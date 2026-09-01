@@ -7,6 +7,16 @@ export const BRIDGE_METHODS = Object.freeze([
     'settingsChanged'
 ]);
 
+export const CORE_EVENTS = Object.freeze([
+    'replace',
+    'append',
+    'patch',
+    'remove',
+    'navigate',
+    'action',
+    'more'
+]);
+
 const noop = () => undefined;
 
 export function createGalleryBridge(overrides = {}) {

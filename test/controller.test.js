@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
     BRIDGE_METHODS,
+    CORE_EVENTS,
     GalleryController,
     XGALLERY_CORE_API_VERSION,
     configureVideoElement,
@@ -24,6 +25,27 @@ test('contract has a stable API version and complete bridge', () => {
     assert.equal(XGALLERY_CORE_API_VERSION, 1);
     const bridge = createGalleryBridge();
     for (const method of BRIDGE_METHODS) assert.equal(typeof bridge[method], 'function');
+    assert.ok(CORE_EVENTS.includes('navigate'));
+    assert.ok(CORE_EVENTS.includes('more'));
+});
+
+test('controller requestMore and performAction do not pass host nodes', () => {
+    const calls = [];
+    const controller = new GalleryController({
+        items: [item('a')],
+        startId: 'a',
+        bridge: {
+            requestMore(payload) { calls.push(['more', payload]); },
+            performAction(payload) { calls.push(['action', payload]); }
+        }
+    });
+    controller.requestMore();
+    controller.performAction('like', { wanted: true });
+    assert.equal(calls[0][0], 'more');
+    assert.equal(calls[0][1].currentId, 'a');
+    assert.equal(calls[1][1].name, 'like');
+    assert.equal(calls[1][1].itemId, 'a');
+    assert.equal(calls[1][1].payload.wanted, true);
 });
 
 test('controller preserves current item across replacement', () => {

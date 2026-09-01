@@ -1,10 +1,6 @@
 export const OVERLAY_CSS = String.raw`
         :root {
-            /* Reference-derived token sheet (chatgpt / bunkrr / opentherank /
-               claude, researched live). Definition comes from the surface
-               ladder and hover fills; borders are deliberate hairlines. The
-               earlier 65%-white outline experiment is superseded by user
-               decision - do not raise these again. */
+            /* Surface ladder and hairline borders for the overlay chrome. */
             --ms-bg: hsl(220, 8%, 8%);
             --ms-surface-1: hsl(220, 7%, 9%);
             --ms-surface-2: hsl(220, 7%, 10%);
@@ -81,8 +77,8 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay a {
             font-family: inherit !important;
         }
-        /* PixelDrain styles raw button/img/input globally. Isolation plus
-           disabling host sheets (isolateHostPageStyles) keeps chrome ours. */
+        /* Some hosts restyle raw form controls. Isolation keeps overlay chrome ours. */
+        .ms-gallery-overlay.ms-reset-host,
         .ms-gallery-overlay.ms-pixeldrain {
             isolation: isolate;
         }
@@ -561,13 +557,9 @@ export const OVERLAY_CSS = String.raw`
             pointer-events: auto;
             touch-action: pan-x;
         }
-        /* Reddit: post info and vote/save controls, between the media and the
-           thumb strip. Shown and hidden by the same toggle as the description
-           panel.
-
-           The title card is centred and resizable. The actions sit at a fixed
-           offset from the right edge so they never move when the title's
-           length or height changes. */
+        /* Optional vote/info row between the media and the thumbnail strip.
+           Shown and hidden by the same toggle as the description panel.
+           The title card is centred and resizable. */
         .ms-reddit-info-row {
             position: absolute;
             left: 0;
@@ -1131,7 +1123,7 @@ export const OVERLAY_CSS = String.raw`
             box-shadow: var(--ms-shadow-md);
             transform: rotate(45deg);
         }
-        /* Reddit: old/new front-end switch, next to the Gallery button. */
+        /* Optional host-page companion button next to Gallery. */
         #ms-site-redirect-btn {
             position: fixed;
             top: 70px;
@@ -1145,8 +1137,7 @@ export const OVERLAY_CSS = String.raw`
             border: 1px solid var(--ms-line);
             border-radius: 20px;
             cursor: pointer;
-            /* Reddit's own stylesheet otherwise wins here, so this button came
-               out in a different face/weight to the Gallery button beside it. */
+            /* Host stylesheets can override UA button fonts; keep this chrome aligned. */
             font-family: system-ui, -apple-system, Segoe UI, sans-serif !important;
             font-size: 13px;
             font-weight: 700;
@@ -1162,22 +1153,21 @@ export const OVERLAY_CSS = String.raw`
             background: var(--ms-surface-3);
             border-color: var(--ms-line-strong);
         }
-        /* Reddit: while the modal is up, stop the (heavy) page behind it from
-           rendering at all. Lifted briefly whenever we nudge its infinite
-           scroll, and removed before the close-time scroll-back. */
+        /* Hide the host page while the overlay is open. Adapters may use a
+           lighter variant that still allows layout. */
+        body.ms-host-isolation > :not(.ms-gallery-overlay):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
         body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
             visibility: hidden !important;
             pointer-events: none !important;
             contain: layout paint style;
             content-visibility: hidden;
         }
-        /* BDSMLR still has to layout/prime media-renderer while the gallery
-           is open. content-visibility:hidden skipped that and dropped posts. */
+        body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
         body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
             visibility: hidden !important;
             pointer-events: none !important;
         }
-        /* Reddit: orange glow on the post the gallery scrolled back to. */
+        /* Highlight the restored host post after close. */
         .ms-post-highlight {
             outline: 3px solid rgba(255, 69, 0, 0.9) !important;
             outline-offset: 2px;
@@ -2299,12 +2289,7 @@ export const OVERLAY_CSS = String.raw`
             border-color: var(--ms-line-strong);
             color: var(--ms-text);
         }
-        /* Rule34's own tag-category palette (artist/copyright/character/
-           general/metadata), adapted to this dark panel: a tinted background
-           and border in the category's hue, with a light version of the same
-           hue for the text so it stays readable. Only rule34 items ever carry
-           a category - the .ms-tag-pill base rule above is everyone else's
-           (and rule34's own) fallback until its sidebar fetch resolves. */
+        /* Optional tag-category tints. Adapters assign these classes. */
         .ms-tag-pill-artist {
             background: rgba(170, 0, 0, 0.18);
             border-color: #a33;
@@ -2336,7 +2321,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-info-description p:last-child {
             margin-bottom: 0;
         }
-        .post-captions-section .caption-text a[href],
+        .ms-gallery-overlay.ms-rich-info .ms-info-description a[href]:not(.ms-info-desc-username),
         .ms-gallery-overlay.ms-imaglr .ms-info-description a[href]:not(.ms-info-desc-username),
         .ms-gallery-overlay.ms-bdsmlr .ms-info-description a[href]:not(.ms-info-desc-username) {
             color: var(--ms-accent) !important;
@@ -2347,7 +2332,7 @@ export const OVERLAY_CSS = String.raw`
             text-underline-offset: 2px;
             transition: color 150ms var(--ms-ease), text-decoration-color 150ms var(--ms-ease);
         }
-        .post-captions-section .caption-text a[href]:hover,
+        .ms-gallery-overlay.ms-rich-info .ms-info-description a[href]:not(.ms-info-desc-username):hover,
         .ms-gallery-overlay.ms-imaglr .ms-info-description a[href]:not(.ms-info-desc-username):hover,
         .ms-gallery-overlay.ms-bdsmlr .ms-info-description a[href]:not(.ms-info-desc-username):hover {
             color: hsl(223, 92%, 70%) !important;
@@ -2529,26 +2514,31 @@ export const OVERLAY_CSS = String.raw`
         .ms-tags-like-btn.active .ms-tags-like-count {
             color: inherit;
         }
+        .ms-gallery-overlay.ms-rich-info .ms-info-posthead .ms-info-desc-avatar,
         .ms-gallery-overlay.ms-imaglr .ms-info-posthead .ms-info-desc-avatar,
         .ms-gallery-overlay.ms-bdsmlr .ms-info-posthead .ms-info-desc-avatar {
             width: 24px;
             height: 24px;
         }
+        .ms-gallery-overlay.ms-rich-info .ms-info-posthead .ms-info-desc-username,
         .ms-gallery-overlay.ms-imaglr .ms-info-posthead .ms-info-desc-username,
         .ms-gallery-overlay.ms-bdsmlr .ms-info-posthead .ms-info-desc-username {
             font-size: 14px;
             font-weight: 600;
         }
+        .ms-gallery-overlay.ms-rich-info .ms-info-postmeta,
         .ms-gallery-overlay.ms-imaglr .ms-info-postmeta,
         .ms-gallery-overlay.ms-bdsmlr .ms-info-postmeta {
             font-size: 11px;
         }
+        .ms-gallery-overlay.ms-rich-info .ms-info-stats,
         .ms-gallery-overlay.ms-imaglr .ms-info-stats,
         .ms-gallery-overlay.ms-bdsmlr .ms-info-stats {
             font-size: 11px;
             text-transform: none;
             letter-spacing: 0;
         }
+        .ms-gallery-overlay.ms-rich-info .ms-tags-content,
         .ms-gallery-overlay.ms-imaglr .ms-tags-content,
         .ms-gallery-overlay.ms-bdsmlr .ms-tags-content {
             font-size: var(--ms-tags-font, 14px);
@@ -2629,7 +2619,7 @@ export const OVERLAY_CSS = String.raw`
             fill: none;
         }
 
-        /* Merged settings dropdown (gallery mode + bunkr handling) */
+        /* Settings dropdown sections */
         .ms-dropdown-menu-wide {
             min-width: 190px;
         }

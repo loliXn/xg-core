@@ -1,11 +1,11 @@
 {
   "name": "xgallery-core",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "exports": "./src/index.js",
   "scripts": {
     "build": "node scripts/build.mjs",
-    "test": "node test/controller.test.js"
+    "test": "node --test test/controller.test.js test/update.test.js"
   }
 }

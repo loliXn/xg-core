@@ -1,4 +1,14 @@
-export { BRIDGE_METHODS, createGalleryBridge } from './bridge.js';
+export { BRIDGE_METHODS, CORE_EVENTS, createGalleryBridge } from './bridge.js';
+export {
+    CORE_MANIFEST_URL,
+    CORE_UPDATE_INTERVAL_MS,
+    compareCoreVersions,
+    isTrustedCoreUrl,
+    parseCoreManifest,
+    sha256Hex,
+    shouldInstallCore,
+    verifiedCoreRecord
+} from './update.js';
 export { GalleryController } from './controller.js';
 export { OVERLAY_CSS, installOverlayStyles } from './styles.js';
 export { createOverlayShell } from './view.js';

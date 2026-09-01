@@ -84,6 +84,21 @@ export class GalleryController {
         return true;
     }
 
+    requestMore() {
+        this.#emit('more');
+        return this.#bridge.requestMore({ currentId: this.#currentId });
+    }
+
+    performAction(name, payload) {
+        const event = {
+            name: String(name || ''),
+            itemId: this.#currentId,
+            payload: payload && typeof payload === 'object' ? payload : {}
+        };
+        this.#emit('action');
+        return this.#bridge.performAction(event);
+    }
+
     destroy() {
         this.#listeners.clear();
         this.#items = [];
