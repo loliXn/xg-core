@@ -1,3 +1,5 @@
+import { filterBarMarkup } from './filter.js';
+
 export function createOverlayShell(options = {}) {
     const doc = options.document || document;
     const overlay = doc.createElement('div');
@@ -28,15 +30,6 @@ export function createOverlayShell(options = {}) {
         '    <button class="ms-btn" data-act="pan-toggle" title="Zoom &amp; pan"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg><span class="ms-btn-label">Zoom</span></button>',
         '    <button class="ms-btn" data-act="download" title="Download"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg><span class="ms-btn-label">DL</span></button>',
         '    <div class="ms-dropdown">',
-        '      <button class="ms-btn ms-dropdown-trigger" data-act="filter-trigger"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h18l-7 8.5V19l-4 2v-8.5z"/></svg><span class="ms-btn-label">Filter: All</span></button>',
-        '      <div class="ms-dropdown-menu">',
-        '    <button class="ms-dropdown-item" data-act="filter" data-val="0">All</button>',
-        '    <button class="ms-dropdown-item" data-act="filter" data-val="1">Images</button>',
-        '    <button class="ms-dropdown-item" data-act="filter" data-val="2">Videos</button>',
-        '    <button class="ms-dropdown-item" data-act="filter" data-val="3">Images + GIFs</button>',
-        '      </div>',
-        '    </div>',
-        '    <div class="ms-dropdown">',
         '      <button class="ms-btn ms-dropdown-trigger" data-act="fit-trigger"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M8 7l4-4 4 4"/><path d="M8 17l4 4 4-4"/></svg><span class="ms-btn-label">Fit: Std</span></button>',
         '      <div class="ms-dropdown-menu">',
         '    <button class="ms-dropdown-item" data-act="fit" data-val="standard">Standard</button>',
@@ -47,6 +40,7 @@ export function createOverlayShell(options = {}) {
         '    <button class="ms-btn ms-close-btn" data-act="close" title="Close"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18"/><path d="M6 6l12 12"/></svg><span class="ms-btn-label">Close</span></button>',
         '  </div>',
         '</div>',
+        filterBarMarkup(),
         '<div class="ms-gallery-stage">',
         '  <div class="ms-tags-overlay">',
         '    <div class="ms-tags-panel">',

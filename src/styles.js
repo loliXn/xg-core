@@ -54,6 +54,7 @@ export const OVERLAY_CSS = String.raw`
 
         .ms-gallery-overlay {
             --ms-topbar-h: 56px;
+            --ms-filter-h: 0px;
             --ms-thumbs-h: 90px;
             --ms-tags-w: 420px;
             position: fixed;
@@ -101,11 +102,13 @@ export const OVERLAY_CSS = String.raw`
             opacity: 0;
         }
         .ms-gallery-overlay.ms-opening .ms-gallery-stage,
+        .ms-gallery-overlay.ms-opening .ms-filter-bar,
         .ms-gallery-overlay.ms-opening .ms-thumbs-wrap {
             transform: translateY(3px);
             opacity: 0;
         }
         .ms-gallery-overlay .ms-gallery-topbar,
+        .ms-gallery-overlay .ms-filter-bar,
         .ms-gallery-overlay .ms-gallery-stage,
         .ms-gallery-overlay .ms-thumbs-wrap {
             transition: opacity 160ms var(--ms-ease-out), transform 160ms var(--ms-ease-out);
@@ -258,6 +261,219 @@ export const OVERLAY_CSS = String.raw`
             flex-shrink: 0;
         }
 
+        .ms-filter-bar {
+            position: absolute;
+            top: 64px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            max-width: 1100px;
+            z-index: 90;
+            box-sizing: border-box;
+            padding: 14px 16px;
+            border: 1px solid var(--ms-line);
+            border-radius: 16px;
+            background: hsla(220, 7%, 10%, 0.94);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: var(--ms-shadow-md);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .ms-filter-row,
+        .ms-filter-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+        .ms-filter-search {
+            position: relative;
+            flex: 1 1 220px;
+            min-width: 0;
+        }
+        .ms-filter-search-icon,
+        .ms-filter-bar svg {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+        }
+        .ms-filter-search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--ms-text-4);
+            pointer-events: none;
+            display: inline-flex;
+        }
+        .ms-filter-input,
+        .ms-filter-pair input {
+            width: 100%;
+            height: 40px;
+            box-sizing: border-box;
+            border: 1px solid var(--ms-line);
+            border-radius: 10px;
+            background: var(--ms-surface-1);
+            color: var(--ms-text);
+            padding: 0 52px 0 36px;
+            font-size: 13px;
+        }
+        .ms-filter-pair input { padding: 0 12px; }
+        .ms-filter-input:focus,
+        .ms-filter-pair input:focus {
+            outline: none;
+            border-color: var(--ms-accent-line);
+            box-shadow: 0 0 0 3px var(--ms-accent-tint);
+        }
+        .ms-filter-kbd {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: none;
+            align-items: center;
+            gap: 3px;
+            padding: 2px 6px;
+            border: 1px solid var(--ms-line);
+            border-radius: 6px;
+            background: var(--ms-surface-3);
+            color: var(--ms-text-4);
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 10px;
+            pointer-events: none;
+        }
+        @media (min-width: 640px) {
+            .ms-filter-kbd { display: inline-flex; }
+        }
+        .ms-filter-actions {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .ms-filter-submit,
+        .ms-filter-copy,
+        .ms-filter-kind,
+        .ms-filter-extras-toggle,
+        .ms-filter-reset,
+        .ms-filter-type,
+        .ms-filter-chip {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            border: 1px solid var(--ms-line);
+            background: transparent;
+            color: var(--ms-text-3);
+            cursor: pointer;
+        }
+        .ms-filter-submit,
+        .ms-filter-copy {
+            height: 40px;
+            padding: 0 14px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 650;
+        }
+        .ms-filter-submit {
+            border-color: var(--ms-accent-line);
+            background: var(--ms-accent);
+            color: #fff;
+        }
+        .ms-filter-copy:hover,
+        .ms-filter-kind:hover,
+        .ms-filter-extras-toggle:hover,
+        .ms-filter-reset:hover,
+        .ms-filter-type:hover,
+        .ms-filter-chip:hover {
+            background: var(--ms-hover);
+            color: var(--ms-text);
+        }
+        .ms-filter-toolbar { justify-content: space-between; }
+        .ms-filter-kinds,
+        .ms-filter-toolbar-end { display: flex; flex-wrap: wrap; gap: 6px; }
+        .ms-filter-kind,
+        .ms-filter-extras-toggle,
+        .ms-filter-reset {
+            height: 30px;
+            padding: 0 10px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .ms-filter-kind.is-active {
+            border-color: var(--ms-accent-line);
+            background: var(--ms-accent);
+            color: #fff;
+        }
+        .ms-filter-extras {
+            display: none;
+            grid-template-columns: 1fr;
+            gap: 14px;
+            padding-top: 12px;
+            border-top: 1px solid var(--ms-hairline);
+        }
+        .ms-filter-extras-open .ms-filter-extras {
+            display: grid;
+        }
+        @media (min-width: 900px) {
+            .ms-filter-extras-open .ms-filter-extras {
+                grid-template-columns: 1.4fr 1fr 1fr;
+            }
+        }
+        .ms-filter-field {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 0;
+        }
+        .ms-filter-field > span {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 10px;
+            letter-spacing: 0.09em;
+            text-transform: uppercase;
+            color: var(--ms-text-4);
+        }
+        .ms-filter-types {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 6px;
+        }
+        @media (min-width: 520px) {
+            .ms-filter-types { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+        }
+        .ms-filter-type {
+            height: 32px;
+            border-radius: 8px;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 11px;
+            letter-spacing: 0.08em;
+        }
+        .ms-filter-type.is-active {
+            border-color: var(--ms-accent-line);
+            background: var(--ms-accent-tint);
+            color: var(--ms-text);
+        }
+        .ms-filter-pair {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .ms-filter-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+        .ms-filter-chip {
+            height: 26px;
+            padding: 0 8px;
+            border-radius: 999px;
+            font-size: 11px;
+            background: var(--ms-surface-1);
+        }
+        .ms-filter-chip svg { width: 10px; height: 10px; }
+
         .ms-gallery-stage {
             position: absolute;
             inset: 0;
@@ -265,7 +481,7 @@ export const OVERLAY_CSS = String.raw`
             align-items: center;
             justify-content: center;
             overflow: hidden;
-            padding: calc(var(--ms-topbar-h) + 16px) 40px calc(var(--ms-thumbs-h) + 14px) 40px;
+            padding: calc(var(--ms-topbar-h) + var(--ms-filter-h) + 16px) 40px calc(var(--ms-thumbs-h) + 14px) 40px;
             box-sizing: border-box;
         }
         .ms-media-wrap {
@@ -1748,7 +1964,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-grid-wrap {
             position: absolute;
             inset: 0;
-            padding: calc(var(--ms-topbar-h) + 24px) 20px 70px 20px;
+            padding: calc(var(--ms-topbar-h) + var(--ms-filter-h) + 24px) 20px 70px 20px;
             box-sizing: border-box;
             overflow-y: auto;
             overflow-x: hidden;

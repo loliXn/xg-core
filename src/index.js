@@ -13,6 +13,18 @@ export { GalleryController } from './controller.js';
 export { OVERLAY_CSS, installOverlayStyles } from './styles.js';
 export { createOverlayShell } from './view.js';
 export {
+    DEFAULT_FILTER_STATE,
+    FILTER_TYPE_OPTIONS,
+    applyGalleryFilter,
+    bindFilterBar,
+    filterBarMarkup,
+    itemExtension,
+    itemSearchText,
+    matchGalleryItem,
+    normalizeFilterState,
+    parseSearchQuery
+} from './filter.js';
+export {
     configureVideoElement,
     createExpandButton,
     createImageMedia,

@@ -83,6 +83,7 @@ test('overlay shell rendering is core-owned', () => {
     });
     assert.match(overlay.className, /ms-gallery-overlay ms-test/);
     assert.match(overlay.innerHTML, /ms-gallery-topbar/);
+    assert.match(overlay.innerHTML, /ms-filter-bar/);
     assert.match(overlay.innerHTML, />Info<\/span>/);
 });
 

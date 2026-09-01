@@ -31,9 +31,9 @@ The injected bridge is the only route back to a handler:
 - `dist/xgallery-core-<version>.iife.js`
 - `dist/latest.json` with `version`, `url`, and `sha256`
 
-Consumers should pin a release tag plus SHA-256, or load `latest.json` from
-GitHub Releases, verify the hash, and cache the last verified bundle. Do not
-load a moving `@main` branch.
+Consumers should pin a bootstrap release tag plus SHA-256, then load
+`latest.json` from GitHub Releases on each start, verify the hash, and cache
+the last verified bundle. Do not load a moving `@main` branch.
 
 ## Development
 

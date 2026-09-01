@@ -2,7 +2,7 @@ const VERSION_RE = /^(\d+)\.(\d+)\.(\d+)$/;
 const SHA_RE = /^[a-f0-9]{64}$/;
 
 export const CORE_MANIFEST_URL = 'https://github.com/loliXn/xg-core/releases/latest/download/latest.json';
-export const CORE_UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const CORE_UPDATE_INTERVAL_MS = 0; // check GitHub latest.json on every load
 
 export function parseCoreManifest(data) {
     if (!data || typeof data !== 'object' || Array.isArray(data)) {
