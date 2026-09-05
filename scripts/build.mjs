@@ -24,7 +24,9 @@ const body = [
     moduleBody('filter.js'),
     moduleBody('view.js'),
     moduleBody('renderers.js'),
-    moduleBody('update.js')
+    moduleBody('update.js'),
+    moduleBody('panels.js'),
+    moduleBody('runtime.js')
 ].join('\n\n');
 
 const bundle = [
@@ -39,6 +41,9 @@ const bundle = [
     '        CORE_MANIFEST_URL,',
     '        CORE_UPDATE_INTERVAL_MS,',
     '        GalleryController,',
+    '        createViewerRuntime,',
+    '        renderPostPanel,',
+    '        createSettingsPanel,',
     '        MEDIA_TYPES,',
     '        XGALLERY_CORE_API_VERSION,',
     '        compareCoreVersions,',
@@ -65,6 +70,8 @@ const bundle = [
     '        parseSearchQuery,',
     '        ensureMediaBox,',
     '        installOverlayStyles,',
+    '        installLauncherStyles,',
+    '        LAUNCHER_CSS,',
     '        isTrustedCoreUrl,',
     '        normalizeMediaItem,',
     '        parseCoreManifest,',
@@ -80,7 +87,7 @@ const bundle = [
     '    });',
     "})(typeof globalThis !== 'undefined' ? globalThis : this);",
     ''
-].join('\n');
+].join('\n').replace(/[ \t]+$/gm, '');
 
 fs.mkdirSync(dist, { recursive: true });
 const sha256 = crypto.createHash('sha256').update(bundle).digest('hex');

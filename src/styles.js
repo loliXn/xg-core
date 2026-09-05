@@ -494,6 +494,21 @@ export const OVERLAY_CSS = String.raw`
             overflow: hidden;
             transition: max-width 200ms var(--ms-ease-out);
         }
+        .ms-gallery-overlay .ms-media-wrap {
+            min-width: 0 !important;
+            min-height: 0 !important;
+            overflow: hidden !important;
+            box-sizing: border-box !important;
+        }
+        .ms-gallery-overlay .ms-media-box {
+            min-width: 0 !important;
+            min-height: 0 !important;
+            box-sizing: border-box !important;
+        }
+        .ms-gallery-overlay .ms-media-box > img,
+        .ms-gallery-overlay .ms-media-box > video {
+            object-fit: contain !important;
+        }
         .ms-media-box {
             position: relative;
             flex: 0 0 auto;
@@ -1028,6 +1043,45 @@ export const OVERLAY_CSS = String.raw`
         .ms-thumbs-track:active { cursor: grabbing; }
         .ms-thumbs-track.ms-thumbs-windowed { position: relative; }
         .ms-thumbs-sizer { display: block; height: 1px; pointer-events: none; }
+        .ms-load-mark-layer {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            pointer-events: none;
+            z-index: 6;
+        }
+        .ms-load-mark {
+            position: absolute;
+            top: 10px;
+            width: 14px;
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--ms-accent);
+        }
+        .ms-load-mark::before {
+            content: "";
+            position: absolute;
+            left: 50%;
+            top: 8px;
+            bottom: 8px;
+            width: 1px;
+            background: var(--ms-accent);
+            opacity: 0.7;
+        }
+        .ms-load-mark svg {
+            width: 11px;
+            height: 11px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2.6;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            position: relative;
+            z-index: 1;
+        }
         .ms-thumb-group-layer {
             position: absolute;
             left: 0;
@@ -1950,6 +2004,8 @@ export const OVERLAY_CSS = String.raw`
             border-radius: 0;
             will-change: transform;
             user-select: none;
+            inset: 0 auto auto 0 !important;
+            margin: 0 !important;
         }
         .ms-pan-hint {
             position: absolute;
@@ -2994,9 +3050,168 @@ export const OVERLAY_CSS = String.raw`
         .ms-zoom-slider::-moz-range-thumb:hover {
             transform: scale(1.12);
         }
+.ms-index-input{top:0!important;height:1em!important;display:inline-flex!important;align-items:center!important;}.ms-position-control>span{display:inline-flex;align-items:center;height:1em;line-height:1;}.ms-tags-overlay.active{z-index:20;}.ms-load-mark-layer{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:6;}.ms-load-mark{position:absolute;top:10px;width:14px;height:70px;display:flex;align-items:center;justify-content:center;color:var(--ms-accent);}.ms-load-mark::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:1px;background:var(--ms-accent);opacity:0.7;}.ms-load-mark svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;}.ms-settings-row.ms-settings-stack{flex-direction:column;align-items:stretch;gap:8px;}.ms-settings-textarea{width:100%;min-height:88px;resize:vertical;box-sizing:border-box;background:var(--ms-surface-3,#1b1d24);border:1px solid var(--ms-line,#333);border-radius:8px;color:var(--ms-text-2,#ddd);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:8px 10px;outline:none;}.ms-settings-textarea:focus{border-color:var(--ms-accent);}.ms-settings-hint{margin:0;font-size:11px;color:var(--ms-text-4,#888);}.ms-blacklist-pills{display:flex;flex-wrap:wrap;gap:6px;}.ms-blacklist-pill{border:1px solid var(--ms-line,#444);background:transparent;color:var(--ms-text-3,#ccc);border-radius:999px;padding:3px 9px;font-size:12px;cursor:pointer;}.ms-blacklist-pill[aria-pressed="true"]{background:hsla(0,72%,46%,0.18);border-color:hsla(0,72%,56%,0.55);color:#f2c0c0;}
     `;
 
 export function installOverlayStyles(addStyle) {
     if (typeof addStyle !== 'function') throw new TypeError('addStyle must be a function');
     return addStyle(OVERLAY_CSS);
 }
+
+export const LAUNCHER_CSS = String.raw`
+        :root {
+            --ms-bg: hsl(220, 8%, 8%);
+            --ms-surface-1: hsl(220, 7%, 9%);
+            --ms-surface-3: hsl(220, 7%, 13%);
+            --ms-line: rgba(255, 255, 255, 0.16);
+            --ms-line-strong: rgba(255, 255, 255, 0.26);
+            --ms-text: hsl(40, 22%, 88%);
+            --ms-accent: hsl(223, 88%, 57%);
+            --ms-accent-line: hsla(223, 88%, 57%, 0.72);
+            --ms-hover: rgba(255, 255, 255, 0.08);
+            --ms-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+        }
+        .ms-xcom-gallery-btn, .ms-site-gallery-btn {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            z-index: 9999;
+            height: 38px;
+            box-sizing: border-box;
+            padding: 0 18px;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            line-height: 1 !important;
+            background: var(--ms-surface-1);
+            color: var(--ms-text);
+            border: 1px solid var(--ms-line);
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: 700;
+            box-shadow: var(--ms-shadow-md);
+            font-family: system-ui, -apple-system, Segoe UI, sans-serif !important;
+            font-size: 13px;
+            letter-spacing: 0.5px;
+        }
+        .ms-xcom-gallery-btn { padding: 10px 20px; height: auto; }
+        .ms-xcom-gallery-btn:hover, .ms-site-gallery-btn:hover {
+            background: var(--ms-surface-3);
+            border-color: var(--ms-line-strong);
+        }
+        .ms-open-in-gallery {
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 6px;
+            height: 28px;
+            box-sizing: border-box;
+            padding: 0 10px;
+            margin-inline-start: 12px;
+            vertical-align: middle;
+            background: var(--ms-surface-1);
+            color: var(--ms-text);
+            border: 1px solid var(--ms-line);
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: system-ui, -apple-system, Segoe UI, sans-serif !important;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            line-height: 1;
+            text-transform: uppercase;
+        }
+        .ms-open-in-gallery svg {
+            width: 12px;
+            height: 12px;
+            flex-shrink: 0;
+        }
+        .ms-open-in-gallery--embed {
+            margin-inline-start: 0;
+            margin-block-start: 8px;
+        }
+        .ms-open-in-gallery--unfurl {
+            margin-inline-start: 8px;
+            margin-block-start: 0;
+            height: 24px;
+            padding: 0 8px;
+            font-size: 10px;
+            position: relative !important;
+            z-index: 4 !important;
+            pointer-events: auto !important;
+            touch-action: manipulation;
+            isolation: isolate;
+        }
+        .ms-open-in-gallery-host {
+            position: relative !important;
+            z-index: 3 !important;
+        }
+        .ms-open-in-gallery:hover {
+            background: var(--ms-hover);
+        }
+        .ms-open-in-gallery:active {
+            transform: scale(0.97);
+        }
+        .ms-open-in-gallery:focus-visible {
+            outline: 2px solid var(--ms-accent);
+            outline-offset: 2px;
+        }
+        .ms-site-settings-btn {
+            position: fixed;
+            top: 70px;
+            right: 118px;
+            z-index: 9999;
+            width: 38px;
+            height: 38px;
+            box-sizing: border-box;
+            padding: 0;
+            background: var(--ms-surface-1);
+            color: var(--ms-text);
+            border: 1px solid var(--ms-line);
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--ms-shadow-md);
+            transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1), background 140ms var(--ms-ease), border-color 140ms var(--ms-ease);
+        }
+        .ms-site-settings-btn svg path,
+        .ms-site-settings-btn svg circle {
+            fill: none !important;
+            stroke: currentColor !important;
+        }
+        .ms-site-settings-btn:hover {
+            background: var(--ms-surface-3);
+            border-color: var(--ms-line-strong);
+            transform: rotate(45deg);
+        }
+        #ms-site-redirect-btn {
+            position: fixed;
+            top: 70px;
+            right: 166px;
+            z-index: 9999;
+            height: 38px;
+            box-sizing: border-box;
+            padding: 0 14px;
+            background: var(--ms-surface-1);
+            color: var(--ms-text);
+            border: 1px solid var(--ms-line);
+            border-radius: 20px;
+            cursor: pointer;
+            font-family: system-ui, -apple-system, Segoe UI, sans-serif !important;
+            font-size: 13px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: var(--ms-shadow-md);
+        }
+        #ms-site-redirect-btn:hover {
+            background: var(--ms-surface-3);
+            border-color: var(--ms-line-strong);
+        }
+    `;
+export function installLauncherStyles(addStyle) { return addStyle(LAUNCHER_CSS); }

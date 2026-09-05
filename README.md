@@ -4,17 +4,18 @@ Reusable gallery viewer core.
 
 Public releases: `https://github.com/loliXn/xg-core/releases`
 
-This package owns the overlay stylesheet and shell, reusable viewer state,
-thumbnail and grid cells, media-slot cleanup, loading and error states, and
-the common image, video, iframe, album and position renderers.
+This package owns the overlay and launcher styles, shell, controls, settings,
+post panels, captions, zoom and pan, thumbnail and grid windowing, media-slot
+cleanup, loading and error states, and the image, video, iframe and album
+rendering lifecycle.
 It must not contain site detection, source-page selectors, authenticated site
 actions, Tampermonkey APIs, or live host DOM nodes.
 
 ## Boundary
 
 Handlers pass serializable media items into `GalleryController`. Every item has
-a stable `id`, a supported `type`, and a `src`. Site-specific fields may remain
-on the item while adapters are migrated.
+a stable `id`, a supported `type`, and a `src`. Adapters translate source data
+into the core's generic item and UI models.
 
 The injected bridge is the only route back to a handler:
 
