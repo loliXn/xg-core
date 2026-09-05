@@ -169,7 +169,7 @@ function typeButtonsHtml() {
 
 export function filterBarMarkup() {
     return [
-        '<form class="ms-filter-bar" autocomplete="off">',
+        '<form class="ms-filter-bar" autocomplete="off" aria-hidden="true">',
         '  <div class="ms-filter-row">',
         '    <div class="ms-filter-search">',
         '      <span class="ms-filter-search-icon" aria-hidden="true">' + ICON.search + '</span>',
@@ -265,7 +265,22 @@ function readForm(root, extrasOpen) {
 function syncFilterHeight(root) {
     const overlay = root.closest('.ms-gallery-overlay');
     if (!overlay) return;
-    overlay.style.setProperty('--ms-filter-h', Math.ceil(root.getBoundingClientRect().height + 12) + 'px');
+    overlay.style.setProperty('--ms-filter-h', '0px');
+}
+
+function setFilterOpen(root, open) {
+    const overlay = root.closest('.ms-gallery-overlay');
+    if (!overlay) return false;
+    const next = !!open;
+    overlay.classList.toggle('ms-filter-open', next);
+    root.setAttribute('aria-hidden', next ? 'false' : 'true');
+    const trigger = overlay.querySelector('[data-act="filter-toggle"]');
+    if (trigger) {
+        trigger.setAttribute('aria-expanded', next ? 'true' : 'false');
+        trigger.classList.toggle('active', next);
+    }
+    syncFilterHeight(root);
+    return next;
 }
 
 export function bindFilterBar(root, options = {}) {
@@ -334,12 +349,6 @@ export function bindFilterBar(root, options = {}) {
         emit();
     });
 
-    let observer = null;
-    if (typeof ResizeObserver === 'function') {
-        observer = new ResizeObserver(() => syncFilterHeight(root));
-        observer.observe(root);
-    }
-
     return {
         getState: () => normalizeFilterState(state),
         setState: (next) => {
@@ -347,7 +356,14 @@ export function bindFilterBar(root, options = {}) {
             paint(root, state);
             syncFilterHeight(root);
         },
-        focus: () => { if (input) input.focus(); },
-        destroy: () => { if (observer) observer.disconnect(); }
+        open: () => setFilterOpen(root, true),
+        close: () => setFilterOpen(root, false),
+        toggle: () => setFilterOpen(root, !root.closest('.ms-gallery-overlay').classList.contains('ms-filter-open')),
+        isOpen: () => !!(root.closest('.ms-gallery-overlay') && root.closest('.ms-gallery-overlay').classList.contains('ms-filter-open')),
+        focus: () => {
+            setFilterOpen(root, true);
+            if (input) input.focus();
+        },
+        destroy: () => setFilterOpen(root, false)
     };
 }

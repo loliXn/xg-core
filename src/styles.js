@@ -102,7 +102,6 @@ export const OVERLAY_CSS = String.raw`
             opacity: 0;
         }
         .ms-gallery-overlay.ms-opening .ms-gallery-stage,
-        .ms-gallery-overlay.ms-opening .ms-filter-bar,
         .ms-gallery-overlay.ms-opening .ms-thumbs-wrap {
             transform: translateY(3px);
             opacity: 0;
@@ -263,16 +262,16 @@ export const OVERLAY_CSS = String.raw`
 
         .ms-filter-bar {
             position: absolute;
-            top: 64px;
+            top: calc(var(--ms-topbar-h) + 12px);
             left: 50%;
-            transform: translateX(-50%);
-            width: calc(100% - 40px);
-            max-width: 1100px;
-            z-index: 90;
+            transform: translateX(-50%) translateY(-6px) scale(0.985);
+            transform-origin: top center;
+            width: min(760px, calc(100% - 24px));
+            z-index: 100;
             box-sizing: border-box;
-            padding: 14px 16px;
+            padding: 12px;
             border: 1px solid var(--ms-line);
-            border-radius: 16px;
+            border-radius: 14px;
             background: hsla(220, 7%, 10%, 0.94);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
@@ -280,6 +279,16 @@ export const OVERLAY_CSS = String.raw`
             display: flex;
             flex-direction: column;
             gap: 12px;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            transition: opacity 160ms var(--ms-ease-out), transform 160ms var(--ms-ease-out), visibility 160ms var(--ms-ease-out);
+        }
+        .ms-gallery-overlay.ms-filter-open .ms-filter-bar {
+            transform: translateX(-50%) translateY(0) scale(1);
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
         }
         .ms-filter-row,
         .ms-filter-toolbar {
@@ -1991,6 +2000,10 @@ export const OVERLAY_CSS = String.raw`
         /* Hand (pan) tool for oversized media */
         .ms-media-wrap.ms-pan-enabled {
             cursor: grab;
+        }
+        .ms-media-wrap.ms-pan-enabled > .ms-media-box {
+            visibility: hidden;
+            background: transparent;
         }
         .ms-media-wrap.ms-pan-enabled.ms-pan-dragging {
             cursor: grabbing;

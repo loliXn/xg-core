@@ -384,6 +384,18 @@ function ensureOverlay() {
 
 function onOverlayClick(e) {
 
+        const filterApi = bridge.state.filterBar;
+        const filterPopup = e.target.closest('.ms-filter-bar');
+        const filterTrigger = e.target.closest('[data-act="filter-toggle"]');
+        if (filterApi && filterApi.isOpen && filterApi.isOpen() && !filterPopup && !filterTrigger) {
+            filterApi.close();
+            if (!e.target.closest('[data-act]')) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+        }
+
         const rdVote = e.target.closest('[data-rdvote]');
         const rdSave = e.target.closest('[data-rdsave]');
         if (rdVote || rdSave) {
@@ -441,6 +453,8 @@ function onOverlayClick(e) {
                 toggleTagsPanel(false);
             } else if (act === 'view-toggle') {
                 setGridMode(!bridge.state.gridMode);
+            } else if (act === 'filter-toggle') {
+                if (bridge.state.filterBar && bridge.state.filterBar.toggle) bridge.state.filterBar.toggle();
             } else if (act === 'pan-toggle') {
                 togglePanMode();
             } else if (act === 'fullscreen-toggle') {
@@ -506,7 +520,7 @@ function tagsPanelIsScrollable(panel) {
 function onOverlayWheel(e) {
         if (bridge.state.gridMode) return;
         const target = e.target;
-        if (target && target.closest('.ms-thumbs-wrap, .ms-gallery-controls')) return;
+        if (target && target.closest('.ms-thumbs-wrap, .ms-gallery-controls, .ms-filter-bar')) return;
         const tagsPanel = target && target.closest('.ms-tags-overlay');
         if (tagsPanel && tagsPanelIsScrollable(tagsPanel)) return;
         e.preventDefault();
@@ -2402,6 +2416,12 @@ function bindGlobalGalleryHandlers() {
             if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
                 e.preventDefault();
                 if (bridge.state.filterBar && typeof bridge.state.filterBar.focus === 'function') bridge.state.filterBar.focus();
+                return;
+            }
+            if (e.key === 'Escape' && bridge.state.filterBar && bridge.state.filterBar.isOpen && bridge.state.filterBar.isOpen()) {
+                e.preventDefault();
+                bridge.state.filterBar.close();
+                if (document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
                 return;
             }
             const active = document.activeElement;

@@ -57,7 +57,8 @@ test('overlay shell includes the filter bar', () => {
     const overlay = createOverlayShell({ document: dom.window.document });
     assert.ok(overlay.querySelector('.ms-filter-bar'));
     assert.ok(overlay.querySelector('.ms-filter-input'));
-    assert.equal(overlay.querySelector('[data-act="filter-trigger"]'), null);
+    assert.ok(overlay.querySelector('[data-act="filter-toggle"]'));
+    assert.equal(overlay.querySelector('.ms-filter-bar').getAttribute('aria-hidden'), 'true');
 });
 
 test('bindFilterBar toggles type chips and kinds', () => {
@@ -77,6 +78,12 @@ test('bindFilterBar toggles type chips and kinds', () => {
     assert.equal(bar.getState().kind, 'images');
     assert.deepEqual(bar.getState().types, ['png']);
     assert.ok(changes.length >= 2);
+    bar.open();
+    assert.equal(bar.isOpen(), true);
+    assert.equal(overlay.querySelector('[data-act="filter-toggle"]').getAttribute('aria-expanded'), 'true');
+    assert.equal(overlay.style.getPropertyValue('--ms-filter-h'), '0px');
+    bar.close();
+    assert.equal(bar.isOpen(), false);
     bar.destroy();
     delete globalThis.document;
     delete globalThis.ResizeObserver;
