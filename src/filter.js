@@ -39,6 +39,15 @@ export function normalizeFilterState(input) {
     };
 }
 
+export function isFilterStateActive(input) {
+    const state = normalizeFilterState(input);
+    return state.kind !== 'all'
+        || state.types.length > 0
+        || state.minMb != null
+        || state.maxMb != null
+        || String(state.query || '').trim() !== '';
+}
+
 export function parseSearchQuery(query) {
     const text = String(query || '').trim();
     const include = [];
@@ -226,6 +235,13 @@ function paint(root, state) {
     if (maxMb && !isActiveControl(maxMb)) maxMb.value = state.maxMb == null ? '' : String(state.maxMb);
     if (minAlbum && !isActiveControl(minAlbum)) minAlbum.value = state.minAlbum == null ? '' : String(state.minAlbum);
     if (maxAlbum && !isActiveControl(maxAlbum)) maxAlbum.value = state.maxAlbum == null ? '' : String(state.maxAlbum);
+    const overlay = root.closest('.ms-gallery-overlay');
+    const trigger = overlay && overlay.querySelector('[data-act="filter-toggle"]');
+    if (trigger) {
+        const active = isFilterStateActive(state);
+        trigger.classList.toggle('active', active);
+        trigger.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
     paintChips(root, state);
 }
 
@@ -264,7 +280,6 @@ function setFilterOpen(root, open) {
     const trigger = overlay.querySelector('[data-act="filter-toggle"]');
     if (trigger) {
         trigger.setAttribute('aria-expanded', next ? 'true' : 'false');
-        trigger.classList.toggle('active', next);
     }
     syncFilterHeight(root);
     return next;

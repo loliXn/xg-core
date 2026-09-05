@@ -97,9 +97,15 @@ export function renderPostPanel(options) {
     if (model.actions && model.actions.length) {
         const actions = panelElement(doc, 'div', 'ms-tags-actions-bar');
         model.actions.forEach(action => {
-            const button = panelElement(doc, action.href ? 'a' : 'button', 'ms-tags-action-btn ms-tags-' + action.kind + '-btn', action.label);
+            const button = panelElement(doc, action.href ? 'a' : 'button', 'ms-tags-action-btn ms-tags-' + action.kind + '-btn');
             if (!action.href) button.type = 'button';
             else { button.href = action.href; button.target = '_blank'; button.rel = 'noopener noreferrer'; }
+            if (action.kind === 'like') {
+                const icon = panelElement(doc, 'span', 'ms-tags-action-icon');
+                icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21.2l8.8-8.8a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
+                button.append(icon);
+            }
+            button.append(panelElement(doc, 'span', 'ms-tags-action-label', action.label));
             button.classList.toggle('active', !!action.active);
             button.setAttribute('aria-label', action.label);
             if (action.count != null && action.count !== '') button.append(panelElement(doc, 'span', 'ms-tags-like-count', action.count));

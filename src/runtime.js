@@ -2479,7 +2479,7 @@ function openInGalleryButtonHtml() {
 function createOpenInGalleryButton(startNode, variant) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'ms-btn ms-open-in-gallery' + (variant ? ' ms-open-in-gallery--' + variant : '') +
+        btn.className = 'ms-open-in-gallery' + (variant ? ' ms-open-in-gallery--' + variant : '') +
             (variant === 'unfurl' ? ' fauxBlockLink-link' : '');
         btn.setAttribute('aria-label', 'Open in Gallery');
         btn.innerHTML = openInGalleryButtonHtml();

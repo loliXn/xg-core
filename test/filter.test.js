@@ -6,6 +6,7 @@ import {
     applyGalleryFilter,
     bindFilterBar,
     createOverlayShell,
+    isFilterStateActive,
     matchGalleryItem,
     parseSearchQuery
 } from '../src/index.js';
@@ -20,6 +21,13 @@ const item = (id, extra = {}) => ({
     bytes: extra.bytes,
     albumSize: extra.albumSize,
     postInfo: extra.postInfo
+});
+
+test('isFilterStateActive ignores an open panel and empty defaults', () => {
+    assert.equal(isFilterStateActive({ kind: 'all' }), false);
+    assert.equal(isFilterStateActive({ query: 'cat' }), true);
+    assert.equal(isFilterStateActive({ kind: 'images' }), true);
+    assert.equal(isFilterStateActive({ types: ['png'] }), true);
 });
 
 test('parseSearchQuery splits phrases and exclusions', () => {
@@ -88,9 +96,14 @@ test('bindFilterBar toggles type chips and kinds', () => {
     assert.equal(bar.getState().kind, 'images');
     assert.deepEqual(bar.getState().types, ['png']);
     assert.ok(changes.length >= 2);
+    assert.equal(overlay.querySelector('[data-act="filter-toggle"]').classList.contains('active'), true);
     bar.open();
     assert.equal(bar.isOpen(), true);
     assert.equal(overlay.querySelector('[data-act="filter-toggle"]').getAttribute('aria-expanded'), 'true');
+    assert.equal(overlay.querySelector('[data-act="filter-toggle"]').classList.contains('active'), true);
+    overlay.querySelector('[data-kind="all"]').click();
+    overlay.querySelector('[data-ext="png"]').click();
+    assert.equal(overlay.querySelector('[data-act="filter-toggle"]').classList.contains('active'), false);
     assert.equal(overlay.style.getPropertyValue('--ms-filter-h'), '0px');
     bar.close();
     assert.equal(bar.isOpen(), false);

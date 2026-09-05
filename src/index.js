@@ -22,6 +22,7 @@ export {
     filterBarMarkup,
     itemExtension,
     itemSearchText,
+    isFilterStateActive,
     matchGalleryItem,
     normalizeFilterState,
     parseSearchQuery

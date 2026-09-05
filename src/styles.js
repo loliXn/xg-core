@@ -219,8 +219,8 @@ export const OVERLAY_CSS = String.raw`
             gap: 4px;
             align-items: center;
         }
-        .ms-btn {
-            border: 1px solid var(--ms-line);
+        .ms-gallery-overlay .ms-btn {
+            border: 1px solid transparent;
             background: transparent;
             color: var(--ms-text-3);
             border-radius: 14px;
@@ -238,21 +238,29 @@ export const OVERLAY_CSS = String.raw`
             justify-content: center !important;
             line-height: 1 !important;
             flex-shrink: 0;
+            box-shadow: none;
+            outline: none;
         }
         /* The display:inline-flex !important above exists to survive hostile
            host-page button styling, but it also beat every inline
            style.display='none' we set - so the Favorite heart, Loop and HD
            buttons were visible on sites that never support them. Re-hide via
            a higher-specificity rule that matches the inline style itself. */
-        .ms-btn[style*="display:none"],
-        .ms-btn[style*="display: none"],
-        .ms-icon-btn[style*="display:none"],
-        .ms-icon-btn[style*="display: none"] {
+        .ms-gallery-overlay .ms-btn[style*="display:none"],
+        .ms-gallery-overlay .ms-btn[style*="display: none"],
+        .ms-gallery-overlay .ms-icon-btn[style*="display:none"],
+        .ms-gallery-overlay .ms-icon-btn[style*="display: none"] {
             display: none !important;
         }
-        .ms-btn:hover {
+        .ms-gallery-overlay .ms-btn:hover {
             background: var(--ms-hover);
             color: var(--ms-text);
+        }
+        .ms-gallery-overlay .ms-gallery-topbar .ms-btn,
+        .ms-gallery-overlay .ms-gallery-topbar .ms-icon-btn {
+            border: none;
+            box-shadow: none;
+            outline: none;
         }
         .ms-btn-icon {
             width: 12px;
@@ -267,9 +275,10 @@ export const OVERLAY_CSS = String.raw`
         .ms-filter-bar {
             position: absolute;
             top: calc(var(--ms-topbar-h) + 12px);
-            left: 50%;
-            transform: translateX(-50%) translateY(-6px) scale(0.985);
-            transform-origin: top center;
+            right: 20px;
+            left: auto;
+            transform: translateY(-6px) scale(0.985);
+            transform-origin: top right;
             width: min(620px, calc(100% - 24px));
             z-index: 100;
             box-sizing: border-box;
@@ -289,7 +298,7 @@ export const OVERLAY_CSS = String.raw`
             transition: opacity 160ms var(--ms-ease-out), transform 160ms var(--ms-ease-out), visibility 160ms var(--ms-ease-out);
         }
         .ms-gallery-overlay.ms-filter-open .ms-filter-bar {
-            transform: translateX(-50%) translateY(0) scale(1);
+            transform: translateY(0) scale(1);
             opacity: 1;
             visibility: visible;
             pointer-events: auto;
@@ -2667,6 +2676,18 @@ export const OVERLAY_CSS = String.raw`
             box-sizing: border-box;
             word-break: break-word;
         }
+        .ms-gallery-overlay.ms-imaglr .ms-info-description,
+        .ms-gallery-overlay.ms-imaglr .ms-tags-content {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 13px;
+            line-height: 1.55;
+            letter-spacing: 0;
+        }
+        .ms-gallery-overlay.ms-imaglr .ms-info-postmeta,
+        .ms-gallery-overlay.ms-imaglr .ms-info-stats,
+        .ms-position-control {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
         .ms-info-posthead {
             width: 100%;
             min-height: 44px;
@@ -2728,8 +2749,12 @@ export const OVERLAY_CSS = String.raw`
             color: var(--ms-text-4);
             margin-right: 2px;
         }
-        .ms-btn.active {
+        .ms-gallery-overlay .ms-btn.active {
             color: var(--ms-accent);
+            background: var(--ms-accent-tint);
+        }
+        .ms-filter-trigger.active {
+            color: hsl(223, 96%, 72%);
             background: var(--ms-accent-tint);
         }
         .ms-tags-actions-bar {
@@ -2777,13 +2802,19 @@ export const OVERLAY_CSS = String.raw`
             transform: scale(0.97);
         }
         .ms-tags-action-btn svg,
-        .ms-tags-like-btn svg,
         .ms-tags-hide-btn svg,
         .adv-hide-btn-list svg {
             width: 15px;
             height: 15px;
             stroke: currentColor;
             fill: none;
+            flex-shrink: 0;
+        }
+        .ms-tags-like-btn svg {
+            width: 15px;
+            height: 15px;
+            fill: currentColor;
+            stroke: none;
             flex-shrink: 0;
         }
         .ms-tags-like-btn.active {
@@ -3112,22 +3143,23 @@ export const LAUNCHER_CSS = String.raw`
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 6px;
-            height: 28px;
-            box-sizing: border-box;
-            padding: 0 10px;
+            gap: 6px !important;
+            height: 28px !important;
+            min-height: 28px !important;
+            box-sizing: border-box !important;
+            padding: 0 10px !important;
             margin-inline-start: 12px;
             vertical-align: middle;
-            background: var(--ms-surface-1);
-            color: var(--ms-text);
-            border: 1px solid var(--ms-line);
-            border-radius: 8px;
-            cursor: pointer;
+            background: var(--ms-surface-1) !important;
+            color: var(--ms-text) !important;
+            border: 1px solid var(--ms-line) !important;
+            border-radius: 8px !important;
+            cursor: pointer !important;
             font-family: system-ui, -apple-system, Segoe UI, sans-serif !important;
             font-size: 11px;
             font-weight: 600;
             letter-spacing: 0.5px;
-            line-height: 1;
+            line-height: 1 !important;
             text-transform: uppercase;
         }
         .ms-open-in-gallery svg {
@@ -3142,7 +3174,8 @@ export const LAUNCHER_CSS = String.raw`
         .ms-open-in-gallery--unfurl {
             margin-inline-start: 8px;
             margin-block-start: 0;
-            height: 24px;
+            height: 24px !important;
+            min-height: 24px !important;
             padding: 0 8px;
             font-size: 10px;
             position: relative !important;
