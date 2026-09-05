@@ -2541,7 +2541,7 @@ export const OVERLAY_CSS = String.raw`
             color: var(--ms-text);
         }
         .ms-tags-content {
-            font-size: var(--ms-tags-font, 15px);
+            font-size: 14px;
             padding: 12px;
             overflow-y: auto;
             display: flex;
@@ -2576,7 +2576,7 @@ export const OVERLAY_CSS = String.raw`
             color: var(--ms-text-2);
             padding: 5px 10px;
             border-radius: 20px;
-            font-size: 0.8em;
+            font-size: 12px;
             line-height: 1.2;
             text-decoration: none;
             word-break: break-word;
@@ -2666,7 +2666,7 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-info-description {
             color: var(--ms-text-2);
-            font-size: 1em;
+            font-size: var(--ms-tags-font, 15px);
             line-height: 1.5;
             margin-bottom: 10px;
             width: 100%;
@@ -2676,15 +2676,6 @@ export const OVERLAY_CSS = String.raw`
             box-sizing: border-box;
             word-break: break-word;
         }
-        .ms-gallery-overlay.ms-imaglr .ms-info-description,
-        .ms-gallery-overlay.ms-imaglr .ms-tags-content {
-            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-            font-size: 13px;
-            line-height: 1.55;
-            letter-spacing: 0;
-        }
-        .ms-gallery-overlay.ms-imaglr .ms-info-postmeta,
-        .ms-gallery-overlay.ms-imaglr .ms-info-stats,
         .ms-position-control {
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
@@ -2861,7 +2852,17 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay.ms-rich-info .ms-tags-content,
         .ms-gallery-overlay.ms-imaglr .ms-tags-content,
         .ms-gallery-overlay.ms-bdsmlr .ms-tags-content {
-            font-size: var(--ms-tags-font, 14px);
+            font-size: 14px;
+        }
+        .ms-tags-panel,
+        .ms-info-description,
+        .ms-tag-pill,
+        .ms-tags-action-btn,
+        .ms-tags-like-btn,
+        .ms-tags-hide-btn,
+        .ms-tags-header h3,
+        .ms-tags-font-btn {
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
         }
         .ms-fav-btn {
             display: inline-flex;
