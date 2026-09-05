@@ -1,5 +1,5 @@
 export const OVERLAY_CSS = String.raw`
-        :root {
+        :root, .ms-gallery-overlay {
             /* Surface ladder and hairline borders for the overlay chrome. */
             --ms-bg: hsl(220, 8%, 8%);
             --ms-surface-1: hsl(220, 7%, 9%);
@@ -68,6 +68,10 @@ export const OVERLAY_CSS = String.raw`
             transition: opacity 160ms var(--ms-ease-out), visibility 160ms var(--ms-ease-out);
             color: var(--ms-text);
             font-family: system-ui, -apple-system, Segoe UI, sans-serif !important;
+        }
+        .ms-gallery-overlay,
+        .ms-gallery-overlay * {
+            box-sizing: border-box;
         }
         /* Buttons/inputs/selects/links don't inherit font-family by default
            (browser UA stylesheet quirk), so host-page styles can otherwise
@@ -216,7 +220,7 @@ export const OVERLAY_CSS = String.raw`
             align-items: center;
         }
         .ms-btn {
-            border: none;
+            border: 1px solid var(--ms-line);
             background: transparent;
             color: var(--ms-text-3);
             border-radius: 14px;
@@ -266,7 +270,7 @@ export const OVERLAY_CSS = String.raw`
             left: 50%;
             transform: translateX(-50%) translateY(-6px) scale(0.985);
             transform-origin: top center;
-            width: min(760px, calc(100% - 24px));
+            width: min(620px, calc(100% - 24px));
             z-index: 100;
             box-sizing: border-box;
             padding: 12px;
@@ -417,18 +421,15 @@ export const OVERLAY_CSS = String.raw`
             color: #fff;
         }
         .ms-filter-extras {
-            display: none;
+            display: grid;
             grid-template-columns: 1fr;
-            gap: 14px;
+            gap: 12px;
             padding-top: 12px;
             border-top: 1px solid var(--ms-hairline);
         }
-        .ms-filter-extras-open .ms-filter-extras {
-            display: grid;
-        }
         @media (min-width: 900px) {
-            .ms-filter-extras-open .ms-filter-extras {
-                grid-template-columns: 1.4fr 1fr 1fr;
+            .ms-filter-extras {
+                grid-template-columns: 1.45fr 1fr;
             }
         }
         .ms-filter-field {
@@ -1434,15 +1435,15 @@ export const OVERLAY_CSS = String.raw`
         }
         /* Hide the host page while the overlay is open. Adapters may use a
            lighter variant that still allows layout. */
-        body.ms-host-isolation > :not(.ms-gallery-overlay):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
-        body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
+        body.ms-host-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
+        body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
             visibility: hidden !important;
             pointer-events: none !important;
             contain: layout paint style;
             content-visibility: hidden;
         }
-        body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
-        body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
+        body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
+        body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
             visibility: hidden !important;
             pointer-events: none !important;
         }
@@ -1866,11 +1867,6 @@ export const OVERLAY_CSS = String.raw`
             box-shadow: 0 0 0 2px var(--ms-accent-tint);
         }
         .ms-position-total { color: var(--ms-text-4); }
-
-        .ms-gallery-overlay.ms-old-reddit .ms-btn,
-        .ms-gallery-overlay.ms-old-reddit .ms-icon-btn {
-            border: 1px solid var(--ms-line) !important;
-        }
 
         .ms-x-action {
             color: var(--ms-text-3);

@@ -182,8 +182,10 @@ function ensureOverlay() {
         bridge.ensureMsStyles();
         if (bridge.state.overlay) return bridge.state.overlay;
 
+        const coreApi = bridge.xgalleryCoreApi();
         const overlay = globalThis.XGalleryCore.createOverlayShell({
             document: document,
+            shadowCss: coreApi && coreApi.OVERLAY_CSS,
             classes: [
                 bridge.captionFeed || bridge.reservedPostHeader ? 'ms-rich-info' : '',
                 bridge.captionFeed ? 'ms-imaglr' : '',
@@ -196,7 +198,6 @@ function ensureOverlay() {
             infoLabel: bridge.captionFeed ? 'Description' : (bridge.reservedPostHeader || bridge.titleCard ? 'Info' : 'Tags')
         });
 
-        const coreApi = bridge.xgalleryCoreApi();
         if (coreApi && typeof coreApi.bindFilterBar === 'function') {
             bridge.state.filterBar = coreApi.bindFilterBar(overlay.querySelector('.ms-filter-bar'), {
                 state: bridge.galleryFilter,
@@ -208,12 +209,6 @@ function ensureOverlay() {
                         bridge.savePreference(bridge.GALLERY_FILTER_KEY, JSON.stringify(next));
                     } catch (e) { }
                     if (bridge.state.open) bridge.rebuildFilteredAndRender();
-                },
-                onCopyLink: () => {
-                    const url = window.location.href;
-                    if (navigator.clipboard && navigator.clipboard.writeText) {
-                        navigator.clipboard.writeText(url).catch(() => { });
-                    }
                 }
             });
         }
@@ -377,7 +372,7 @@ function ensureOverlay() {
             zoomSlider.addEventListener('click', (e) => e.stopPropagation());
         }
 
-        document.body.appendChild(overlay);
+        document.body.appendChild(overlay.msRootHost || overlay);
         bridge.state.overlay = overlay;
         return overlay;
     }
@@ -715,7 +710,8 @@ function updatePositionControl(force) {
         const position = bridge.galleryPositionSnapshot();
         const length = position.length;
         const currentIndex = position.currentIndex;
-        const editing = document.activeElement === input && input.dataset.msDirty === '1';
+        const inputRoot = input.getRootNode && input.getRootNode();
+        const editing = (document.activeElement === input || (inputRoot && inputRoot.activeElement === input)) && input.dataset.msDirty === '1';
         if (force || !editing) input.value = length ? String(currentIndex + 1) : '0';
         const digits = String(Math.max(1, length)).length;
         input.style.setProperty('width', Math.max(1, digits) + 'ch', 'important');
@@ -2421,10 +2417,13 @@ function bindGlobalGalleryHandlers() {
             if (e.key === 'Escape' && bridge.state.filterBar && bridge.state.filterBar.isOpen && bridge.state.filterBar.isOpen()) {
                 e.preventDefault();
                 bridge.state.filterBar.close();
-                if (document.activeElement && typeof document.activeElement.blur === 'function') document.activeElement.blur();
+                const focusRoot = bridge.state.overlay && bridge.state.overlay.getRootNode && bridge.state.overlay.getRootNode();
+                const focused = (focusRoot && focusRoot.activeElement) || document.activeElement;
+                if (focused && typeof focused.blur === 'function') focused.blur();
                 return;
             }
-            const active = document.activeElement;
+            const activeRoot = bridge.state.overlay && bridge.state.overlay.getRootNode && bridge.state.overlay.getRootNode();
+            const active = (activeRoot && activeRoot.activeElement) || document.activeElement;
             if (active && (/^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName) || active.isContentEditable)) return;
             if (e.key === 'Escape') {
                 e.preventDefault();

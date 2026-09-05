@@ -83,5 +83,21 @@ export function createOverlayShell(options = {}) {
         '<div class="ms-thumbs-wrap"><div class="ms-thumbs-track"></div></div>'
     ].join('');
 
+    if (options.shadowCss && typeof overlay.attachShadow === 'function') {
+        const host = doc.createElement('xgallery-root');
+        host.className = 'ms-gallery-root';
+        host.style.setProperty('all', 'initial', 'important');
+        host.style.setProperty('position', 'fixed', 'important');
+        host.style.setProperty('inset', '0', 'important');
+        host.style.setProperty('z-index', '2147483646', 'important');
+        host.style.setProperty('pointer-events', 'none', 'important');
+        host.style.setProperty('display', 'block', 'important');
+        const shadow = host.attachShadow({ mode: 'open' });
+        const style = doc.createElement('style');
+        style.textContent = String(options.shadowCss);
+        shadow.append(style, overlay);
+        Object.defineProperty(overlay, 'msRootHost', { value: host });
+    }
+
     return overlay;
 }

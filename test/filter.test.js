@@ -56,9 +56,19 @@ test('overlay shell includes the filter bar', () => {
     const dom = new JSDOM('<!doctype html><html><body></body></html>');
     const overlay = createOverlayShell({ document: dom.window.document });
     assert.ok(overlay.querySelector('.ms-filter-bar'));
-    assert.ok(overlay.querySelector('.ms-filter-input'));
+    assert.equal(overlay.querySelector('.ms-filter-input'), null);
+    assert.equal(overlay.querySelector('.ms-filter-copy'), null);
+    assert.equal(overlay.querySelector('.ms-filter-min-album'), null);
+    assert.ok(overlay.querySelector('.ms-filter-min-mb'));
     assert.ok(overlay.querySelector('[data-act="filter-toggle"]'));
     assert.equal(overlay.querySelector('.ms-filter-bar').getAttribute('aria-hidden'), 'true');
+});
+
+test('overlay shell can isolate viewer chrome in a shadow root', () => {
+    const dom = new JSDOM('<!doctype html><html><body></body></html>');
+    const overlay = createOverlayShell({ document: dom.window.document, shadowCss: '.ms-gallery-overlay{color:white}' });
+    assert.equal(overlay.getRootNode().host.className, 'ms-gallery-root');
+    assert.equal(overlay.msRootHost.shadowRoot.querySelector('.ms-gallery-overlay'), overlay);
 });
 
 test('bindFilterBar toggles type chips and kinds', () => {

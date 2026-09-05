@@ -170,17 +170,6 @@ function typeButtonsHtml() {
 export function filterBarMarkup() {
     return [
         '<form class="ms-filter-bar" autocomplete="off" aria-hidden="true">',
-        '  <div class="ms-filter-row">',
-        '    <div class="ms-filter-search">',
-        '      <span class="ms-filter-search-icon" aria-hidden="true">' + ICON.search + '</span>',
-        '      <input class="ms-filter-input" type="search" name="q" placeholder="Search: &quot;exact phrase&quot;, -to exclude" aria-label="Filter gallery">',
-        '      <kbd class="ms-filter-kbd" aria-hidden="true"><span>Ctrl</span>K</kbd>',
-        '    </div>',
-        '    <div class="ms-filter-actions">',
-        '      <button class="ms-filter-submit" type="submit">' + ICON.search + '<span>Search</span></button>',
-        '      <button class="ms-filter-copy" type="button">' + ICON.copy + '<span>Copy link</span></button>',
-        '    </div>',
-        '  </div>',
         '  <div class="ms-filter-toolbar">',
         '    <div class="ms-filter-kinds">',
         '      <button type="button" class="ms-filter-kind" data-kind="all">' + ICON.search + 'All</button>',
@@ -188,7 +177,6 @@ export function filterBarMarkup() {
         '      <button type="button" class="ms-filter-kind" data-kind="videos">' + ICON.video + 'Videos</button>',
         '    </div>',
         '    <div class="ms-filter-toolbar-end">',
-        '      <button class="ms-filter-extras-toggle" type="button">' + ICON.sliders + '<span>Hide filters</span></button>',
         '      <button class="ms-filter-reset" type="button">Reset filters</button>',
         '    </div>',
         '  </div>',
@@ -197,10 +185,6 @@ export function filterBarMarkup() {
         '    <label class="ms-filter-field"><span>File size</span><div class="ms-filter-pair">',
         '      <input class="ms-filter-min-mb" type="number" min="0" inputmode="numeric" placeholder="Min MB">',
         '      <input class="ms-filter-max-mb" type="number" min="0" inputmode="numeric" placeholder="Max MB">',
-        '    </div></label>',
-        '    <label class="ms-filter-field"><span>Album size</span><div class="ms-filter-pair">',
-        '      <input class="ms-filter-min-album" type="number" min="0" inputmode="numeric" placeholder="Min files">',
-        '      <input class="ms-filter-max-album" type="number" min="0" inputmode="numeric" placeholder="Max files">',
         '    </div></label>',
         '  </div>',
         '  <div class="ms-filter-chips" hidden></div>',
@@ -218,9 +202,15 @@ function paintChips(root, state) {
     )).join('');
 }
 
+function isActiveControl(control) {
+    if (!control) return false;
+    const root = control.getRootNode && control.getRootNode();
+    return document.activeElement === control || !!(root && root.activeElement === control);
+}
+
 function paint(root, state) {
     const input = root.querySelector('.ms-filter-input');
-    if (input && input.value !== state.query && document.activeElement !== input) input.value = state.query;
+    if (input && input.value !== state.query && !isActiveControl(input)) input.value = state.query;
     root.querySelectorAll('.ms-filter-kind').forEach((btn) => {
         btn.classList.toggle('is-active', btn.getAttribute('data-kind') === state.kind);
     });
@@ -232,13 +222,10 @@ function paint(root, state) {
     const maxMb = root.querySelector('.ms-filter-max-mb');
     const minAlbum = root.querySelector('.ms-filter-min-album');
     const maxAlbum = root.querySelector('.ms-filter-max-album');
-    if (minMb && document.activeElement !== minMb) minMb.value = state.minMb == null ? '' : String(state.minMb);
-    if (maxMb && document.activeElement !== maxMb) maxMb.value = state.maxMb == null ? '' : String(state.maxMb);
-    if (minAlbum && document.activeElement !== minAlbum) minAlbum.value = state.minAlbum == null ? '' : String(state.minAlbum);
-    if (maxAlbum && document.activeElement !== maxAlbum) maxAlbum.value = state.maxAlbum == null ? '' : String(state.maxAlbum);
-    root.classList.toggle('ms-filter-extras-open', state.extrasOpen);
-    const toggle = root.querySelector('.ms-filter-extras-toggle span');
-    if (toggle) toggle.textContent = state.extrasOpen ? 'Hide filters' : 'Show filters';
+    if (minMb && !isActiveControl(minMb)) minMb.value = state.minMb == null ? '' : String(state.minMb);
+    if (maxMb && !isActiveControl(maxMb)) maxMb.value = state.maxMb == null ? '' : String(state.maxMb);
+    if (minAlbum && !isActiveControl(minAlbum)) minAlbum.value = state.minAlbum == null ? '' : String(state.minAlbum);
+    if (maxAlbum && !isActiveControl(maxAlbum)) maxAlbum.value = state.maxAlbum == null ? '' : String(state.maxAlbum);
     paintChips(root, state);
 }
 
@@ -329,18 +316,10 @@ export function bindFilterBar(root, options = {}) {
             emit();
             return;
         }
-        if (event.target.closest('.ms-filter-extras-toggle')) {
-            state.extrasOpen = !state.extrasOpen;
-            emit();
-            return;
-        }
         if (event.target.closest('.ms-filter-reset')) {
             state = normalizeFilterState({});
             emit();
             return;
-        }
-        if (event.target.closest('.ms-filter-copy')) {
-            if (typeof options.onCopyLink === 'function') options.onCopyLink();
         }
     });
     root.addEventListener('change', (event) => {
