@@ -11,6 +11,10 @@ function createLauncher(options) {
     button.textContent=options.label||'Gallery';button.title=options.title||button.textContent;
     button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();options.onClick();});
     protectHostControl(button,false);
+    button.style.setProperty('height','38px','important');
+    button.style.setProperty('min-height','38px','important');
+    button.style.setProperty('max-height','38px','important');
+    button.style.setProperty('padding','0 14px','important');
     document.body.append(button);return button;
 }
 function beginOpen() {
@@ -1761,6 +1765,13 @@ function appendVideoThumbMedia(host, item, thumbSrc, isVideo, placeholderClass) 
             return;
         }
         const videoUrl = item.src || thumbSrc || '';
+        // Feed adapters with expensive native players must not allocate a
+        // decoder for every thumbnail as well as the active stage video.
+        if (bridge.reservedPostHeader) {
+            host.classList.add(placeholderClass);
+            host.appendChild(createPlaceholderIcon(true));
+            return;
+        }
         if (hasPlayableVideoThumb(item, thumbSrc)) {
             if (!bridge.reservedPostHeader && bridge.isMp4ThumbUrl(videoUrl) && bridge.msMp4Box()) {
                 const img = createLazyMp4PosterImg(item, function () { fail(img); });
@@ -2545,7 +2556,8 @@ function renderCurrent() {
         if (!bridge.state.overlay || !bridge.state.items.length) return;
         if (bridge.state.gridMode) return;
         bridge.syncCoreCurrent();
-        bridge.checkTriggerInfiniteScroll();
+        // Let the current item paint before any host scroll/layout work starts.
+        setTimeout(() => { if (bridge.state.open) bridge.checkTriggerInfiniteScroll(); }, 0);
         bridge.scheduleWindowResolution();
         disablePan();
 
@@ -2584,8 +2596,9 @@ function renderCurrent() {
                     ? `<img class="ms-info-avatar" src="${esc(author.avatarUrl)}" referrerpolicy="no-referrer" alt="">`
                     : '';
                 const who = `<a class="ms-info-author" href="${esc(author.profileUrl || linkUrl)}" target="_blank" rel="noopener noreferrer" title="${esc(author.handle || author.name)}">${esc(author.name || author.handle)}</a>`;
+                const date = presentation.date || '';
                 return `<span class="ms-info-byline">${avatar}${who}<span class="ms-info-sep">:</span>` +
-                    `<a href="${esc(linkUrl)}" target="_blank" rel="noopener noreferrer">${esc(linkUrl)}</a></span>`;
+                    `<span class="ms-info-source"><a href="${esc(linkUrl)}" target="_blank" rel="noopener noreferrer">${esc(linkUrl)}</a>${date ? `<span class="ms-info-date">${esc(date)}</span>` : ''}</span></span>`;
             }
 
             if (item && item.galleryName) {
@@ -3074,7 +3087,9 @@ function renderCurrent() {
             };
             video.addEventListener('pointerdown', activateVideo, { once: true });
             if ((usedPredicted || bufferedVideo) && !video.getAttribute('src')) video.src = primaryVideoSrc;
-            setTimeout(activateVideo, usedPredicted || bufferedVideo ? 0 : presentation.videoDelay);
+            // Two frames let navigation and the poster reach the screen before
+            // stream initialization. Superseded items never start a decoder.
+            requestAnimationFrame(() => requestAnimationFrame(activateVideo));
         } else {
             if (presentation.coverAlbum) {
                 const coverImg = globalThis.XGalleryCore.createImageMedia({
@@ -3126,6 +3141,11 @@ function renderCurrent() {
         }
 
         info.innerHTML = buildInfoHtml();
+        if (presentation.date && !info.querySelector('.ms-info-date')) {
+            const date = document.createElement('span');
+            date.className = 'ms-info-date'; date.textContent = presentation.date;
+            date.style.display = 'block'; info.append(date);
+        }
         const position = bridge.galleryPositionSnapshot();
         globalThis.XGalleryCore.renderPosition({
             counter: counter,
@@ -3146,6 +3166,12 @@ function renderCurrent() {
                 const current = bridge.state.items[bridge.state.currentIndex];
                 const currentItem = current ? (current.item || current) : null;
                 if (currentItem !== item) return;
+                const freshDate = bridge.mediaPresentation(item).date;
+                if (freshDate && info.isConnected) {
+                    let date = info.querySelector('.ms-info-date');
+                    if (!date) { date = document.createElement('span'); date.className='ms-info-date'; date.style.display='block'; info.append(date); }
+                    date.textContent = freshDate;
+                }
                 updateMediaCaptionOverlay(item);
                 const tagsOverlay = bridge.state.overlay && bridge.state.overlay.querySelector('.ms-tags-overlay');
                 if (tagsOverlay && tagsOverlay.classList.contains('active')) bridge.applyTagsPanel(true);
@@ -3209,6 +3235,8 @@ function addSettingsGearButton() {
             e.stopPropagation();
         });
         protectHostControl(gear,false);
+        for (const prop of ['height','min-height','max-height','width']) gear.style.setProperty(prop,'38px','important');
+        gear.style.setProperty('padding','0','important');
         document.body.appendChild(gear);
     }
 

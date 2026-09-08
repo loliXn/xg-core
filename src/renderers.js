@@ -145,7 +145,9 @@ export function prepareMediaSlot(options) {
     const wrap = options.wrap;
     const item = options.item;
     if (!wrap) return false;
-    const keepVideo = item && item.type === 'video' ? wrap.querySelector('video.ms-media') : null;
+    // Retiring once avoids resetting a decoder here and then resetting it a
+    // second time when the runtime replaces the old player and its listeners.
+    const keepVideo = null;
     wrap.querySelectorAll('video, audio').forEach((element) => {
         if (element === keepVideo) return;
         try {

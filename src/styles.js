@@ -3111,6 +3111,18 @@ export const OVERLAY_CSS = String.raw`
             transform: scale(1.12);
         }
 .ms-index-input{top:0!important;height:1em!important;display:inline-flex!important;align-items:center!important;}.ms-position-control>span{display:inline-flex;align-items:center;height:1em;line-height:1;}.ms-tags-overlay.active{z-index:20;}.ms-load-mark-layer{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:6;}.ms-load-mark{position:absolute;top:10px;width:14px;height:70px;display:flex;align-items:center;justify-content:center;color:var(--ms-accent);}.ms-load-mark::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:1px;background:var(--ms-accent);opacity:0.7;}.ms-load-mark svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;}.ms-settings-row.ms-settings-stack{flex-direction:column;align-items:stretch;gap:8px;}.ms-settings-textarea{width:100%;min-height:88px;resize:vertical;box-sizing:border-box;background:var(--ms-surface-3,#1b1d24);border:1px solid var(--ms-line,#333);border-radius:8px;color:var(--ms-text-2,#ddd);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:8px 10px;outline:none;}.ms-settings-textarea:focus{border-color:var(--ms-accent);}.ms-settings-hint{margin:0;font-size:11px;color:var(--ms-text-4,#888);}.ms-blacklist-pills{display:flex;flex-wrap:wrap;gap:6px;}.ms-blacklist-pill{border:1px solid var(--ms-line,#444);background:transparent;color:var(--ms-text-3,#ccc);border-radius:999px;padding:3px 9px;font-size:12px;cursor:pointer;}.ms-blacklist-pill[aria-pressed="true"]{background:hsla(0,72%,46%,0.18);border-color:hsla(0,72%,56%,0.55);color:#f2c0c0;}
+        .ms-info-source{display:flex;flex-direction:column;min-width:0;gap:2px;line-height:1.25}
+        .ms-info-source>a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .ms-info-date{font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ms-text-3,#aaa)}
+        .ms-tags-action-btn,.ms-tags-action-btn *{text-decoration:none!important}
+        .ms-settings-tabs{display:flex;gap:6px;padding:0 20px 12px;overflow-x:auto}
+        .ms-settings-tab{border:1px solid var(--ms-line);border-radius:8px;padding:8px 12px;background:transparent;color:var(--ms-text);font:600 12px/1.3 system-ui;cursor:pointer;white-space:nowrap}
+        .ms-settings-tab[aria-selected="true"]{background:var(--ms-accent);border-color:var(--ms-accent);color:white}
+        .ms-settings-page[hidden]{display:none!important}
+        .ms-r34-settings-modal button:not(:disabled):hover{background:#303846!important;border-color:var(--ms-accent)!important;color:#fff!important}
+        .ms-r34-settings-modal button:focus-visible{outline:2px solid var(--ms-accent);outline-offset:2px}
+        .ms-r34-settings-modal button:disabled{opacity:.45;cursor:default}
+        .ms-settings-row>button{padding:8px 12px;min-height:34px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);cursor:pointer}
     `;
 
 export function installOverlayStyles(addStyle) {

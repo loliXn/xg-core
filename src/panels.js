@@ -143,9 +143,41 @@ export function createSettingsPanel(options) {
     const close = panelElement(doc, 'button', 'ms-settings-close', '×'); close.type = 'button'; close.setAttribute('aria-label', 'Close');
     heading.append(close); modal.append(heading);
     const body = panelElement(doc, 'div', 'ms-settings-body');
+    const tabs = panelElement(doc, 'div', 'ms-settings-tabs');
+    tabs.setAttribute('role', 'tablist');
+    tabs.setAttribute('aria-label', 'Settings category');
+    const names = [...new Set(options.sections.map(section => section.tab || 'General'))];
+    const groups = new Map();
+    names.forEach((name, index) => {
+        const tab = panelElement(doc, 'button', 'ms-settings-tab', name);
+        tab.type = 'button'; tab.setAttribute('role', 'tab');
+        tab.id = 'ms-settings-tab-' + index;
+        tab.setAttribute('aria-controls', 'ms-settings-page-' + index);
+        const group = panelElement(doc, 'div', 'ms-settings-page');
+        group.id = 'ms-settings-page-' + index;
+        group.setAttribute('role', 'tabpanel'); group.setAttribute('aria-labelledby', tab.id);
+        group.hidden = index !== 0;
+        tab.tabIndex = index ? -1 : 0; tab.setAttribute('aria-selected', String(!index));
+        tab.addEventListener('click', () => {
+            groups.forEach(({tab: other, group: pane}, key) => {
+                pane.hidden = key !== name; other.tabIndex = key === name ? 0 : -1;
+                other.setAttribute('aria-selected', String(key === name));
+            });
+        });
+        tab.addEventListener('keydown', event => {
+            if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+            event.preventDefault();
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? names.length - 1 :
+                (index + (event.key === 'ArrowRight' ? 1 : -1) + names.length) % names.length;
+            const target = groups.get(names[next]).tab; target.click(); target.focus();
+        });
+        groups.set(name, {tab, group}); tabs.append(tab); body.append(group);
+    });
+    modal.append(tabs);
     const controls = new Map();
     options.sections.forEach(section => {
-        body.append(panelElement(doc, 'div', 'ms-settings-section-group', section.label));
+        const sectionBody = groups.get(section.tab || 'General').group;
+        sectionBody.append(panelElement(doc, 'div', 'ms-settings-section-group', section.label));
         const card = panelElement(doc, 'div', 'ms-settings-card');
         section.fields.forEach(field => {
             const row = panelElement(doc, 'div', 'ms-settings-row' + (field.type === 'textarea' ? ' ms-settings-stack' : ''));
@@ -194,7 +226,7 @@ export function createSettingsPanel(options) {
             }
             card.append(row);
         });
-        body.append(card);
+        sectionBody.append(card);
     });
     modal.append(body);
     const footer = panelElement(doc, 'div', 'ms-r34-btn-row');
