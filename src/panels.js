@@ -182,16 +182,37 @@ export function createSettingsPanel(options) {
         section.fields.forEach(field => {
             const row = panelElement(doc, 'div', 'ms-settings-row' + (field.type === 'textarea' ? ' ms-settings-stack' : ''));
             const label = panelElement(doc, 'label', 'ms-settings-label', field.label);
-            if (field.note) { label.append(doc.createElement('br'), panelElement(doc, 'small', '', field.note)); }
+            let note = null;
+            if (field.note) {
+                note = panelElement(doc, 'small', '', field.note);
+                label.append(doc.createElement('br'), note);
+            }
             row.append(label);
             let input;
             if (field.type === 'button') {
                 input = panelElement(doc, 'button', '', field.buttonLabel || field.label); input.type = 'button';
                 input.addEventListener('click', async () => {
                     input.disabled = true;
-                    try { const text = await field.run(); if (text) input.textContent = text; }
-                    catch { input.textContent = 'Try again'; }
-                    finally { input.disabled = false; }
+                    input.classList.remove('is-success', 'is-error');
+                    input.classList.add('is-busy');
+                    const original = input.textContent;
+                    input.textContent = field.busyLabel || 'Working…';
+                    try {
+                        const result = await field.run();
+                        if (result && typeof result === 'object') {
+                            input.textContent = result.buttonLabel || original;
+                            if (note && result.note) note.textContent = result.note;
+                            input.classList.add(result.ok === false ? 'is-error' : 'is-success');
+                        } else if (result) {
+                            input.textContent = result;
+                            input.classList.add('is-success');
+                        } else input.textContent = original;
+                    }
+                    catch {
+                        input.textContent = 'Try again';
+                        input.classList.add('is-error');
+                    }
+                    finally { input.disabled = false; input.classList.remove('is-busy'); }
                 });
             } else if (field.type === 'select') {
                 input = doc.createElement('select');

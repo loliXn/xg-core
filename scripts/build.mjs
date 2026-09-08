@@ -46,6 +46,7 @@ const bundle = [
     '        createSettingsPanel,',
     '        MEDIA_TYPES,',
     '        XGALLERY_CORE_API_VERSION,',
+    '        XGALLERY_CORE_VERSION,',
     '        compareCoreVersions,',
     '        OVERLAY_CSS,',
     '        configureVideoElement,',

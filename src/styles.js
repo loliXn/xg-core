@@ -22,6 +22,8 @@ export const OVERLAY_CSS = String.raw`
             --ms-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
             --ms-ease: cubic-bezier(0.4, 0, 0.2, 1);
             --ms-ease-out: cubic-bezier(0.215, 0.61, 0.355, 1);
+            --ms-font-ui: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
+            --ms-font-data: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         }
         @supports not (backdrop-filter: blur(12px)) {
             .ms-gallery-topbar, .ms-thumbs-wrap, .ms-dropdown-menu, .ms-grid-controls {
@@ -37,7 +39,7 @@ export const OVERLAY_CSS = String.raw`
             align-items: center;
             justify-content: center;
             color: var(--ms-text);
-            font-family: system-ui, -apple-system, Segoe UI, sans-serif !important;
+            font-family: var(--ms-font-ui) !important;
             flex-direction: column;
             text-align: center;
             pointer-events: auto;
@@ -67,7 +69,7 @@ export const OVERLAY_CSS = String.raw`
             pointer-events: none;
             transition: opacity 160ms var(--ms-ease-out), visibility 160ms var(--ms-ease-out);
             color: var(--ms-text);
-            font-family: system-ui, -apple-system, Segoe UI, sans-serif !important;
+            font-family: var(--ms-font-ui) !important;
         }
         .ms-gallery-overlay,
         .ms-gallery-overlay * {
@@ -1476,7 +1478,7 @@ export const OVERLAY_CSS = String.raw`
             100% { outline-color: rgba(255, 69, 0, 0); }
         }
         .ms-r34-settings-overlay {
-            font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+            font: 14px/1.5 var(--ms-font-ui);
             color-scheme: dark;
             position: fixed;
             inset: 0;
@@ -1504,7 +1506,7 @@ export const OVERLAY_CSS = String.raw`
             display: flex;
             flex-direction: column;
             color: var(--ms-text-2);
-            font-family: system-ui, -apple-system, "Segoe UI", sans-serif !important;
+            font-family: var(--ms-font-ui) !important;
             box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), var(--ms-shadow-lg);
             transform: translateY(12px) scale(0.96);
             opacity: 0;
@@ -3116,13 +3118,20 @@ export const OVERLAY_CSS = String.raw`
         .ms-info-date{font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ms-text-3,#aaa)}
         .ms-tags-action-btn,.ms-tags-action-btn *{text-decoration:none!important}
         .ms-settings-tabs{display:flex;gap:6px;padding:0 20px 12px;overflow-x:auto}
-        .ms-settings-tab{border:1px solid var(--ms-line);border-radius:8px;padding:8px 12px;background:transparent;color:var(--ms-text);font:600 12px/1.3 system-ui;cursor:pointer;white-space:nowrap}
+        .ms-settings-tab{border:1px solid var(--ms-line);border-radius:8px;padding:8px 12px;background:transparent;color:var(--ms-text);font:600 12px/1.3 var(--ms-font-ui);cursor:pointer;white-space:nowrap;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out)}
         .ms-settings-tab[aria-selected="true"]{background:var(--ms-accent);border-color:var(--ms-accent);color:white}
         .ms-settings-page[hidden]{display:none!important}
         .ms-r34-settings-modal button:not(:disabled):hover{background:#303846!important;border-color:var(--ms-accent)!important;color:#fff!important}
         .ms-r34-settings-modal button:focus-visible{outline:2px solid var(--ms-accent);outline-offset:2px}
         .ms-r34-settings-modal button:disabled{opacity:.45;cursor:default}
-        .ms-settings-row>button{padding:8px 12px;min-height:34px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);cursor:pointer}
+        .ms-settings-row>button{padding:8px 12px;min-height:34px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);font:600 12px/1.25 var(--ms-font-ui);cursor:pointer;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out),opacity 140ms var(--ms-ease-out)}
+        .ms-settings-row>button.is-busy{cursor:wait;color:var(--ms-text-3)}
+        .ms-settings-row>button.is-success{border-color:var(--ms-accent-line);background:var(--ms-accent-tint)}
+        .ms-settings-row>button.is-error{border-color:rgba(239,96,96,.58);color:#f3b0b0}
+        .ms-settings-row>select,.ms-settings-row>input[type="number"],.ms-settings-label{font-family:var(--ms-font-ui)}
+        .ms-settings-label small,.ms-position-control,.ms-info-postmeta,.ms-tags-like-count{font-family:var(--ms-font-data);font-variant-numeric:tabular-nums}
+        .ms-gallery-overlay[data-ms-feed-loading="1"] .ms-position-control::after{content:"";display:inline-block;width:6px;height:6px;margin-left:7px;border-radius:50%;background:var(--ms-accent);box-shadow:0 0 0 3px var(--ms-accent-tint);animation:ms-feed-pulse 900ms var(--ms-ease-out) infinite alternate}
+        @keyframes ms-feed-pulse{from{opacity:.38;transform:scale(.82)}to{opacity:1;transform:scale(1)}}
     `;
 
 export function installOverlayStyles(addStyle) {
@@ -3142,6 +3151,7 @@ export const LAUNCHER_CSS = String.raw`
             --ms-accent-line: hsla(223, 88%, 57%, 0.72);
             --ms-hover: rgba(255, 255, 255, 0.08);
             --ms-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+            --ms-font-ui: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
         }
         .ms-xcom-gallery-btn, .ms-site-gallery-btn {
             position: fixed;
@@ -3162,7 +3172,7 @@ export const LAUNCHER_CSS = String.raw`
             cursor: pointer;
             font-weight: 700;
             box-shadow: var(--ms-shadow-md);
-            font-family: system-ui, -apple-system, Segoe UI, sans-serif !important;
+            font-family: var(--ms-font-ui) !important;
             font-size: 13px;
             letter-spacing: 0.5px;
         }
@@ -3187,7 +3197,7 @@ export const LAUNCHER_CSS = String.raw`
             border: 1px solid var(--ms-line) !important;
             border-radius: 8px !important;
             cursor: pointer !important;
-            font-family: system-ui, -apple-system, Segoe UI, sans-serif !important;
+            font-family: var(--ms-font-ui) !important;
             font-size: 11px;
             font-weight: 600;
             letter-spacing: 0.5px;

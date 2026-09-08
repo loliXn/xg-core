@@ -2322,10 +2322,35 @@ function syncGridWindow() {
         paintGridWindow();
     }
 
-function renderThumbs() {
+function renderThumbs(options) {
+        const track = bridge.state.overlay && bridge.state.overlay.querySelector('.ms-thumbs-track');
+        let anchorKey = '';
+        let anchorX = 0;
+        if (track && options && options.preserveAnchor) {
+            const visible = Array.from(track.querySelectorAll('.ms-thumb[data-ms-key]')).find((button) => {
+                const rect = button.getBoundingClientRect();
+                const host = track.getBoundingClientRect();
+                return rect.right > host.left && rect.left < host.right;
+            });
+            if (visible) {
+                anchorKey = visible.dataset.msKey || '';
+                anchorX = visible.getBoundingClientRect().left;
+            }
+        }
         invalidateThumbGroupData();
         syncThumbsWindow();
-    }
+        if (track && anchorKey) {
+            const escaped = globalThis.CSS && CSS.escape ? CSS.escape(anchorKey) : anchorKey.replace(/["\\]/g, '\\$&');
+            const next = track.querySelector('.ms-thumb[data-ms-key="' + escaped + '"]');
+            if (next) {
+                const delta = next.getBoundingClientRect().left - anchorX;
+                if (Math.abs(delta) > 0.5) {
+                    track.scrollLeft += delta;
+                    paintThumbsWindow(track, thumbGroupData());
+                }
+            }
+        }
+}
 
 function updateSingleThumb(index, entry) {
         if (!bridge.state.overlay) return;
