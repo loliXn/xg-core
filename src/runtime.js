@@ -1,11 +1,16 @@
 import { renderPostPanel } from './panels.js';
 // Shared viewer behavior. Host operations and persisted preferences enter through the bridge.
 export function createViewerRuntime(bridge) {
+function protectHostControl(button, compact) {
+    const values = {appearance:'none',background:'#191b20',color:'#e7e8eb',border:'1px solid rgba(255,255,255,.24)','border-radius':compact?'8px':'10px',font:'600 12px/1 system-ui, sans-serif','text-shadow':'none','box-shadow':'0 2px 8px rgba(0,0,0,.25)','text-transform':'none',opacity:'1',filter:'none','backdrop-filter':'none','box-sizing':'border-box'};
+    for (const [key,value] of Object.entries(values)) button.style.setProperty(key,value,'important');
+}
 function createLauncher(options) {
     if(document.getElementById(options.id))return document.getElementById(options.id);
     const button=document.createElement('button');button.type='button';button.id=options.id;button.className=options.className||options.id;
     button.textContent=options.label||'Gallery';button.title=options.title||button.textContent;
     button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();options.onClick();});
+    protectHostControl(button,false);
     document.body.append(button);return button;
 }
 function beginOpen() {
@@ -1651,7 +1656,7 @@ function promoteLazyThumbVideo(vid) {
     }
 
 function promoteLazyMp4Poster(img) {
-        if (!img || img.dataset.msMp4Started) return;
+        if (!img || !img.isConnected || img.dataset.msMp4Started) return;
         img.dataset.msMp4Started = '1';
         bridge.mp4PosterForItem(img._msPosterItem).then((dataUrl) => {
             if (!img.isConnected) return;
@@ -1815,11 +1820,12 @@ function thumbSourceClass(item) {
 function thumbItemKey(entry) {
         const item = entry && (entry.item || entry);
         if (!item) return '';
-        return String(bridge.mediaKey(item));
+        return String(bridge.mediaKey(item)) + '|' + String(item.thumbSrc || '') + '|' + (item._frozenThumb ? 'frozen' : 'live');
     }
 
 function resetMediaThumbEl(el) {
         if (!el) return;
+        if (bridge.lazyThumbObserver) el.querySelectorAll('[data-ms-lazy-mp4]').forEach(img => bridge.lazyThumbObserver.unobserve(img));
         const vid = el.querySelector('video');
         if (vid) {
             try {
@@ -1975,14 +1981,14 @@ function onThumbsWindowScroll() {
         });
     }
 
-function takePoolCell(pool, used, key) {
+function takePoolCell(pool, used, key, reservedKeys) {
         if (key) {
             for (let i = 0; i < pool.length; i++) {
                 if (!used.has(pool[i]) && pool[i].dataset.msKey === key) return pool[i];
             }
         }
         for (let i = 0; i < pool.length; i++) {
-            if (!used.has(pool[i])) return pool[i];
+            if (!used.has(pool[i]) && (!reservedKeys || !reservedKeys.has(pool[i].dataset.msKey))) return pool[i];
         }
         return null;
     }
@@ -1999,10 +2005,11 @@ function paintThumbsWindow(track, groupData) {
         if (!bridge.state.thumbsPool) bridge.state.thumbsPool = [];
         const pool = bridge.state.thumbsPool;
         const used = new Set();
+        const reservedKeys = new Set(bridge.state.items.slice(start,end).map(thumbItemKey));
         for (let index = start; index < end; index++) {
             const entry = bridge.state.items[index];
             const key = thumbItemKey(entry);
-            let btn = takePoolCell(pool, used, key);
+            let btn = takePoolCell(pool, used, key, reservedKeys);
             if (!btn) {
                 btn = document.createElement('button');
                 btn.type = 'button';
@@ -2023,6 +2030,7 @@ function paintThumbsWindow(track, groupData) {
         }
         for (let i = 0; i < pool.length; i++) {
             if (used.has(pool[i])) continue;
+            if (pool[i].querySelector('video, [data-ms-lazy-mp4]')) resetMediaThumbEl(pool[i]);
             pool[i].style.display = 'none';
             pool[i].removeAttribute('data-index');
         }
@@ -2186,12 +2194,13 @@ function paintGridWindow() {
         if (!bridge.state.gridPool) bridge.state.gridPool = [];
         const pool = bridge.state.gridPool;
         const used = new Set();
+        const reservedKeys = new Set(bridge.state.items.slice(start,end).map(thumbItemKey));
         for (let index = start; index < end; index++) {
             const entry = bridge.state.items[index];
             const key = thumbItemKey(entry);
             const col = index % m.cols;
             const row = Math.floor(index / m.cols);
-            let cell = takePoolCell(pool, used, key);
+            let cell = takePoolCell(pool, used, key, reservedKeys);
             if (!cell) {
                 cell = document.createElement('button');
                 cell.type = 'button';
@@ -2217,6 +2226,7 @@ function paintGridWindow() {
             if (used.has(pool[i])) continue;
             pool[i].style.display = 'none';
             pool[i].removeAttribute('data-grid-index');
+            if (pool[i].querySelector('video, [data-ms-lazy-mp4]')) resetMediaThumbEl(pool[i]);
         }
     }
 
@@ -2267,7 +2277,6 @@ function syncGridWindow() {
     }
 
 function renderThumbs() {
-        bridge.syncCoreItems('thumb-render');
         invalidateThumbGroupData();
         syncThumbsWindow();
     }
@@ -2409,6 +2418,7 @@ function bindGlobalGalleryHandlers() {
 
         bridge.state.keyHandler = function (e) {
             if (!bridge.state.open) return;
+            if (document.getElementById('ms-settings-root')) return;
             if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
                 e.preventDefault();
                 if (bridge.state.filterBar && typeof bridge.state.filterBar.focus === 'function') bridge.state.filterBar.focus();
@@ -2483,6 +2493,7 @@ function createOpenInGalleryButton(startNode, variant) {
             (variant === 'unfurl' ? ' fauxBlockLink-link' : '');
         btn.setAttribute('aria-label', 'Open in Gallery');
         btn.innerHTML = openInGalleryButtonHtml();
+        protectHostControl(btn,true);
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -3170,6 +3181,7 @@ function addSettingsGearButton() {
         gear.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
         });
+        protectHostControl(gear,false);
         document.body.appendChild(gear);
     }
 

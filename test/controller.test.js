@@ -72,7 +72,7 @@ test('patch and removal keep navigation valid', () => {
 test('overlay shell rendering is core-owned', () => {
     const document = {
         createElement() {
-            return { className: '', style: {}, innerHTML: '' };
+            return { className: '', style: {}, innerHTML: '', querySelectorAll: () => [] };
         }
     };
     const overlay = createOverlayShell({

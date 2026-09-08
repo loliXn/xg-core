@@ -1,5 +1,7 @@
 import { filterBarMarkup } from './filter.js';
 
+export const HEART_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21.2l8.8-8.8a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
+
 export function createOverlayShell(options = {}) {
     const doc = options.document || document;
     const overlay = doc.createElement('div');
@@ -83,6 +85,7 @@ export function createOverlayShell(options = {}) {
         '<div class="ms-thumbs-wrap"><div class="ms-thumbs-track"></div></div>'
     ].join('');
 
+    overlay.querySelectorAll('[data-act="x-like"], [data-act="fav-toggle"]').forEach(button => { button.innerHTML = HEART_ICON; });
     if (options.shadowCss && typeof overlay.attachShadow === 'function') {
         const host = doc.createElement('xgallery-root');
         host.className = 'ms-gallery-root';

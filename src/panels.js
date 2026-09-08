@@ -1,3 +1,6 @@
+import { OVERLAY_CSS } from './styles.js';
+import { HEART_ICON } from './view.js';
+
 function panelElement(doc, tag, className, text) {
     const node = doc.createElement(tag);
     if (className) node.className = className;
@@ -102,7 +105,7 @@ export function renderPostPanel(options) {
             else { button.href = action.href; button.target = '_blank'; button.rel = 'noopener noreferrer'; }
             if (action.kind === 'like') {
                 const icon = panelElement(doc, 'span', 'ms-tags-action-icon');
-                icon.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8L12 21.2l8.8-8.8a5.5 5.5 0 0 0 0-7.8Z"/></svg>';
+                icon.innerHTML = HEART_ICON;
                 button.append(icon);
             }
             button.append(panelElement(doc, 'span', 'ms-tags-action-label', action.label));
@@ -122,7 +125,15 @@ export function renderPostPanel(options) {
 
 export function createSettingsPanel(options) {
     const doc = options.document || document;
-    if (doc.getElementById('ms-r34-settings-overlay')) return null;
+    if (doc.getElementById('ms-settings-root')) return null;
+    const previousFocus = doc.activeElement;
+    const host = doc.createElement('xgallery-settings');
+    host.id = 'ms-settings-root';
+    host.style.cssText = 'all:initial!important;position:fixed!important;inset:0!important;z-index:2147483647!important;display:block!important;visibility:visible!important;pointer-events:auto!important;';
+    const shadow = host.attachShadow({mode:'open'});
+    const sheet = doc.createElement('style');
+    sheet.textContent = OVERLAY_CSS;
+    shadow.append(sheet);
     const overlay = panelElement(doc, 'div', 'ms-r34-settings-overlay');
     overlay.id = 'ms-r34-settings-overlay';
     const modal = panelElement(doc, 'div', 'ms-r34-settings-modal');
@@ -190,16 +201,30 @@ export function createSettingsPanel(options) {
     const cancel = panelElement(doc, 'button', 'ms-r34-cancel', 'Cancel');
     const save = panelElement(doc, 'button', 'ms-r34-save', 'Save');
     cancel.type = save.type = 'button'; footer.append(cancel, save); modal.append(footer); overlay.append(modal);
-    const dismiss = () => options.onClose(overlay);
+    const dismiss = () => {
+        host.remove();
+        if (previousFocus && previousFocus.isConnected) previousFocus.focus({preventScroll:true});
+        if (options.onClose) options.onClose(overlay);
+    };
     close.addEventListener('click', dismiss); cancel.addEventListener('click', dismiss);
     overlay.addEventListener('click', e => { if (e.target === overlay) dismiss(); });
-    overlay.addEventListener('keydown', e => { if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); dismiss(); } });
+    overlay.addEventListener('keydown', e => {
+        e.stopPropagation();
+        if (e.key === 'Escape') { e.preventDefault(); dismiss(); }
+        if (e.key === 'Tab') {
+            const targets = Array.from(modal.querySelectorAll('button,input,select,textarea,a[href]')).filter(el => !el.disabled && el.getClientRects().length);
+            const first = targets[0], last = targets[targets.length-1];
+            if (e.shiftKey && shadow.activeElement === first) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && shadow.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+    });
     save.addEventListener('click', () => {
         const values = {};
         controls.forEach(({input,field}, id) => { if (field.type !== 'button') values[id] = field.type === 'checkbox' ? input.checked : input.value; });
         options.onSave(values); dismiss();
     });
-    doc.body.append(overlay);
+    shadow.append(overlay);
+    doc.body.append(host);
     requestAnimationFrame(() => { overlay.classList.add('ms-settings-open'); close.focus(); });
     return overlay;
 }

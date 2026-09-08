@@ -1,5 +1,5 @@
 export const OVERLAY_CSS = String.raw`
-        :root, .ms-gallery-overlay {
+        :root, .ms-gallery-overlay, .ms-r34-settings-overlay {
             /* Surface ladder and hairline borders for the overlay chrome. */
             --ms-bg: hsl(220, 8%, 8%);
             --ms-surface-1: hsl(220, 7%, 9%);
@@ -1124,7 +1124,7 @@ export const OVERLAY_CSS = String.raw`
             margin-right: 0 !important;
             z-index: 1;
         }
-        .ms-btn-expand-album {
+        .ms-gallery-overlay .ms-btn-expand-album {
             position: absolute;
             bottom: 20px;
             left: 50%;
@@ -1133,13 +1133,15 @@ export const OVERLAY_CSS = String.raw`
             display: inline-flex !important;
             align-items: center;
             gap: 8px;
-            height: 40px;
-            padding: 0 16px;
+            height: 46px;
+            min-width: 180px;
+            max-width: calc(100% - 24px);
+            padding: 0 22px;
             border-radius: 10px;
-            background: hsla(220, 7%, 9%, 0.92);
-            border: 1px solid var(--ms-line);
+            background: hsla(220, 14%, 12%, 0.96);
+            border: 1px solid var(--ms-accent-line);
             color: var(--ms-text);
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             letter-spacing: 0.2px;
             text-transform: none;
@@ -1444,15 +1446,15 @@ export const OVERLAY_CSS = String.raw`
         }
         /* Hide the host page while the overlay is open. Adapters may use a
            lighter variant that still allows layout. */
-        body.ms-host-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
-        body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
+        body.ms-host-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
+        body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
             visibility: hidden !important;
             pointer-events: none !important;
             contain: layout paint style;
             content-visibility: hidden;
         }
-        body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
-        body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
+        body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
+        body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
             visibility: hidden !important;
             pointer-events: none !important;
         }
@@ -1468,6 +1470,8 @@ export const OVERLAY_CSS = String.raw`
             100% { outline-color: rgba(255, 69, 0, 0); }
         }
         .ms-r34-settings-overlay {
+            font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+            color-scheme: dark;
             position: fixed;
             inset: 0;
             z-index: 100000;
@@ -1487,7 +1491,7 @@ export const OVERLAY_CSS = String.raw`
             border: 1px solid var(--ms-line);
             border-radius: 16px;
             padding: 0;
-            width: 460px;
+            width: 560px;
             max-width: calc(100vw - 32px);
             max-height: min(85vh, 720px);
             overflow: hidden;
@@ -1562,6 +1566,15 @@ export const OVERLAY_CSS = String.raw`
             scrollbar-width: thin;
             scrollbar-color: var(--ms-line-strong) transparent;
         }
+        .ms-r34-settings-overlay *, .ms-r34-settings-overlay *::before, .ms-r34-settings-overlay *::after { box-sizing: border-box; }
+        .ms-r34-settings-overlay button, .ms-r34-settings-overlay input, .ms-r34-settings-overlay select, .ms-r34-settings-overlay textarea { font: inherit; }
+        .ms-settings-section-group { margin: 12px 0 8px; color: var(--ms-text-3); font: 11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; text-transform: uppercase; letter-spacing: .06em; }
+        .ms-settings-label { flex: 1; min-width: 0; font-size: 13px; }
+        .ms-settings-label small { color: var(--ms-text-3); font-size: 11px; }
+        .ms-settings-row > input, .ms-settings-row > select { max-width: 180px; min-width: 0; }
+        .ms-settings-row > button, .ms-settings-row > select { border: 1px solid var(--ms-line); background: var(--ms-surface-3); color: var(--ms-text); border-radius: 7px; padding: 7px 10px; font-size: 12px; }
+        .ms-r34-settings-overlay :focus-visible { outline: 2px solid var(--ms-accent); outline-offset: 3px; }
+        .ms-tags-action-icon { display: inline-flex; }
         @media (prefers-reduced-motion: reduce) {
             .ms-r34-settings-overlay,
             .ms-r34-settings-modal {
