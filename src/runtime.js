@@ -949,7 +949,7 @@ function buildGridCell(entry, index) {
         const isVideo = item.type === 'video' || item.type === 'iframe' || item.expectedVideo || item.xUnplayable;
         const hasPoster = !!(item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc));
 
-        if (bridge.isPlaceholderUrl(thumbSrc) || (isVideo && !hasPoster && !bridge.canExtractMp4Poster(item, thumbSrc))) {
+        if (thumbMediaIsPlaceholder(item, thumbSrc)) {
             cell.classList.add('ms-grid-placeholder');
             cell.appendChild(createPlaceholderIcon(isVideo));
             let domain = 'unknown';
@@ -1711,9 +1711,10 @@ function createLazyMp4PosterImg(item, onError) {
     }
 
 function isStaticVideoThumbUrl(url) {
-        if (!url || (bridge.isPlaceholderUrl && bridge.isPlaceholderUrl(url))) return false;
+        if (!url) return false;
+        if (typeof bridge.isPlaceholderUrl === 'function' && bridge.isPlaceholderUrl(url)) return false;
         if (/^data:image\/(jpeg|jpg|png|gif|webp)/i.test(url)) return true;
-        return !!(bridge.isImageThumbSource && bridge.isImageThumbSource(url));
+        return typeof bridge.isImageThumbSource === 'function' && bridge.isImageThumbSource(url);
     }
 
 function appendStaticVideoThumb(host, url) {
@@ -1723,6 +1724,24 @@ function appendStaticVideoThumb(host, url) {
         img.classList.add('ms-loaded');
         img.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none;display:block;background:#111;';
         host.appendChild(img);
+    }
+
+function hasPlayableVideoThumb(item, thumbSrc) {
+        const url = String((item && item.src) || thumbSrc || '');
+        if (!url) return false;
+        if (typeof bridge.isPlaceholderUrl === 'function' && bridge.isPlaceholderUrl(url)) return false;
+        if (typeof bridge.isMp4ThumbUrl === 'function' && bridge.isMp4ThumbUrl(url)) return true;
+        if (typeof bridge.isVideoThumbSource === 'function' && bridge.isVideoThumbSource(url)) return true;
+        return /\.(mp4|webm|ogg|m4v|mov)(?:\?|#|$)/i.test(url);
+    }
+
+function thumbMediaIsPlaceholder(item, thumbSrc) {
+        const hasPoster = isStaticVideoThumbUrl(thumbSrc) || isStaticVideoThumbUrl(item && item.thumbSrc)
+            || !!(item && item.thumbSrc && item.thumbSrc !== item.src && !(bridge.isPlaceholderUrl && bridge.isPlaceholderUrl(item.thumbSrc)));
+        if (hasPoster) return false;
+        if (hasPlayableVideoThumb(item, thumbSrc)) return false;
+        if (bridge.canExtractMp4Poster && bridge.canExtractMp4Poster(item, thumbSrc)) return false;
+        return true;
     }
 
 function appendVideoThumbMedia(host, item, thumbSrc, isVideo, placeholderClass) {
@@ -1741,20 +1760,22 @@ function appendVideoThumbMedia(host, item, thumbSrc, isVideo, placeholderClass) 
             appendStaticVideoThumb(host, isStaticVideoThumbUrl(thumbSrc) ? thumbSrc : item.thumbSrc);
             return;
         }
-        if (bridge.reservedPostHeader) {
-            host.classList.add(placeholderClass);
-            host.appendChild(createPlaceholderIcon(true));
+        const videoUrl = item.src || thumbSrc || '';
+        if (hasPlayableVideoThumb(item, thumbSrc)) {
+            if (!bridge.reservedPostHeader && bridge.isMp4ThumbUrl(videoUrl) && bridge.msMp4Box()) {
+                const img = createLazyMp4PosterImg(item, function () { fail(img); });
+                host.appendChild(img);
+                return;
+            }
+            const playUrl = thumbSrc || videoUrl;
+            const vid = createLazyThumbVideo(
+                playUrl.includes('#t=') ? playUrl : (playUrl + '#t=0.1'),
+                function () { fail(vid); });
+            host.appendChild(vid);
             return;
         }
-        if (bridge.isMp4ThumbUrl(item.src || thumbSrc) && bridge.msMp4Box()) {
-            const img = createLazyMp4PosterImg(item, function () { fail(img); });
-            host.appendChild(img);
-            return;
-        }
-        const vid = createLazyThumbVideo(
-            thumbSrc.includes('#t=') ? thumbSrc : (thumbSrc + '#t=0.1'),
-            function () { fail(vid); });
-        host.appendChild(vid);
+        host.classList.add(placeholderClass);
+        host.appendChild(createPlaceholderIcon(true));
     }
 
 function stopThumbTrackAnimation() {
@@ -1898,7 +1919,7 @@ function fillThumbButton(btn, entry, index, groupCounts) {
         const cacheClass = (hdSrc && !bridge.state.cachedImageUrls.has(hdSrc) && !item._msMediaLoaded) ? ' ms-uncached' : '';
         const isVideo = item.type === 'video' || item.type === 'iframe' || item.expectedVideo || item.xUnplayable;
         const hasPoster = !!(item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc));
-        const isPlaceholder = bridge.isPlaceholderUrl(thumbSrc) || (isVideo && !hasPoster && !bridge.canExtractMp4Poster(item, thumbSrc));
+        const isPlaceholder = thumbMediaIsPlaceholder(item, thumbSrc);
         btn.setAttribute('data-index', String(index));
         btn.dataset.msKey = thumbItemKey(entry);
         btn.style.display = '';
@@ -2269,8 +2290,7 @@ function fillGridCell(cell, entry, index) {
             isVideo: isVideo,
             isAnimated: animated,
             animatedLabel: animated ? bridge.animatedThumbLabel(item) : '',
-            isPlaceholder: bridge.isPlaceholderUrl(thumbSrc) ||
-                (isVideo && !hasPoster && !bridge.canExtractMp4Poster(item, thumbSrc)),
+            isPlaceholder: thumbMediaIsPlaceholder(item, thumbSrc),
             isVideoThumb: isVideo && !hasPoster &&
                 (bridge.isVideoThumbSource(thumbSrc) || !bridge.isImageThumbSource(thumbSrc)),
             sourceUrl: item.src,
