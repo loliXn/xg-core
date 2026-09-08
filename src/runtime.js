@@ -518,6 +518,7 @@ function tagsPanelIsScrollable(panel) {
     }
 
 function onOverlayWheel(e) {
+        e.stopPropagation();
         if (bridge.state.gridMode) return;
         const target = e.target;
         if (target && target.closest('.ms-thumbs-wrap, .ms-gallery-controls, .ms-filter-bar')) return;
@@ -1709,12 +1710,22 @@ function createLazyMp4PosterImg(item, onError) {
         return img;
     }
 
+function isStaticVideoThumbUrl(url) {
+        if (!url || (bridge.isPlaceholderUrl && bridge.isPlaceholderUrl(url))) return false;
+        if (/^data:image\/(jpeg|jpg|png|gif|webp)/i.test(url)) return true;
+        return !!(bridge.isImageThumbSource && bridge.isImageThumbSource(url));
+    }
+
+function appendStaticVideoThumb(host, url) {
+        const img = document.createElement('img');
+        img.referrerPolicy = 'no-referrer';
+        img.src = url;
+        img.classList.add('ms-loaded');
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none;display:block;background:#111;';
+        host.appendChild(img);
+    }
+
 function appendVideoThumbMedia(host, item, thumbSrc, isVideo, placeholderClass) {
-        if (bridge.reservedPostHeader) {
-            host.classList.add(placeholderClass);
-            host.appendChild(createPlaceholderIcon(true));
-            return;
-        }
         const fail = function (el) {
             if (el.parentNode === host && !host.classList.contains(placeholderClass)) {
                 host.classList.add(placeholderClass);
@@ -1723,12 +1734,16 @@ function appendVideoThumbMedia(host, item, thumbSrc, isVideo, placeholderClass) 
             }
         };
         if (item._frozenThumb) {
-            const img = document.createElement('img');
-            img.referrerPolicy = 'no-referrer';
-            img.src = item._frozenThumb;
-            img.classList.add('ms-loaded');
-            img.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none;display:block;background:#111;';
-            host.appendChild(img);
+            appendStaticVideoThumb(host, item._frozenThumb);
+            return;
+        }
+        if (isStaticVideoThumbUrl(thumbSrc) || isStaticVideoThumbUrl(item.thumbSrc)) {
+            appendStaticVideoThumb(host, isStaticVideoThumbUrl(thumbSrc) ? thumbSrc : item.thumbSrc);
+            return;
+        }
+        if (bridge.reservedPostHeader) {
+            host.classList.add(placeholderClass);
+            host.appendChild(createPlaceholderIcon(true));
             return;
         }
         if (bridge.isMp4ThumbUrl(item.src || thumbSrc) && bridge.msMp4Box()) {
