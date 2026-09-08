@@ -2898,7 +2898,7 @@ function renderCurrent() {
             }
             const primaryVideoSrc = bridge.wrapMediaUrl(item.src);
             const bufferedVideo = bridge.requiresBufferedVideo(item);
-            const videoPoster = bridge.reservedPostHeader && item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc)
+            const videoPoster = item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc)
                 ? item.thumbSrc : '';
             video = globalThis.XGalleryCore.configureVideoElement({
                 document: document,
@@ -3053,24 +3053,16 @@ function renderCurrent() {
             if (!video.isConnected || !video.closest('.ms-media-box')) ensureMediaBox(wrap).appendChild(video);
             const revealVideo = () => {
                 if (!ownsVideoSession()) return;
-                wrap.querySelectorAll('img.ms-media, img.ms-loading-thumb').forEach((el) => el.remove());
                 video.classList.add('ms-ready');
                 video.style.opacity = '1';
-                syncVerticalFitMediaBox(video);
             };
-            if (video.readyState >= 1) revealVideo();
-            else video.addEventListener('loadedmetadata', revealVideo, { once: true });
-            if (!bridge.reservedPostHeader && !wrap.querySelector('img') && item.thumbSrc && !bridge.isPlaceholderUrl(item.thumbSrc)) {
-                const standIn = globalThis.XGalleryCore.createLoadingPreview({
-                    document: document,
-                    src: item.thumbSrc,
-                    onLoad: (image) => {
-                        if (image.isConnected) syncVerticalFitMediaBox(image);
-                    }
-                });
-                ensureMediaBox(wrap).insertBefore(standIn, video);
-                if (standIn.complete) syncVerticalFitMediaBox(standIn);
-            }
+            // One media element owns both poster and playback. An extra image
+            // caused a second layout and a blank handoff before the first frame.
+            wrap.querySelectorAll('img.ms-media, img.ms-loading-thumb').forEach(el => el.remove());
+            video.style.opacity = '1';
+            if (video.readyState >= 1) syncVerticalFitMediaBox(video);
+            if (video.readyState >= 2) revealVideo();
+            else video.addEventListener('loadeddata', revealVideo, { once: true });
             let videoActivated = false;
             const activateVideo = () => {
                 if (videoActivated || token !== bridge.state.renderToken || !video.isConnected) return;

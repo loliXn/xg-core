@@ -697,7 +697,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-media-wrap .ms-media.ms-ready {
             opacity: 1;
             transform: none;
-            filter: blur(0);
+            filter: none;
         }
         .ms-gallery-overlay:not(.ms-fit-vertical) .ms-media-wrap > img,
         .ms-gallery-overlay:not(.ms-fit-vertical) .ms-media-wrap > video {
@@ -1403,6 +1403,10 @@ export const OVERLAY_CSS = String.raw`
             box-shadow: var(--ms-shadow-md);
             transition: all 120ms ease;
         }
+        .ms-site-settings-btn svg {
+            display: block;
+            transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+        }
         .ms-site-settings-btn svg path,
         .ms-site-settings-btn svg circle {
             fill: none !important;
@@ -1412,6 +1416,8 @@ export const OVERLAY_CSS = String.raw`
             background: var(--ms-surface-3);
             border-color: var(--ms-line-strong);
             box-shadow: var(--ms-shadow-md);
+        }
+        .ms-site-settings-btn:hover svg {
             transform: rotate(45deg);
         }
         /* Optional host-page companion button next to Gallery. */
@@ -3232,6 +3238,10 @@ export const LAUNCHER_CSS = String.raw`
             box-shadow: var(--ms-shadow-md);
             transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1), background 140ms var(--ms-ease), border-color 140ms var(--ms-ease);
         }
+        .ms-site-settings-btn svg {
+            display: block;
+            transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+        }
         .ms-site-settings-btn svg path,
         .ms-site-settings-btn svg circle {
             fill: none !important;
@@ -3240,6 +3250,8 @@ export const LAUNCHER_CSS = String.raw`
         .ms-site-settings-btn:hover {
             background: var(--ms-surface-3);
             border-color: var(--ms-line-strong);
+        }
+        .ms-site-settings-btn:hover svg {
             transform: rotate(45deg);
         }
         #ms-site-redirect-btn {
