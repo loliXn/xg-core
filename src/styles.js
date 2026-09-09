@@ -672,26 +672,39 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-caption-mode {
             display: flex;
-            gap: 4px;
-            margin: 8px 0 10px;
+            gap: 3px;
             width: 100%;
+            padding: 3px;
+            border: 1px solid var(--ms-line);
+            border-radius: 9px;
+            background: var(--ms-surface-1);
+            box-sizing: border-box;
         }
         .ms-caption-mode button {
             flex: 1 1 0;
-            height: 28px;
-            padding: 0 6px;
-            border: 1px solid var(--ms-line);
-            background: var(--ms-surface-3);
+            min-width: 0;
+            height: 30px;
+            padding: 0 7px;
+            border: 0;
+            background: transparent;
             color: var(--ms-text-3);
-            border-radius: 7px;
+            border-radius: 6px;
             font-size: 11px;
             font-weight: 650;
             cursor: pointer;
+            transition: color 150ms var(--ms-ease), background-color 150ms var(--ms-ease), transform 120ms var(--ms-ease);
+        }
+        .ms-caption-mode button:hover {
+            color: var(--ms-text);
+            background: var(--ms-hover);
+        }
+        .ms-caption-mode button:active {
+            transform: scale(0.97);
         }
         .ms-caption-mode button.active {
             color: var(--ms-text);
-            border-color: var(--ms-accent-line);
             background: var(--ms-accent-tint);
+            box-shadow: inset 0 0 0 1px var(--ms-accent-line);
         }
         .ms-media-wrap iframe.ms-media {
             z-index: 1;
@@ -2573,14 +2586,24 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-tags-content {
             font-size: 14px;
-            padding: 12px;
+            padding: 0;
             overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--ms-line-strong) var(--ms-surface-1);
+        }
+        .ms-post-panel {
+            min-height: 100%;
+            padding: 14px;
+            box-sizing: border-box;
             display: flex;
             flex-direction: column;
             align-items: stretch;
-            gap: 5px;
-            scrollbar-width: thin;
-            scrollbar-color: var(--ms-line-strong) var(--ms-surface-1);
+            gap: 12px;
+            color: var(--ms-text-2);
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+        }
+        .ms-post-section {
+            width: 100%;
         }
         .ms-tag-pills {
             display: flex;
@@ -2650,9 +2673,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-info-description p:last-child {
             margin-bottom: 0;
         }
-        .ms-gallery-overlay.ms-rich-info .ms-info-description a[href]:not(.ms-info-desc-username),
-        .ms-gallery-overlay.ms-imaglr .ms-info-description a[href]:not(.ms-info-desc-username),
-        .ms-gallery-overlay.ms-bdsmlr .ms-info-description a[href]:not(.ms-info-desc-username) {
+        .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-desc-username) {
             color: var(--ms-accent) !important;
             font-weight: 600;
             text-decoration: underline !important;
@@ -2661,9 +2682,7 @@ export const OVERLAY_CSS = String.raw`
             text-underline-offset: 2px;
             transition: color 150ms var(--ms-ease), text-decoration-color 150ms var(--ms-ease);
         }
-        .ms-gallery-overlay.ms-rich-info .ms-info-description a[href]:not(.ms-info-desc-username):hover,
-        .ms-gallery-overlay.ms-imaglr .ms-info-description a[href]:not(.ms-info-desc-username):hover,
-        .ms-gallery-overlay.ms-bdsmlr .ms-info-description a[href]:not(.ms-info-desc-username):hover {
+        .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-desc-username):hover {
             color: hsl(223, 92%, 70%) !important;
             text-decoration-color: currentColor !important;
         }
@@ -2679,16 +2698,16 @@ export const OVERLAY_CSS = String.raw`
             margin-bottom: 6px;
         }
         .ms-info-desc-avatar {
-            width: 22px;
-            height: 22px;
+            width: 24px;
+            height: 24px;
             border-radius: 50%;
             object-fit: cover;
             flex-shrink: 0;
             background: var(--ms-surface-3);
         }
         .ms-info-desc-username {
-            font-weight: 700;
-            font-size: 0.87em;
+            font-weight: 650;
+            font-size: 14px;
             color: var(--ms-text);
             text-decoration: none;
         }
@@ -2699,21 +2718,30 @@ export const OVERLAY_CSS = String.raw`
             color: var(--ms-text-2);
             font-size: var(--ms-tags-font, 15px);
             line-height: 1.5;
-            margin-bottom: 10px;
+            margin: 0;
             width: 100%;
-            background: var(--ms-surface-2);
-            border-radius: 8px;
-            padding: 10px 12px;
+            background: var(--ms-surface-1);
+            border: 1px solid var(--ms-line);
+            border-radius: 10px;
+            padding: 12px 13px;
             box-sizing: border-box;
             word-break: break-word;
+            text-wrap: pretty;
+        }
+        .ms-panel-caption {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
         }
         .ms-position-control {
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
         .ms-info-posthead {
             width: 100%;
-            min-height: 44px;
-            margin-bottom: 10px;
+            min-height: 32px;
+            padding: 0 2px 11px;
+            border-bottom: 1px solid var(--ms-line);
+            box-sizing: border-box;
         }
         .ms-info-user {
             display: flex;
@@ -2735,8 +2763,9 @@ export const OVERLAY_CSS = String.raw`
             font-size: 12px;
         }
         .ms-info-postmeta {
-            margin-top: 4px;
-            font-size: 0.74em;
+            margin-top: 3px;
+            padding-left: 32px;
+            font-size: 11px;
             color: var(--ms-text-4);
             line-height: 1.5;
         }
@@ -2745,8 +2774,8 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-info-original {
             width: 100%;
-            margin-top: 10px;
-            font-size: 0.74em;
+            margin: 0;
+            font-size: 11px;
             color: var(--ms-text-4);
         }
         .ms-info-stats {
@@ -2754,8 +2783,8 @@ export const OVERLAY_CSS = String.raw`
             flex-wrap: wrap;
             gap: 12px;
             width: 100%;
-            margin-top: 10px;
-            font-size: 0.74em;
+            margin: 0;
+            font-size: 11px;
             color: var(--ms-text-4);
             text-transform: uppercase;
             letter-spacing: 0.4px;
@@ -2783,9 +2812,28 @@ export const OVERLAY_CSS = String.raw`
             display: flex;
             align-items: center;
             gap: 8px;
-            margin-top: 12px;
-            margin-bottom: 12px;
+            margin: 0;
             flex-wrap: wrap;
+        }
+        .ms-post-context {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            padding: 10px 2px 0;
+            border-top: 1px solid var(--ms-line);
+        }
+        .ms-post-footer {
+            margin-top: auto;
+            padding-top: 12px;
+            border-top: 1px solid var(--ms-line);
+        }
+        .ms-caption-mode-label {
+            display: block;
+            margin: 0 0 7px 2px;
+            color: var(--ms-text-4);
+            font: 650 10px/1.2 var(--ms-font-data);
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
         }
         .ms-tags-action-btn,
         .ms-tags-like-btn,
@@ -2856,33 +2904,23 @@ export const OVERLAY_CSS = String.raw`
         .ms-tags-like-btn.active .ms-tags-like-count {
             color: inherit;
         }
-        .ms-gallery-overlay.ms-rich-info .ms-info-posthead .ms-info-desc-avatar,
-        .ms-gallery-overlay.ms-imaglr .ms-info-posthead .ms-info-desc-avatar,
-        .ms-gallery-overlay.ms-bdsmlr .ms-info-posthead .ms-info-desc-avatar {
+        .ms-gallery-overlay .ms-info-posthead .ms-info-desc-avatar {
             width: 24px;
             height: 24px;
         }
-        .ms-gallery-overlay.ms-rich-info .ms-info-posthead .ms-info-desc-username,
-        .ms-gallery-overlay.ms-imaglr .ms-info-posthead .ms-info-desc-username,
-        .ms-gallery-overlay.ms-bdsmlr .ms-info-posthead .ms-info-desc-username {
+        .ms-gallery-overlay .ms-info-posthead .ms-info-desc-username {
             font-size: 14px;
             font-weight: 600;
         }
-        .ms-gallery-overlay.ms-rich-info .ms-info-postmeta,
-        .ms-gallery-overlay.ms-imaglr .ms-info-postmeta,
-        .ms-gallery-overlay.ms-bdsmlr .ms-info-postmeta {
+        .ms-gallery-overlay .ms-info-postmeta {
             font-size: 11px;
         }
-        .ms-gallery-overlay.ms-rich-info .ms-info-stats,
-        .ms-gallery-overlay.ms-imaglr .ms-info-stats,
-        .ms-gallery-overlay.ms-bdsmlr .ms-info-stats {
+        .ms-gallery-overlay .ms-info-stats {
             font-size: 11px;
             text-transform: none;
             letter-spacing: 0;
         }
-        .ms-gallery-overlay.ms-rich-info .ms-tags-content,
-        .ms-gallery-overlay.ms-imaglr .ms-tags-content,
-        .ms-gallery-overlay.ms-bdsmlr .ms-tags-content {
+        .ms-gallery-overlay .ms-tags-content {
             font-size: 14px;
         }
         .ms-tags-panel,

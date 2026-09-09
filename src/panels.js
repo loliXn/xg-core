@@ -34,6 +34,8 @@ export function renderPostPanel(options) {
     const { content, model } = options;
     const doc = content.ownerDocument;
     content.replaceChildren();
+    const panel = panelElement(doc, 'div', 'ms-post-panel');
+    content.append(panel);
     const user = (data, small = false) => {
         const row = panelElement(doc, small ? 'span' : 'div', 'ms-info-user' + (small ? ' ms-info-user-sm' : ''));
         if (data.avatarUrl) {
@@ -55,9 +57,8 @@ export function renderPostPanel(options) {
         const meta = panelElement(doc, 'div', 'ms-info-postmeta', info.time || (model.reserveHeader ? '\u00a0' : ''));
         if (info.repostedFrom) meta.append(doc.createTextNode(' · reposted from '), user(info.repostedFrom, true));
         head.append(meta);
-        content.append(head);
+        panel.append(head);
     }
-    if (options.captionControls) options.captionControls(content);
     const captions = Array.isArray(info.captions) && info.captions.length ? info.captions : [{ html: model.description }];
     const caption = panelElement(doc, 'div', 'ms-panel-caption');
     captions.forEach(cap => {
@@ -66,9 +67,10 @@ export function renderPostPanel(options) {
         if (cap.user && !(captions.length === 1 && info.author && cap.user.username === info.author.username)) card.prepend(user(cap.user, true));
         caption.append(card);
     });
-    if (caption.childNodes.length) content.append(caption);
+    if (caption.childNodes.length) panel.append(caption);
     if (model.tags && model.tags.length) {
-        content.append(panelElement(doc, 'div', 'ms-info-tags-label', 'Tags'));
+        const tagsSection = panelElement(doc, 'section', 'ms-post-section ms-post-tags');
+        tagsSection.append(panelElement(doc, 'div', 'ms-info-tags-label', 'Tags'));
         const pills = panelElement(doc, 'div', 'ms-tag-pills');
         model.tags.forEach(tag => {
             const link = panelElement(doc, 'a', 'ms-tag-pill', '#' + tag.label);
@@ -83,20 +85,23 @@ export function renderPostPanel(options) {
             }
             pills.append(link);
         });
-        content.append(pills);
+        tagsSection.append(pills);
+        panel.append(tagsSection);
     }
+    const context = panelElement(doc, 'div', 'ms-post-context');
     if (info.originalPost && info.originalPost.username) {
         const original = panelElement(doc, 'div', 'ms-info-original', 'Originally posted by ');
         original.append(user({ ...info.originalPost, profileUrl: info.originalPost.url }, true));
-        content.append(original);
+        context.append(original);
     }
     if (info.stats) {
         const stats = panelElement(doc, 'div', 'ms-info-stats');
         for (const [key, label] of [['views', 'Views'], ['reposts', 'Reposts']]) {
             if (info.stats[key]) stats.append(panelElement(doc, 'span', '', info.stats[key] + ' ' + label));
         }
-        if (stats.childNodes.length) content.append(stats);
+        if (stats.childNodes.length) context.append(stats);
     }
+    if (context.childNodes.length) panel.append(context);
     if (model.actions && model.actions.length) {
         const actions = panelElement(doc, 'div', 'ms-tags-actions-bar');
         model.actions.forEach(action => {
@@ -118,9 +123,15 @@ export function renderPostPanel(options) {
             }).catch(() => {});
             actions.append(button);
         });
-        content.append(actions);
+        panel.append(actions);
     }
-    if (!content.childNodes.length) content.append(panelElement(doc, 'div', 'ms-info-empty', 'No description or tags available.'));
+    if (options.captionControls) {
+        const footer = panelElement(doc, 'div', 'ms-post-footer');
+        footer.append(panelElement(doc, 'span', 'ms-caption-mode-label', 'Caption'));
+        options.captionControls(footer);
+        if (footer.childNodes.length > 1) panel.append(footer);
+    }
+    if (!panel.childNodes.length) panel.append(panelElement(doc, 'div', 'ms-info-empty', 'No description or tags available.'));
 }
 
 export function createSettingsPanel(options) {

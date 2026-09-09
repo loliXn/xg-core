@@ -1198,7 +1198,9 @@ function setCaptionMode(mode, item, fromRemote, edge) {
         updateMediaCaptionOverlay(current);
         if (bridge.state.overlay) {
             bridge.state.overlay.querySelectorAll('.ms-caption-mode button').forEach((btn) => {
-                btn.classList.toggle('active', btn.getAttribute('data-caption-mode') === bridge.captionMode);
+                const active = btn.getAttribute('data-caption-mode') === bridge.captionMode;
+                btn.classList.toggle('active', active);
+                btn.setAttribute('aria-pressed', String(active));
             });
         }
     }
@@ -1305,15 +1307,21 @@ function appendCaptionModeControls(content, item) {
         if (!content || (!bridge.reservedPostHeader && !bridge.captionFeed)) return;
         const row = document.createElement('div');
         row.className = 'ms-caption-mode';
+        row.setAttribute('role', 'group');
+        row.setAttribute('aria-label', 'Caption display mode');
         [['popup', 'Popup'], ['overlay', 'Overlay'], ['snapchat', 'Snapchat']].forEach(([mode, label]) => {
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.setAttribute('data-caption-mode', mode);
+            btn.setAttribute('aria-pressed', String(bridge.captionMode === mode));
             btn.textContent = label;
             if (bridge.captionMode === mode) btn.classList.add('active');
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 clickCaptionModeButton(mode, item);
+                row.querySelectorAll('button').forEach((button) => {
+                    button.setAttribute('aria-pressed', String(button.getAttribute('data-caption-mode') === mode));
+                });
             });
             row.appendChild(btn);
         });
