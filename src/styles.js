@@ -1169,6 +1169,7 @@ export const OVERLAY_CSS = String.raw`
         }
 
         .ms-thumb {
+            --ms-thumb-rest-opacity: 0.7;
             position: relative;
             display: inline-block;
             width: 70px;
@@ -1178,7 +1179,7 @@ export const OVERLAY_CSS = String.raw`
             border: 2px solid var(--ms-line) !important;
             border-radius: 6px;
             overflow: hidden;
-            opacity: 0.7;
+            opacity: var(--ms-thumb-rest-opacity);
             cursor: pointer;
             vertical-align: top;
             background: var(--ms-surface-1);
@@ -1220,12 +1221,21 @@ export const OVERLAY_CSS = String.raw`
             pointer-events: none;
         }
         .ms-thumb:hover {
-            opacity: 1;
+            --ms-thumb-rest-opacity: 1;
+            opacity: var(--ms-thumb-rest-opacity);
             border-color: var(--ms-line-strong) !important;
         }
         .ms-thumb.active {
-            opacity: 1;
+            --ms-thumb-rest-opacity: 1;
+            opacity: var(--ms-thumb-rest-opacity);
             border-color: var(--ms-accent) !important;
+        }
+        .ms-thumb.ms-thumb-entering {
+            animation: ms-thumb-enter 180ms cubic-bezier(0.23, 1, 0.32, 1) both;
+        }
+        @keyframes ms-thumb-enter {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: var(--ms-thumb-rest-opacity); transform: translateY(0); }
         }
         .ms-thumb img {
             width: 100%;
@@ -3036,6 +3046,7 @@ export const OVERLAY_CSS = String.raw`
             .ms-gallery-overlay .ms-gallery-stage,
             .ms-gallery-overlay .ms-thumbs-wrap,
             .ms-nav svg { transition-duration: 0.01ms !important; transform: none !important; }
+            .ms-thumb.ms-thumb-entering { animation: none !important; }
         }
 
 

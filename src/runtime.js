@@ -39,6 +39,8 @@ function clearViewerMedia() {
     clearFullscreenIdleTimer();stopThumbTrackAnimation();
     if(bridge.state.mediaFitObserver){bridge.state.mediaFitObserver.disconnect();bridge.state.mediaFitObserver=null;}
     for(const key of ['thumbsWindowRaf','gridWindowRaf'])if(bridge.state[key]){cancelAnimationFrame(bridge.state[key]);bridge.state[key]=null;}
+    if(bridge.state.thumbEnteringTimer){clearTimeout(bridge.state.thumbEnteringTimer);bridge.state.thumbEnteringTimer=null;}
+    bridge.state.thumbKnownKeys=null;bridge.state.thumbEnteringKeys=null;
     overlay.classList.remove('ms-grid-mode','ms-stage-fullscreen');
     const grid=overlay.querySelector('.ms-grid');if(grid)grid.replaceChildren();
     bridge.state.gridPool=[];bridge.state.gridSizer=null;
@@ -1885,6 +1887,7 @@ function resetMediaThumbEl(el) {
             }
         }
         el.innerHTML = '';
+        el.classList.remove('ms-thumb-entering');
         el.removeAttribute('data-hd-src');
         delete el.dataset.msKey;
     }
@@ -1964,6 +1967,9 @@ function fillThumbButton(btn, entry, index, groupCounts) {
                 }
             }
         });
+        if (bridge.state.thumbEnteringKeys && bridge.state.thumbEnteringKeys.has(btn.dataset.msKey)) {
+            btn.classList.add('ms-thumb-entering');
+        }
     }
 
 function invalidateThumbGroupData() {
@@ -2327,18 +2333,33 @@ function renderThumbs(options) {
         let anchorKey = '';
         let anchorX = 0;
         if (track && options && options.preserveAnchor) {
-            const visible = Array.from(track.querySelectorAll('.ms-thumb[data-ms-key]')).find((button) => {
+            const hostRect = track.getBoundingClientRect();
+            const visible = Array.from(track.querySelectorAll('.ms-thumb[data-ms-key]')).filter((button) => {
                 const rect = button.getBoundingClientRect();
-                const host = track.getBoundingClientRect();
-                return rect.right > host.left && rect.left < host.right;
+                return rect.right > hostRect.left && rect.left < hostRect.right;
             });
-            if (visible) {
-                anchorKey = visible.dataset.msKey || '';
-                anchorX = visible.getBoundingClientRect().left;
+            const anchor = visible.find((button) => button.classList.contains('active')) ||
+                visible.reduce((best, button) => {
+                    const center = button.getBoundingClientRect().left + button.offsetWidth / 2;
+                    const distance = Math.abs(center - (hostRect.left + hostRect.width / 2));
+                    return !best || distance < best.distance ? { button: button, distance: distance } : best;
+                }, null)?.button;
+            if (anchor) {
+                anchorKey = anchor.dataset.msKey || '';
+                anchorX = anchor.getBoundingClientRect().left;
             }
         }
+        const itemKeys = new Set(bridge.state.items.map(thumbItemKey).filter(Boolean));
+        if (!bridge.state.thumbKnownKeys) bridge.state.thumbKnownKeys = new Set(itemKeys);
+        bridge.state.thumbEnteringKeys = options && options.animateNew
+            ? new Set(Array.from(itemKeys).filter((key) => !bridge.state.thumbKnownKeys.has(key)))
+            : null;
+        itemKeys.forEach((key) => bridge.state.thumbKnownKeys.add(key));
         invalidateThumbGroupData();
+        const followedCenter = bridge.state.thumbsFollowCenter;
+        if (anchorKey) bridge.state.thumbsFollowCenter = false;
         syncThumbsWindow();
+        bridge.state.thumbsFollowCenter = followedCenter;
         if (track && anchorKey) {
             const escaped = globalThis.CSS && CSS.escape ? CSS.escape(anchorKey) : anchorKey.replace(/["\\]/g, '\\$&');
             const next = track.querySelector('.ms-thumb[data-ms-key="' + escaped + '"]');
@@ -2349,6 +2370,14 @@ function renderThumbs(options) {
                     paintThumbsWindow(track, thumbGroupData());
                 }
             }
+        }
+        if (bridge.state.thumbEnteringKeys && bridge.state.thumbEnteringKeys.size) {
+            if (bridge.state.thumbEnteringTimer) clearTimeout(bridge.state.thumbEnteringTimer);
+            bridge.state.thumbEnteringTimer = setTimeout(() => {
+                bridge.state.thumbEnteringKeys = null;
+                bridge.state.thumbEnteringTimer = null;
+                if (track) track.querySelectorAll('.ms-thumb-entering').forEach((button) => button.classList.remove('ms-thumb-entering'));
+            }, 260);
         }
 }
 
