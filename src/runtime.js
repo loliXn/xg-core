@@ -2401,6 +2401,9 @@ function updateSingleThumb(index, entry) {
 function markItemMediaLoaded(item) {
         if (!item || !bridge.state.overlay) return;
         item._msMediaLoaded = true;
+        try {
+            if (typeof bridge.onMediaLoaded === 'function') bridge.onMediaLoaded(item);
+        } catch (e) { }
         const index = bridge.state.items.findIndex((entry) => (entry.item || entry) === item);
         if (index < 0) return;
 
@@ -3097,6 +3100,18 @@ function renderCurrent() {
                     return;
                 }
                 if (retryIndex >= retrySources.length) {
+                    if (item.imageFallbackSrc && !item._imageFallbackTried) {
+                        item._imageFallbackTried = true;
+                        item.src = item.imageFallbackSrc;
+                        item.type = 'img';
+                        item.isVideo = false;
+                        item.isGif = /\.gif(?:\?|#|$)/i.test(item.src);
+                        item.needsResolve = false;
+                        const itemIndex = bridge.state.items.findIndex((entry) => (entry.item || entry) === item);
+                        if (itemIndex >= 0) updateSingleThumb(itemIndex, bridge.state.items[itemIndex]);
+                        renderCurrent();
+                        return;
+                    }
                     if (item.embedSrc) {
                         item.src = item.embedSrc;
                         item.type = 'iframe';
