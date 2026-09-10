@@ -1731,9 +1731,10 @@ function isStaticVideoThumbUrl(url) {
         return typeof bridge.isImageThumbSource === 'function' && bridge.isImageThumbSource(url);
     }
 
-function appendStaticVideoThumb(host, url) {
+function appendStaticVideoThumb(host, url, onError) {
         const img = document.createElement('img');
         img.referrerPolicy = 'no-referrer';
+        if (onError) img.onerror = () => onError(img);
         img.src = url;
         img.classList.add('ms-loaded');
         img.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none;display:block;background:#111;';
@@ -1759,6 +1760,17 @@ function thumbMediaIsPlaceholder(item, thumbSrc) {
     }
 
 function appendVideoThumbMedia(host, item, thumbSrc, isVideo, placeholderClass) {
+        const extractPoster = (failedImage) => {
+            if (failedImage && failedImage.parentNode !== host) return;
+            if (!bridge.canExtractMp4Poster || !bridge.canExtractMp4Poster(item, item.src)) {
+                if (failedImage) fail(failedImage);
+                return false;
+            }
+            if (failedImage) failedImage.remove();
+            const img = createLazyMp4PosterImg(item, function () { fail(img); });
+            host.appendChild(img);
+            return true;
+        };
         const fail = function (el) {
             if (el.parentNode === host && !host.classList.contains(placeholderClass)) {
                 host.classList.add(placeholderClass);
@@ -1771,10 +1783,13 @@ function appendVideoThumbMedia(host, item, thumbSrc, isVideo, placeholderClass) 
             return;
         }
         if (isStaticVideoThumbUrl(thumbSrc) || isStaticVideoThumbUrl(item.thumbSrc)) {
-            appendStaticVideoThumb(host, isStaticVideoThumbUrl(thumbSrc) ? thumbSrc : item.thumbSrc);
+            appendStaticVideoThumb(host, isStaticVideoThumbUrl(thumbSrc) ? thumbSrc : item.thumbSrc, extractPoster);
             return;
         }
         const videoUrl = item.src || thumbSrc || '';
+        // Still extraction is queued and bounded by the adapter. It does not
+        // leave one native player mounted for every visible thumbnail.
+        if (bridge.reservedPostHeader && extractPoster(null)) return;
         // Feed adapters with expensive native players must not allocate a
         // decoder for every thumbnail as well as the active stage video.
         if (bridge.reservedPostHeader) {
