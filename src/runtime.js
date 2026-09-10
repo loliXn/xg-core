@@ -968,8 +968,7 @@ function buildGridCell(entry, index) {
             cell.appendChild(domainSpan);
         } else {
 
-            const isVideoThumb = isVideo && !hasPoster &&
-                (bridge.isVideoThumbSource(thumbSrc) || !bridge.isImageThumbSource(thumbSrc));
+            const isVideoThumb = isVideo;
             if (isVideoThumb) {
                 appendVideoThumbMedia(cell, item, thumbSrc, isVideo, 'ms-grid-placeholder');
             } else {
@@ -1977,8 +1976,7 @@ function fillThumbButton(btn, entry, index, groupCounts) {
             isAnimated: animated,
             animatedLabel: animated ? bridge.animatedThumbLabel(item) : '',
             isPlaceholder: isPlaceholder,
-            isVideoThumb: isVideo && !hasPoster &&
-                (bridge.isVideoThumbSource(thumbSrc) || !bridge.isImageThumbSource(thumbSrc)),
+            isVideoThumb: isVideo,
             sourceUrl: item.src,
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-placeholder'),
             loadImage: (img) => {
@@ -2331,8 +2329,7 @@ function fillGridCell(cell, entry, index) {
             isAnimated: animated,
             animatedLabel: animated ? bridge.animatedThumbLabel(item) : '',
             isPlaceholder: thumbMediaIsPlaceholder(item, thumbSrc),
-            isVideoThumb: isVideo && !hasPoster &&
-                (bridge.isVideoThumbSource(thumbSrc) || !bridge.isImageThumbSource(thumbSrc)),
+            isVideoThumb: isVideo,
             sourceUrl: item.src,
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-grid-placeholder'),
             loadImage: (img) => {
