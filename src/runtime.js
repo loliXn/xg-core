@@ -2645,7 +2645,8 @@ function renderCurrent() {
         const thumbs = bridge.state.overlay.querySelectorAll('.ms-thumb');
         prepareMediaWrap(wrap, item);
         const buildInfoHtml = () => {
-            const linkUrl = item ? (item.resolveUrl || item.src || '') : '';
+            const hasSourceOverride = !!(item && Object.prototype.hasOwnProperty.call(item, 'sourceUrl'));
+            const linkUrl = item ? String(hasSourceOverride ? (item.sourceUrl || '') : (item.resolveUrl || item.src || '')) : '';
             if (item && item.error) {
                 return `<span style="color: #f43f5e;"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer">Error: ${item.error} (${linkUrl})</a></span>`;
             }
@@ -2657,10 +2658,16 @@ function renderCurrent() {
                 const avatar = author.avatarUrl
                     ? `<img class="ms-info-avatar" src="${esc(author.avatarUrl)}" referrerpolicy="no-referrer" alt="">`
                     : '';
-                const who = `<a class="ms-info-author" href="${esc(author.profileUrl || linkUrl)}" target="_blank" rel="noopener noreferrer" title="${esc(author.handle || author.name)}">${esc(author.name || author.handle)}</a>`;
+                const whoHref = author.profileUrl || linkUrl;
+                const who = whoHref
+                    ? `<a class="ms-info-author" href="${esc(whoHref)}" target="_blank" rel="noopener noreferrer" title="${esc(author.handle || author.name)}">${esc(author.name || author.handle)}</a>`
+                    : `<span class="ms-info-author" title="${esc(author.handle || author.name)}">${esc(author.name || author.handle)}</span>`;
                 const date = presentation.date || '';
-                return `<span class="ms-info-byline">${avatar}${who}<span class="ms-info-sep">:</span>` +
-                    `<span class="ms-info-source"><a href="${esc(linkUrl)}" target="_blank" rel="noopener noreferrer">${esc(linkUrl)}</a>${date ? `<span class="ms-info-date">${esc(date)}</span>` : ''}</span></span>`;
+                const source = linkUrl ? `<a href="${esc(linkUrl)}" target="_blank" rel="noopener noreferrer">${esc(linkUrl)}</a>` : '';
+                const details = source || date
+                    ? `<span class="ms-info-sep">:</span><span class="ms-info-source">${source}${date ? `<span class="ms-info-date">${esc(date)}</span>` : ''}</span>`
+                    : '';
+                return `<span class="ms-info-byline">${avatar}${who}${details}</span>`;
             }
 
             if (item && item.galleryName) {
@@ -2670,7 +2677,9 @@ function renderCurrent() {
                 return `<a class="ms-info-author" href="${escG(galleryHref)}" target="_blank" rel="noopener noreferrer" title="${escG(item.galleryName)}">${escG(item.galleryName)}</a>`;
             }
 
-            return `<span style="color: var(--ms-text-2);"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer">${linkUrl}</a></span>`;
+            return linkUrl
+                ? `<span style="color: var(--ms-text-2);"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer">${linkUrl}</a></span>`
+                : '';
         };
 
         if (item && item.type === 'iframe') bridge.state.overlay.classList.add('ms-iframe-nav-safe');
