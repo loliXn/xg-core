@@ -2585,6 +2585,10 @@ export const OVERLAY_CSS = String.raw`
             color: var(--ms-text);
         }
         .ms-tags-content {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
             font-size: 14px;
             padding: 0;
             overflow-y: auto;
@@ -2592,6 +2596,8 @@ export const OVERLAY_CSS = String.raw`
             scrollbar-color: var(--ms-line-strong) var(--ms-surface-1);
         }
         .ms-post-panel {
+            flex: 1 0 auto;
+            width: 100%;
             min-height: 100%;
             padding: 14px;
             box-sizing: border-box;
