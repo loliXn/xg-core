@@ -23,8 +23,13 @@ function panelHtml(doc, html, className) {
     node.querySelectorAll('script,style,iframe,object,embed,form').forEach(el => el.remove());
     node.querySelectorAll('*').forEach(el => {
         Array.from(el.attributes).forEach(attr => {
-            if (/^on/i.test(attr.name)) el.removeAttribute(attr.name);
+            if (/^on/i.test(attr.name) || attr.name === 'style' || attr.name === 'id') el.removeAttribute(attr.name);
         });
+        if (el.hasAttribute('class')) {
+            const owned = Array.from(el.classList).filter(name => name.startsWith('ms-'));
+            if (owned.length) el.className = owned.join(' ');
+            else el.removeAttribute('class');
+        }
     });
     panelLinks(node);
     return node;
@@ -35,7 +40,9 @@ export function renderPostPanel(options) {
     const doc = content.ownerDocument;
     content.replaceChildren();
     const panel = panelElement(doc, 'div', 'ms-post-panel');
+    const body = panelElement(doc, 'div', 'ms-post-body');
     content.append(panel);
+    panel.append(body);
     const user = (data, small = false) => {
         const row = panelElement(doc, small ? 'span' : 'div', 'ms-info-user' + (small ? ' ms-info-user-sm' : ''));
         if (data.avatarUrl) {
@@ -57,17 +64,20 @@ export function renderPostPanel(options) {
         const meta = panelElement(doc, 'div', 'ms-info-postmeta', info.time || (model.reserveHeader ? '\u00a0' : ''));
         if (info.repostedFrom) meta.append(doc.createTextNode(' · reposted from '), user(info.repostedFrom, true));
         head.append(meta);
-        panel.append(head);
+        body.append(head);
     }
     const captions = Array.isArray(info.captions) && info.captions.length ? info.captions : [{ html: model.description }];
     const caption = panelElement(doc, 'div', 'ms-panel-caption');
     captions.forEach(cap => {
         if (!cap.html) return;
         const card = panelHtml(doc, cap.html, 'ms-info-description');
-        if (cap.user && !(captions.length === 1 && info.author && cap.user.username === info.author.username)) card.prepend(user(cap.user, true));
+        if (cap.user && !(captions.length === 1 && info.author && cap.user.username === info.author.username)) {
+            card.classList.add('ms-info-description-attributed');
+            card.prepend(user(cap.user, true));
+        }
         caption.append(card);
     });
-    if (caption.childNodes.length) panel.append(caption);
+    if (caption.childNodes.length) body.append(caption);
     const appendTags = (label, tags, profileUrl = '') => {
         if (!tags || !tags.length) return;
         const tagsSection = panelElement(doc, 'section', 'ms-post-section ms-post-tags');
@@ -80,8 +90,12 @@ export function renderPostPanel(options) {
         } else heading.textContent = label;
         tagsSection.append(heading);
         const pills = panelElement(doc, 'div', 'ms-tag-pills');
-        tags.forEach(tag => {
+        tags.forEach((tag, index) => {
             const link = panelElement(doc, 'a', 'ms-tag-pill', '#' + tag.label);
+            if (index >= 18) {
+                link.classList.add('ms-tag-overflow');
+                link.hidden = true;
+            }
             if (tag.category) link.classList.add('ms-tag-pill-' + tag.category);
             link.href = tag.href || '#';
             link.target = tag.onClick ? '_self' : '_blank';
@@ -93,8 +107,21 @@ export function renderPostPanel(options) {
             }
             pills.append(link);
         });
+        if (tags.length > 18) {
+            const more = panelElement(doc, 'button', 'ms-tag-more', '+' + (tags.length - 18) + ' more');
+            more.type = 'button';
+            more.setAttribute('aria-expanded', 'false');
+            more.addEventListener('click', event => {
+                event.stopPropagation();
+                const expanded = more.getAttribute('aria-expanded') === 'true';
+                pills.querySelectorAll('.ms-tag-overflow').forEach(tag => { tag.hidden = expanded; });
+                more.setAttribute('aria-expanded', String(!expanded));
+                more.textContent = expanded ? '+' + (tags.length - 18) + ' more' : 'Show less';
+            });
+            pills.append(more);
+        }
         tagsSection.append(pills);
-        panel.append(tagsSection);
+        body.append(tagsSection);
     };
     if (model.tagGroups && model.tagGroups.length) {
         model.tagGroups.forEach(group => appendTags(group.owner || 'Tags', group.tags, group.profileUrl));
@@ -114,7 +141,8 @@ export function renderPostPanel(options) {
         }
         if (stats.childNodes.length) context.append(stats);
     }
-    if (context.childNodes.length) panel.append(context);
+    if (context.childNodes.length) body.append(context);
+    const footer = panelElement(doc, 'div', 'ms-post-footer');
     if (model.actions && model.actions.length) {
         const actions = panelElement(doc, 'div', 'ms-tags-actions-bar');
         model.actions.forEach(action => {
@@ -136,15 +164,16 @@ export function renderPostPanel(options) {
             }).catch(() => {});
             actions.append(button);
         });
-        panel.append(actions);
+        footer.append(actions);
     }
     if (options.captionControls) {
-        const footer = panelElement(doc, 'div', 'ms-post-footer');
-        footer.append(panelElement(doc, 'span', 'ms-caption-mode-label', 'Caption'));
-        options.captionControls(footer);
-        if (footer.childNodes.length > 1) panel.append(footer);
+        const modes = panelElement(doc, 'div', 'ms-caption-footer');
+        modes.append(panelElement(doc, 'span', 'ms-caption-mode-label', 'Caption'));
+        options.captionControls(modes);
+        if (modes.childNodes.length > 1) footer.append(modes);
     }
-    if (!panel.childNodes.length) panel.append(panelElement(doc, 'div', 'ms-info-empty', 'No description or tags available.'));
+    if (footer.childNodes.length) panel.append(footer);
+    if (!body.childNodes.length) body.append(panelElement(doc, 'div', 'ms-info-empty', 'No description or tags available.'));
 }
 
 export function createSettingsPanel(options) {

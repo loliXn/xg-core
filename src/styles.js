@@ -681,6 +681,10 @@ export const OVERLAY_CSS = String.raw`
             background: var(--ms-surface-1);
             box-sizing: border-box;
         }
+        .ms-caption-footer .ms-caption-mode {
+            width: auto;
+            flex: 1 1 auto;
+        }
         .ms-caption-mode button {
             flex: 1 1 0;
             min-width: 0;
@@ -2627,14 +2631,22 @@ export const OVERLAY_CSS = String.raw`
             flex: 1 0 auto;
             width: 100%;
             min-height: 100%;
-            padding: 14px;
+            padding: 0;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
             align-items: stretch;
-            gap: 12px;
             color: var(--ms-text-2);
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+        }
+        .ms-post-body {
+            display: flex;
+            flex: 1 0 auto;
+            flex-direction: column;
+            gap: 15px;
+            width: 100%;
+            padding: 0 14px 16px;
+            box-sizing: border-box;
         }
         .ms-post-section {
             width: 100%;
@@ -2642,7 +2654,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-tag-pills {
             display: flex;
             flex-wrap: wrap;
-            gap: 6px;
+            gap: 5px;
             width: 100%;
         }
         .ms-info-tags-label {
@@ -2670,9 +2682,9 @@ export const OVERLAY_CSS = String.raw`
             background: var(--ms-surface-3);
             border: 1px solid var(--ms-line);
             color: var(--ms-text-2);
-            padding: 5px 10px;
+            padding: 4px 8px;
             border-radius: 20px;
-            font-size: 12px;
+            font-size: 11px;
             line-height: 1.2;
             text-decoration: none;
             word-break: break-word;
@@ -2683,6 +2695,18 @@ export const OVERLAY_CSS = String.raw`
             border-color: var(--ms-line-strong);
             color: var(--ms-text);
         }
+        .ms-tag-overflow[hidden] { display: none !important; }
+        .ms-tag-more {
+            min-height: 25px;
+            padding: 3px 8px;
+            border: 1px dashed var(--ms-line);
+            border-radius: 20px;
+            background: transparent;
+            color: var(--ms-text-4);
+            font: 600 11px/1.2 var(--ms-font-ui);
+            cursor: pointer;
+        }
+        .ms-tag-more:hover { border-color: var(--ms-accent-line); color: var(--ms-text); background: var(--ms-accent-tint); }
         /* Optional tag-category tints. Adapters assign these classes. */
         .ms-tag-pill-artist {
             background: rgba(170, 0, 0, 0.18);
@@ -2758,17 +2782,21 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-info-description {
             color: var(--ms-text-2);
-            font-size: var(--ms-tags-font, 15px);
-            line-height: 1.5;
+            font-size: var(--ms-tags-font, 16px);
+            line-height: 1.55;
             margin: 0;
             width: 100%;
-            background: var(--ms-surface-1);
-            border: 1px solid var(--ms-line);
-            border-radius: 10px;
-            padding: 12px 13px;
+            background: transparent;
+            border: 0;
+            border-radius: 0;
+            padding: 0;
             box-sizing: border-box;
             word-break: break-word;
             text-wrap: pretty;
+        }
+        .ms-info-description-attributed {
+            padding-left: 12px;
+            border-left: 2px solid var(--ms-line-strong);
         }
         .ms-panel-caption {
             display: flex;
@@ -2779,10 +2807,16 @@ export const OVERLAY_CSS = String.raw`
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
         .ms-info-posthead {
+            position: sticky;
+            top: 0;
+            z-index: 2;
             width: 100%;
             min-height: 32px;
-            padding: 0 2px 11px;
+            margin: 0 -14px;
+            padding: 12px 16px 11px;
             border-bottom: 1px solid var(--ms-line);
+            background: rgba(24, 26, 31, 0.94);
+            backdrop-filter: blur(12px) saturate(120%);
             box-sizing: border-box;
         }
         .ms-info-user {
@@ -2865,13 +2899,28 @@ export const OVERLAY_CSS = String.raw`
             border-top: 1px solid var(--ms-line);
         }
         .ms-post-footer {
+            position: sticky;
+            bottom: 0;
+            z-index: 3;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
             margin-top: auto;
-            padding-top: 12px;
+            padding: 11px 14px 12px;
             border-top: 1px solid var(--ms-line);
+            background: rgba(24, 26, 31, 0.95);
+            backdrop-filter: blur(14px) saturate(125%);
+            box-shadow: 0 -8px 24px rgba(0,0,0,0.16);
+        }
+        .ms-caption-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
         }
         .ms-caption-mode-label {
-            display: block;
-            margin: 0 0 7px 2px;
+            display: inline-flex;
+            margin: 0;
             color: var(--ms-text-4);
             font: 650 10px/1.2 var(--ms-font-data);
             letter-spacing: 0.08em;
@@ -3176,6 +3225,24 @@ export const OVERLAY_CSS = String.raw`
             cursor: pointer;
             touch-action: none;
         }
+        .ms-zoom-slider::-webkit-slider-runnable-track {
+            height: 4px;
+            border-radius: 2px;
+            background: linear-gradient(to right,
+                var(--ms-accent) 0 var(--ms-zoom-progress, 0%),
+                var(--ms-line) var(--ms-zoom-progress, 0%) 100%);
+        }
+        .ms-zoom-slider::-moz-range-track {
+            height: 4px;
+            border: 0;
+            border-radius: 2px;
+            background: var(--ms-line);
+        }
+        .ms-zoom-slider::-moz-range-progress {
+            height: 4px;
+            border-radius: 2px;
+            background: var(--ms-accent);
+        }
         .ms-zoom-slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
@@ -3205,6 +3272,9 @@ export const OVERLAY_CSS = String.raw`
         .ms-zoom-slider::-moz-range-thumb:hover {
             transform: scale(1.12);
         }
+        .ms-zoom-slider:focus-visible {
+            filter: drop-shadow(0 0 3px var(--ms-accent));
+        }
 .ms-index-input{top:0!important;height:1em!important;display:inline-flex!important;align-items:center!important;}.ms-position-control>span{display:inline-flex;align-items:center;height:1em;line-height:1;}.ms-tags-overlay.active{z-index:20;}.ms-load-mark-layer{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:6;}.ms-load-mark{position:absolute;top:10px;width:14px;height:70px;display:flex;align-items:center;justify-content:center;color:var(--ms-accent);}.ms-load-mark::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:1px;background:var(--ms-accent);opacity:0.7;}.ms-load-mark svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;}.ms-settings-row.ms-settings-stack{flex-direction:column;align-items:stretch;gap:8px;}.ms-settings-textarea{width:100%;min-height:88px;resize:vertical;box-sizing:border-box;background:var(--ms-surface-3,#1b1d24);border:1px solid var(--ms-line,#333);border-radius:8px;color:var(--ms-text-2,#ddd);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:8px 10px;outline:none;}.ms-settings-textarea:focus{border-color:var(--ms-accent);}.ms-settings-hint{margin:0;font-size:11px;color:var(--ms-text-4,#888);}.ms-blacklist-pills{display:flex;flex-wrap:wrap;gap:6px;}.ms-blacklist-pill{border:1px solid var(--ms-line,#444);background:transparent;color:var(--ms-text-3,#ccc);border-radius:999px;padding:3px 9px;font-size:12px;cursor:pointer;}.ms-blacklist-pill[aria-pressed="true"]{background:hsla(0,72%,46%,0.18);border-color:hsla(0,72%,56%,0.55);color:#f2c0c0;}
         .ms-info-source{display:flex;flex-direction:column;min-width:0;gap:2px;line-height:1.25}
         .ms-info-source>a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -3214,7 +3284,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-settings-tab{border:1px solid var(--ms-line);border-radius:8px;padding:8px 12px;background:transparent;color:var(--ms-text);font:600 12px/1.3 var(--ms-font-ui);cursor:pointer;white-space:nowrap;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out)}
         .ms-settings-tab[aria-selected="true"]{background:var(--ms-accent);border-color:var(--ms-accent);color:white}
         .ms-settings-page[hidden]{display:none!important}
-        .ms-r34-settings-modal button:not(:disabled):hover{background:#303846!important;border-color:var(--ms-accent)!important;color:#fff!important}
+        .ms-r34-settings-modal button:not(:disabled):hover{background:var(--ms-hover)!important;border-color:var(--ms-line-strong)!important;color:var(--ms-text)!important}
         .ms-r34-settings-modal button:focus-visible{outline:2px solid var(--ms-accent);outline-offset:2px}
         .ms-r34-settings-modal button:disabled{opacity:.45;cursor:default}
         .ms-settings-row>button{padding:8px 12px;min-height:34px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);font:600 12px/1.25 var(--ms-font-ui);cursor:pointer;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out),opacity 140ms var(--ms-ease-out)}
@@ -3225,6 +3295,28 @@ export const OVERLAY_CSS = String.raw`
         .ms-settings-label small,.ms-position-control,.ms-info-postmeta,.ms-tags-like-count{font-family:var(--ms-font-data);font-variant-numeric:tabular-nums}
         .ms-gallery-overlay[data-ms-feed-loading="1"] .ms-position-control::after{content:"";display:inline-block;width:6px;height:6px;margin-left:7px;border-radius:50%;background:var(--ms-accent);box-shadow:0 0 0 3px var(--ms-accent-tint);animation:ms-feed-pulse 900ms var(--ms-ease-out) infinite alternate}
         @keyframes ms-feed-pulse{from{opacity:.38;transform:scale(.82)}to{opacity:1;transform:scale(1)}}
+        .ms-gallery-overlay :where(button, a, input, select, textarea):focus-visible {
+            outline: 2px solid var(--ms-accent);
+            outline-offset: 2px;
+        }
+        .ms-gallery-overlay :where(button, [role="button"], a.ms-tag-pill, a.ms-tags-action-btn):not(:disabled) {
+            transition-property: color, background-color, border-color, opacity, transform;
+            transition-duration: 140ms;
+            transition-timing-function: var(--ms-ease-out);
+        }
+        .ms-gallery-overlay :where(button, [role="button"]):disabled {
+            opacity: 0.42;
+            cursor: default;
+        }
+        .ms-gallery-topbar .ms-btn {
+            border-color: transparent !important;
+            box-shadow: none !important;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .ms-gallery-overlay :where(button, [role="button"], a, input) {
+                transition-duration: 0.01ms !important;
+            }
+        }
     `;
 
 export function installOverlayStyles(addStyle) {

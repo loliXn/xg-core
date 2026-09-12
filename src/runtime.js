@@ -360,22 +360,28 @@ function ensureOverlay() {
         const zoomSlider = overlay.querySelector('.ms-zoom-slider');
         if (zoomSlider) {
             let zoomApplyRaf = null;
+            let pendingZoomScale = null;
             zoomSlider.addEventListener('input', () => {
+                const requestedScale = zoomScaleFromSlider(zoomSlider);
+                pendingZoomScale = requestedScale;
                 const valueEl = overlay.querySelector('.ms-zoom-value');
-                if (valueEl) valueEl.textContent = Math.round(parseFloat(zoomSlider.value) * 100) + '%';
+                if (valueEl) valueEl.textContent = Math.round(requestedScale * 100) + '%';
+                paintZoomSlider(zoomSlider);
+                const renderToken = bridge.state.renderToken;
+                const wrap = overlay.querySelector('.ms-media-wrap');
+                const img = wrap ? wrap.querySelector('img.ms-media.ms-ready') : null;
                 if (!bridge.state.pan || !bridge.state.pan.active) {
-                    const wrap = overlay.querySelector('.ms-media-wrap');
-                    const img = wrap ? wrap.querySelector('img.ms-media.ms-ready') : null;
                     if (wrap && img) {
-                        enablePanForImage(wrap, img);
+                        enablePanForImage(wrap, img, { zoom: true, scale: displayedImageScale(wrap, img), returnToFill: false });
                     }
                 }
 
                 if (zoomApplyRaf !== null) return;
                 zoomApplyRaf = requestAnimationFrame(() => {
                     zoomApplyRaf = null;
+                    if (renderToken !== bridge.state.renderToken || !img || bridge.state.pan?.img !== img) return;
                     if (bridge.state.pan && bridge.state.pan.active && typeof bridge.state.pan.updateZoom === 'function') {
-                        bridge.state.pan.updateZoom(parseFloat(zoomSlider.value));
+                        bridge.state.pan.updateZoom(pendingZoomScale);
                     }
                 });
             });
@@ -491,6 +497,7 @@ function onOverlayClick(e) {
                 const val = actionNode.getAttribute('data-val');
                 bridge.fitVertical = val === 'vertical';
                 bridge.savePreference('MS_BETTER_FIT_VERTICAL', bridge.fitVertical);
+                disablePan();
                 applyFitClass();
                 updateButtons();
             }
@@ -1045,6 +1052,46 @@ function disablePan() {
         }
     }
 
+function containedImageScale(wrap, img) {
+        if (!wrap || !img || !img.naturalWidth || !img.naturalHeight) return 1;
+        return Math.min(1, wrap.clientWidth / img.naturalWidth, wrap.clientHeight / img.naturalHeight);
+    }
+
+function displayedImageScale(wrap, img) {
+        if (!img || !img.naturalWidth) return 1;
+        const rect = img.getBoundingClientRect();
+        return rect.width > 0 ? rect.width / img.naturalWidth : containedImageScale(wrap, img);
+    }
+
+function zoomScaleFromSlider(slider) {
+        const min = Math.max(0.001, parseFloat(slider.dataset.scaleMin) || 0.01);
+        const max = Math.max(min, parseFloat(slider.dataset.scaleMax) || 1);
+        const position = Math.max(0, Math.min(1, (parseFloat(slider.value) || 0) / 1000));
+        return min * Math.pow(max / min, position);
+    }
+
+function paintZoomSlider(slider) {
+        const progress = Math.max(0, Math.min(100, (parseFloat(slider.value) || 0) / 10));
+        slider.style.setProperty('--ms-zoom-progress', progress + '%');
+    }
+
+function configureZoomSlider(slider, scale, fitScale) {
+        if (!slider) return;
+        const fit = Math.max(0.005, fitScale || scale || 1);
+        const min = Math.max(0.005, fit * 0.25);
+        const max = Math.max(1, fit * 4);
+        const bounded = Math.max(min, Math.min(max, scale || fit));
+        slider.min = 0;
+        slider.max = 1000;
+        slider.step = 2;
+        slider.dataset.scaleMin = String(min);
+        slider.dataset.scaleMax = String(max);
+        slider.value = max === min ? 0 : Math.log(bounded / min) / Math.log(max / min) * 1000;
+        paintZoomSlider(slider);
+        const valueEl = bridge.state.overlay && bridge.state.overlay.querySelector('.ms-zoom-value');
+        if (valueEl) valueEl.textContent = Math.round(bounded * 100) + '%';
+    }
+
 function applyTitleRowHeight(px) {
         if (!bridge.state.overlay) return;
         const h = Math.round(Math.min(bridge.TITLE_ROW_MAX, Math.max(bridge.TITLE_ROW_MIN, px)));
@@ -1375,14 +1422,11 @@ function enablePanForImage(wrap, img, opts) {
 
             scale = opts.scale;
         } else if (zoomMode) {
-            scale = 1;
+            scale = Math.min(1, displayedImageScale(wrap, img) * 1.5);
         } else if (bridge.fitVertical) {
-
-            const margin = Math.round(window.innerHeight * 0.08);
-            scale = Math.min(1, (wrapH - margin) / img.naturalHeight);
+            scale = Math.min(1, wrapH / img.naturalHeight);
         } else {
-            const margin = Math.round(window.innerWidth * 0.08);
-            scale = Math.min(1, (wrapW - margin) / img.naturalWidth);
+            scale = Math.min(1, wrapW / img.naturalWidth);
         }
 
         let dispW = Math.round(img.naturalWidth * scale);
@@ -1423,9 +1467,15 @@ function enablePanForImage(wrap, img, opts) {
         clampAndApply();
 
         const panResize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
+            const focalX = dispW ? (wrapW / 2 - x) / dispW : 0.5;
+            const focalY = dispH ? (wrapH / 2 - y) / dispH : 0.5;
             wrapW = wrap.clientWidth;
             wrapH = wrap.clientHeight;
-            if (wrapW && wrapH) scheduleClampAndApply();
+            if (wrapW && wrapH) {
+                x = wrapW / 2 - focalX * dispW;
+                y = wrapH / 2 - focalY * dispH;
+                scheduleClampAndApply();
+            }
         }) : null;
         if (panResize) panResize.observe(wrap);
 
@@ -1433,15 +1483,7 @@ function enablePanForImage(wrap, img, opts) {
         const slider = bridge.state.overlay.querySelector('.ms-zoom-slider');
         if (sliderWrap && slider) {
             sliderWrap.classList.remove('ms-zoom-idle');
-            const minScale = Math.min(0.05, scale * 0.1);
-            const maxScale = Math.max(5.0, scale * 5.0);
-            slider.min = minScale;
-            slider.max = maxScale;
-
-            slider.step = (maxScale - minScale) / 200;
-            slider.value = scale;
-            const valueEl = bridge.state.overlay.querySelector('.ms-zoom-value');
-            if (valueEl) valueEl.textContent = Math.round(scale * 100) + '%';
+            configureZoomSlider(slider, scale, containedImageScale(wrap, img));
         }
 
         let dragging = false;
@@ -1516,9 +1558,7 @@ function enablePanForImage(wrap, img, opts) {
                 y = wrapH / 2 - cy * dispH;
                 clampAndApply();
                 if (slider) {
-                    slider.value = newScale;
-                    const valueEl = bridge.state.overlay ? bridge.state.overlay.querySelector('.ms-zoom-value') : null;
-                    if (valueEl) valueEl.textContent = Math.round(newScale * 100) + '%';
+                    configureZoomSlider(slider, newScale, containedImageScale(wrap, img));
                 }
             },
             cleanup: () => {
@@ -1631,13 +1671,16 @@ function handleImageZoomClick(wrap, img, item, e) {
         const px = (e.clientX - rect.left) / rect.width;
         const py = (e.clientY - rect.top) / rect.height;
         const wrapRect = wrap.getBoundingClientRect();
+        const currentScale = rect.width / img.naturalWidth;
+        const nextScale = Math.min(Math.max(1, currentScale * 4), currentScale * 1.5);
 
         const isTallStrip = img.naturalHeight / Math.max(1, img.naturalWidth) >= 2.2;
         enablePanForImage(wrap, img, {
             zoom: true,
-            initialX: (e.clientX - wrapRect.left) - px * img.naturalWidth,
-            initialY: (!wasFill && isTallStrip) ? 0 : (e.clientY - wrapRect.top) - py * img.naturalHeight,
-            returnToFill: wasFill
+            scale: nextScale,
+            initialX: (e.clientX - wrapRect.left) - px * img.naturalWidth * nextScale,
+            initialY: (!wasFill && isTallStrip) ? 0 : (e.clientY - wrapRect.top) - py * img.naturalHeight * nextScale,
+            returnToFill: false
         });
     }
 
@@ -3015,17 +3058,8 @@ function renderCurrent() {
                     const slider = bridge.state.overlay.querySelector('.ms-zoom-slider');
                     if (sliderWrap && slider) {
                         sliderWrap.classList.remove('ms-zoom-idle');
-                        const wrapW = wrap.clientWidth;
-                        const wrapH = wrap.clientHeight;
-                        const fitScale = Math.min(1, Math.min(wrapW / img.naturalWidth, wrapH / img.naturalHeight));
-                        const minScale = Math.min(0.05, fitScale * 0.1);
-                        const maxScale = Math.max(5.0, fitScale * 5.0);
-                        slider.min = minScale;
-                        slider.max = maxScale;
-                        slider.step = (maxScale - minScale) / 200;
-                        slider.value = fitScale;
-                        const valueEl = bridge.state.overlay.querySelector('.ms-zoom-value');
-                        if (valueEl) valueEl.textContent = Math.round(fitScale * 100) + '%';
+                        const fitScale = containedImageScale(wrap, img);
+                        configureZoomSlider(slider, fitScale, fitScale);
                     }
                 }
 
