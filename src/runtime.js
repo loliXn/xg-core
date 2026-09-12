@@ -1097,17 +1097,19 @@ function paintZoomSlider(slider) {
         slider.style.setProperty('--ms-zoom-progress', progress + '%');
     }
 
-function configureZoomSlider(slider, scale, fitScale) {
+function configureZoomSlider(slider, scale, fitScale, fitMultiplier) {
         if (!slider) return;
         const fit = Math.max(0.005, fitScale || scale || 1);
+        const multiplier = Math.max(4, Number(fitMultiplier) || Number(slider.dataset.fitMultiplier) || 4);
         const min = Math.max(0.005, fit * 0.25);
-        const max = Math.max(1, fit * 4);
+        const max = Math.max(1, fit * multiplier, scale || fit);
         const bounded = Math.max(min, Math.min(max, scale || fit));
         slider.min = 0;
         slider.max = 1000;
         slider.step = 2;
         slider.dataset.scaleMin = String(min);
         slider.dataset.scaleMax = String(max);
+        slider.dataset.fitMultiplier = String(multiplier);
         slider.value = max === min ? 0 : Math.log(bounded / min) / Math.log(max / min) * 1000;
         paintZoomSlider(slider);
         const valueEl = bridge.state.overlay && bridge.state.overlay.querySelector('.ms-zoom-value');
@@ -1505,7 +1507,7 @@ function enablePanForImage(wrap, img, opts) {
         const slider = bridge.state.overlay.querySelector('.ms-zoom-slider');
         if (sliderWrap && slider) {
             sliderWrap.classList.remove('ms-zoom-idle');
-            configureZoomSlider(slider, scale, containedImageScale(wrap, img));
+            configureZoomSlider(slider, scale, containedImageScale(wrap, img), isTallStripImage(img) ? 12 : 4);
         }
 
         let dragging = false;
@@ -1617,6 +1619,10 @@ function shouldAutoPan(wrap, img) {
         return img.naturalHeight * fillScale > wrapH * 1.15;
     }
 
+function isTallStripImage(img) {
+        return !!(img && img.naturalWidth && img.naturalHeight / Math.max(1, img.naturalWidth) >= 2.2);
+    }
+
 function togglePanMode() {
         if (!bridge.state.overlay || bridge.state.gridMode) return;
         const entry = bridge.state.items[bridge.state.currentIndex];
@@ -1694,9 +1700,8 @@ function handleImageZoomClick(wrap, img, item, e) {
         const py = (e.clientY - rect.top) / rect.height;
         const wrapRect = wrap.getBoundingClientRect();
         const currentScale = rect.width / img.naturalWidth;
-        const nextScale = Math.min(Math.max(1, currentScale * 4), currentScale * 1.5);
-
-        const isTallStrip = img.naturalHeight / Math.max(1, img.naturalWidth) >= 2.2;
+        const isTallStrip = isTallStripImage(img);
+        const nextScale = Math.min(1, currentScale * (isTallStrip ? 4 : 1.5));
         enablePanForImage(wrap, img, {
             zoom: true,
             scale: nextScale,
@@ -3081,7 +3086,7 @@ function renderCurrent() {
                     if (sliderWrap && slider) {
                         sliderWrap.classList.remove('ms-zoom-idle');
                         const fitScale = containedImageScale(wrap, img);
-                        configureZoomSlider(slider, fitScale, fitScale);
+                        configureZoomSlider(slider, fitScale, fitScale, isTallStripImage(img) ? 12 : 4);
                     }
                 }
 

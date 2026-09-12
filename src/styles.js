@@ -57,7 +57,7 @@ export const OVERLAY_CSS = String.raw`
         }
 
         .ms-gallery-overlay {
-            --ms-topbar-h: 56px;
+            --ms-topbar-h: 50px;
             --ms-filter-h: 0px;
             --ms-thumbs-h: 90px;
             --ms-tags-w: 420px;
@@ -137,24 +137,24 @@ export const OVERLAY_CSS = String.raw`
 
         .ms-gallery-topbar {
             position: absolute;
-            top: 12px;
+            top: 10px;
             left: 50%;
             transform: translateX(-50%);
             width: calc(100% - 40px);
             max-width: 95%;
-            height: 44px;
+            height: 40px;
             display: grid;
             grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
             align-items: center;
-            column-gap: 16px;
+            column-gap: 12px;
             z-index: 100;
             pointer-events: auto;
             background: rgba(24, 25, 28, 0.97);
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
             border: 1px solid var(--ms-hairline);
-            border-radius: 12px;
-            padding: 0 16px;
+            border-radius: 10px;
+            padding: 0 14px;
             box-sizing: border-box;
             box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
         }
@@ -272,6 +272,13 @@ export const OVERLAY_CSS = String.raw`
             border: none;
             box-shadow: none;
             outline: none;
+            height: 30px;
+        }
+        .ms-gallery-overlay .ms-gallery-topbar .ms-icon-btn { width: 30px; }
+        .ms-gallery-overlay .ms-gallery-topbar .ms-btn-icon,
+        .ms-gallery-overlay .ms-gallery-topbar .ms-icon-btn svg {
+            width: 15px;
+            height: 15px;
         }
         .ms-btn-icon {
             width: 16px;
@@ -285,7 +292,7 @@ export const OVERLAY_CSS = String.raw`
 
         .ms-filter-bar {
             position: absolute;
-            top: calc(var(--ms-topbar-h) + 12px);
+            top: calc(var(--ms-topbar-h) + 8px);
             right: 20px;
             left: auto;
             transform: translateY(-6px) scale(0.985);
@@ -559,7 +566,7 @@ export const OVERLAY_CSS = String.raw`
             max-height: none !important;
             min-width: 0 !important;
             min-height: 0 !important;
-            object-fit: contain;
+            object-fit: cover;
             border-radius: 4px;
             display: block;
             background: #000;
@@ -2914,6 +2921,11 @@ export const OVERLAY_CSS = String.raw`
             color: hsl(223, 96%, 72%);
             background: var(--ms-accent-tint);
         }
+        .ms-filter-trigger.is-open,
+        .ms-filter-trigger.active.is-open {
+            color: var(--ms-text) !important;
+            background: var(--ms-hover) !important;
+        }
         .ms-filter-count {
             display: inline-flex;
             min-width: 16px;
@@ -2926,6 +2938,7 @@ export const OVERLAY_CSS = String.raw`
             color: #fff;
             font: 650 10px/1 var(--ms-font-data);
             font-variant-numeric: tabular-nums;
+            margin-left: 4px;
         }
         .ms-filter-count[hidden] { display: none !important; }
         .ms-tags-actions-bar {
@@ -3234,7 +3247,7 @@ export const OVERLAY_CSS = String.raw`
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            height: 32px;
+            height: 30px;
             padding: 0 8px;
             box-sizing: border-box;
             border: 1px solid var(--ms-hairline);

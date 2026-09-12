@@ -203,11 +203,11 @@ export function filterBarMarkup() {
         '    </div>',
         '  </div>',
         '  <div class="ms-filter-extras">',
-        '    <label class="ms-filter-field"><span>File types</span><div class="ms-filter-types">' + typeButtonsHtml() + '</div></label>',
-        '    <label class="ms-filter-field"><span>File size</span><div class="ms-filter-pair">',
+        '    <div class="ms-filter-field" role="group" aria-labelledby="ms-filter-types-label"><span id="ms-filter-types-label">File types</span><div class="ms-filter-types">' + typeButtonsHtml() + '</div></div>',
+        '    <div class="ms-filter-field" role="group" aria-labelledby="ms-filter-size-label"><span id="ms-filter-size-label">File size</span><div class="ms-filter-pair">',
         '      <input class="ms-filter-min-mb" type="number" min="0" inputmode="numeric" placeholder="Min MB">',
         '      <input class="ms-filter-max-mb" type="number" min="0" inputmode="numeric" placeholder="Max MB">',
-        '    </div></label>',
+        '    </div></div>',
         '    <button type="button" class="ms-filter-type ms-filter-hide-unavailable" aria-pressed="false">Hide unavailable</button>',
         '  </div>',
         '  <div class="ms-filter-chips" hidden></div>',
@@ -310,6 +310,7 @@ function setFilterOpen(root, open) {
     const trigger = overlay.querySelector('[data-act="filter-toggle"]');
     if (trigger) {
         trigger.setAttribute('aria-expanded', next ? 'true' : 'false');
+        trigger.classList.toggle('is-open', next);
     }
     syncFilterHeight(root);
     return next;
