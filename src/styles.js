@@ -17,6 +17,8 @@ export const OVERLAY_CSS = String.raw`
             --ms-accent-tint: hsla(223, 88%, 57%, 0.13);
             --ms-accent-line: hsla(223, 88%, 57%, 0.72);
             --ms-hover: rgba(255, 255, 255, 0.08);
+            --ms-pressed: rgba(255, 255, 255, 0.12);
+            --ms-control-rest: rgba(255, 255, 255, 0.035);
             --ms-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);
             --ms-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
             --ms-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
@@ -147,14 +149,14 @@ export const OVERLAY_CSS = String.raw`
             column-gap: 16px;
             z-index: 100;
             pointer-events: auto;
-            background: hsla(220, 7%, 9%, 0.92);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--ms-line);
-            border-radius: 22px;
+            background: rgba(24, 25, 28, 0.97);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--ms-hairline);
+            border-radius: 12px;
             padding: 0 16px;
             box-sizing: border-box;
-            box-shadow: var(--ms-shadow-md);
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
         }
         .ms-gallery-info {
             grid-column: 1;
@@ -193,7 +195,12 @@ export const OVERLAY_CSS = String.raw`
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        .ms-info-author:hover { text-decoration: underline; }
+        .ms-info-author:hover {
+            text-decoration: none;
+            background: var(--ms-hover);
+            box-shadow: 0 0 0 4px var(--ms-hover);
+            border-radius: 4px;
+        }
         .ms-info-sep { color: #71767b; margin-right: 2px; }
         .ms-info-byline > a:last-child {
             min-width: 0;
@@ -225,8 +232,8 @@ export const OVERLAY_CSS = String.raw`
             border: 1px solid transparent;
             background: transparent;
             color: var(--ms-text-3);
-            border-radius: 14px;
-            height: 28px;
+            border-radius: 8px;
+            height: 32px;
             padding: 0 10px;
             cursor: pointer;
             font-weight: 500;
@@ -258,6 +265,8 @@ export const OVERLAY_CSS = String.raw`
             background: var(--ms-hover);
             color: var(--ms-text);
         }
+        .ms-gallery-overlay .ms-btn:active { background: var(--ms-pressed); }
+        .ms-gallery-overlay .ms-btn.active:hover { background: hsla(223, 88%, 57%, 0.2); }
         .ms-gallery-overlay .ms-gallery-topbar .ms-btn,
         .ms-gallery-overlay .ms-gallery-topbar .ms-icon-btn {
             border: none;
@@ -265,12 +274,12 @@ export const OVERLAY_CSS = String.raw`
             outline: none;
         }
         .ms-btn-icon {
-            width: 12px;
-            height: 12px;
+            width: 16px;
+            height: 16px;
             stroke: currentColor;
             fill: none;
             vertical-align: -1px;
-            margin-right: 4px;
+            margin-right: 6px;
             flex-shrink: 0;
         }
 
@@ -286,10 +295,8 @@ export const OVERLAY_CSS = String.raw`
             box-sizing: border-box;
             padding: 12px;
             border: 1px solid var(--ms-line);
-            border-radius: 14px;
-            background: hsla(220, 7%, 10%, 0.94);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
+            border-radius: 12px;
+            background: var(--ms-surface-2);
             box-shadow: var(--ms-shadow-md);
             display: flex;
             flex-direction: column;
@@ -761,13 +768,13 @@ export const OVERLAY_CSS = String.raw`
             padding: 0;
         }
         .ms-nav svg {
-            width: 40px;
-            height: 40px;
-            padding: 10px;
+            width: 38px;
+            height: 38px;
+            padding: 9px;
             box-sizing: border-box;
             border-radius: 50%;
-            background: hsla(220, 7%, 9%, 0.84);
-            border: 1px solid var(--ms-line);
+            background: rgba(32, 33, 36, 0.94);
+            border: 1px solid var(--ms-hairline);
             color: var(--ms-text-2);
             stroke: currentColor;
             fill: none;
@@ -785,7 +792,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-nav:focus-visible svg {
             opacity: 1;
             transform: translateX(0);
-            background: hsla(220, 7%, 13%, 0.94);
+            background: rgba(255, 255, 255, 0.12);
             color: var(--ms-text);
         }
         .ms-nav.prev {
@@ -860,7 +867,7 @@ export const OVERLAY_CSS = String.raw`
             padding: 12px 20px;
             background: var(--ms-surface-2);
             border: 1px solid var(--ms-line);
-            border-radius: 16px;
+            border-radius: 12px;
             box-shadow: var(--ms-shadow-lg);
             pointer-events: auto;
             box-sizing: border-box;
@@ -919,8 +926,9 @@ export const OVERLAY_CSS = String.raw`
             overflow: hidden;
         }
         .ms-reddit-title:hover {
-            text-decoration: underline;
+            text-decoration: none;
             color: #ff4500;
+            background: var(--ms-hover);
         }
         /* Same treatment the topbar gives its labels, so the two read as one UI. */
         .ms-reddit-meta {
@@ -1258,7 +1266,8 @@ export const OVERLAY_CSS = String.raw`
         .ms-thumb img {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            object-fit: contain;
+            background: var(--ms-bg);
             display: block;
             pointer-events: none;
             opacity: 1;
@@ -1475,7 +1484,7 @@ export const OVERLAY_CSS = String.raw`
             box-shadow: var(--ms-shadow-md);
         }
         .ms-site-settings-btn:hover svg {
-            transform: rotate(45deg);
+            transform: none;
         }
         /* Optional host-page companion button next to Gallery. */
         #ms-site-redirect-btn {
@@ -1551,8 +1560,8 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-r34-settings-modal {
             background: var(--ms-surface-1);
-            border: 1px solid var(--ms-line);
-            border-radius: 16px;
+            border: 1px solid var(--ms-hairline);
+            border-radius: 12px;
             padding: 0;
             width: 560px;
             max-width: calc(100vw - 32px);
@@ -1631,7 +1640,7 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-r34-settings-overlay *, .ms-r34-settings-overlay *::before, .ms-r34-settings-overlay *::after { box-sizing: border-box; }
         .ms-r34-settings-overlay button, .ms-r34-settings-overlay input, .ms-r34-settings-overlay select, .ms-r34-settings-overlay textarea { font: inherit; }
-        .ms-settings-section-group { margin: 12px 0 8px; color: var(--ms-text-3); font: 11px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; text-transform: uppercase; letter-spacing: .06em; }
+        .ms-settings-section-group { margin: 12px 0 8px; color: var(--ms-text-3); font: 600 11px/1.5 var(--ms-font-ui); text-transform: uppercase; letter-spacing: .06em; }
         .ms-settings-label { flex: 1; min-width: 0; font-size: 13px; }
         .ms-settings-label small { color: var(--ms-text-3); font-size: 11px; }
         .ms-settings-row > input, .ms-settings-row > select { max-width: 180px; min-width: 0; }
@@ -1926,16 +1935,16 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-position-control {
             display: inline-flex;
-            height: 28px;
+            height: 32px;
             min-width: 0;
             padding: 0 7px;
             box-sizing: border-box;
             align-items: center;
             justify-content: center;
             gap: 2px;
-            border: 1px solid var(--ms-line);
-            border-radius: 14px;
-            background: var(--ms-surface-3);
+            border: 1px solid var(--ms-hairline);
+            border-radius: 8px;
+            background: var(--ms-surface-2);
             color: var(--ms-text-3);
             font-size: 12px;
             font-variant-numeric: tabular-nums;
@@ -1973,7 +1982,10 @@ export const OVERLAY_CSS = String.raw`
             text-decoration: none;
         }
         .ms-gallery-info a:hover {
-            text-decoration: underline;
+            text-decoration: none;
+            background: var(--ms-hover);
+            box-shadow: 0 0 0 4px var(--ms-hover);
+            border-radius: 4px;
         }
 
         .ms-thumb.ms-placeholder.ms-source-saint {
@@ -2369,7 +2381,9 @@ export const OVERLAY_CSS = String.raw`
             gap: 16px;
             padding: 11px 12px;
             border-bottom: 1px solid var(--ms-hairline);
+            transition: background-color 140ms var(--ms-ease-out);
         }
+        .ms-settings-row:hover { background: var(--ms-control-rest); }
         .ms-settings-card .ms-settings-row:last-child {
             border-bottom: none;
         }
@@ -2558,10 +2572,10 @@ export const OVERLAY_CSS = String.raw`
             box-sizing: border-box;
             background: var(--ms-surface-2);
             border: 1px solid var(--ms-line);
-            border-radius: 16px;
+            border-radius: 12px;
             display: flex;
             flex-direction: column;
-            box-shadow: var(--ms-shadow-lg);
+            box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
             pointer-events: auto;
             overflow: hidden;
         }
@@ -2594,8 +2608,8 @@ export const OVERLAY_CSS = String.raw`
             font-weight: 600;
             line-height: 1;
             padding: 0;
-            width: 26px;
-            height: 22px;
+            width: 32px;
+            height: 32px;
             cursor: pointer;
             transition: color 150ms var(--ms-ease), background-color 150ms var(--ms-ease);
         }
@@ -2604,17 +2618,24 @@ export const OVERLAY_CSS = String.raw`
             background: var(--ms-hover);
         }
         .ms-tags-close {
-            background: none;
+            width: 32px;
+            height: 32px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
             border: none;
+            border-radius: 8px;
             color: var(--ms-text-4);
             font-size: 22px;
             cursor: pointer;
             transition: color 150ms var(--ms-ease);
             line-height: 1;
-            padding: 0 4px;
+            padding: 0;
         }
         .ms-tags-close:hover {
             color: var(--ms-text);
+            background: var(--ms-hover);
         }
         .ms-tags-content {
             flex: 1 1 auto;
@@ -2645,7 +2666,7 @@ export const OVERLAY_CSS = String.raw`
             flex-direction: column;
             gap: 15px;
             width: 100%;
-            padding: 0 14px 16px;
+            padding: 16px 16px 20px;
             box-sizing: border-box;
         }
         .ms-post-section {
@@ -2673,6 +2694,9 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-tag-group-owner:hover {
             color: var(--ms-accent);
+            background: var(--ms-hover);
+            box-shadow: 0 0 0 3px var(--ms-hover);
+            border-radius: 3px;
         }
         .ms-tag-pill {
             display: inline-flex;
@@ -2706,7 +2730,8 @@ export const OVERLAY_CSS = String.raw`
             font: 600 11px/1.2 var(--ms-font-ui);
             cursor: pointer;
         }
-        .ms-tag-more:hover { border-color: var(--ms-accent-line); color: var(--ms-text); background: var(--ms-accent-tint); }
+        .ms-tag-more:hover { border-color: var(--ms-line-strong); color: var(--ms-text); background: var(--ms-hover); }
+        .ms-tag-more[aria-expanded="true"] { border-color: var(--ms-accent-line); color: var(--ms-text); background: var(--ms-accent-tint); }
         /* Optional tag-category tints. Adapters assign these classes. */
         .ms-tag-pill-artist {
             background: rgba(170, 0, 0, 0.18);
@@ -2751,6 +2776,9 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-desc-username):hover {
             color: hsl(223, 92%, 70%) !important;
             text-decoration-color: currentColor !important;
+            background: var(--ms-hover);
+            box-shadow: 0 0 0 3px var(--ms-hover);
+            border-radius: 3px;
         }
         .ms-info-description .ms-desc-divider {
             border: none;
@@ -2778,7 +2806,10 @@ export const OVERLAY_CSS = String.raw`
             text-decoration: none;
         }
         a.ms-info-desc-username:hover {
-            text-decoration: underline;
+            text-decoration: none;
+            background: var(--ms-hover);
+            box-shadow: 0 0 0 3px var(--ms-hover);
+            border-radius: 3px;
         }
         .ms-info-description {
             color: var(--ms-text-2);
@@ -2812,11 +2843,10 @@ export const OVERLAY_CSS = String.raw`
             z-index: 2;
             width: 100%;
             min-height: 32px;
-            margin: 0 -14px;
-            padding: 12px 16px 11px;
-            border-bottom: 1px solid var(--ms-line);
-            background: rgba(24, 26, 31, 0.94);
-            backdrop-filter: blur(12px) saturate(120%);
+            margin: 0;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--ms-hairline);
+            background: var(--ms-surface-2);
             box-sizing: border-box;
         }
         .ms-info-user {
@@ -2884,6 +2914,20 @@ export const OVERLAY_CSS = String.raw`
             color: hsl(223, 96%, 72%);
             background: var(--ms-accent-tint);
         }
+        .ms-filter-count {
+            display: inline-flex;
+            min-width: 16px;
+            height: 16px;
+            padding: 0 4px;
+            align-items: center;
+            justify-content: center;
+            border-radius: 5px;
+            background: var(--ms-accent);
+            color: #fff;
+            font: 650 10px/1 var(--ms-font-data);
+            font-variant-numeric: tabular-nums;
+        }
+        .ms-filter-count[hidden] { display: none !important; }
         .ms-tags-actions-bar {
             display: flex;
             align-items: center;
@@ -2907,10 +2951,9 @@ export const OVERLAY_CSS = String.raw`
             gap: 10px;
             margin-top: auto;
             padding: 11px 14px 12px;
-            border-top: 1px solid var(--ms-line);
-            background: rgba(24, 26, 31, 0.95);
-            backdrop-filter: blur(14px) saturate(125%);
-            box-shadow: 0 -8px 24px rgba(0,0,0,0.16);
+            border-top: 1px solid var(--ms-hairline);
+            background: var(--ms-surface-2);
+            box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.14);
         }
         .ms-caption-footer {
             display: flex;
@@ -3032,10 +3075,11 @@ export const OVERLAY_CSS = String.raw`
             border: none !important;
             cursor: pointer;
             padding: 0 8px !important;
-            transition: transform 150ms var(--ms-ease);
+            transition: color 140ms var(--ms-ease-out), background-color 140ms var(--ms-ease-out);
         }
         .ms-fav-btn:hover {
-            transform: scale(1.15);
+            background: var(--ms-hover) !important;
+            transform: none;
         }
         .ms-fav-btn svg {
             width: 18px;
@@ -3190,12 +3234,12 @@ export const OVERLAY_CSS = String.raw`
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            height: 28px;
+            height: 32px;
             padding: 0 8px;
             box-sizing: border-box;
-            border: 1px solid var(--ms-line);
-            border-radius: 14px;
-            background: var(--ms-surface-3);
+            border: 1px solid var(--ms-hairline);
+            border-radius: 8px;
+            background: var(--ms-surface-2);
             color: var(--ms-text-3);
             font-size: 11px;
             text-transform: uppercase;
@@ -3282,9 +3326,9 @@ export const OVERLAY_CSS = String.raw`
         .ms-tags-action-btn,.ms-tags-action-btn *{text-decoration:none!important}
         .ms-settings-tabs{display:flex;gap:6px;padding:0 20px 12px;overflow-x:auto}
         .ms-settings-tab{border:1px solid var(--ms-line);border-radius:8px;padding:8px 12px;background:transparent;color:var(--ms-text);font:600 12px/1.3 var(--ms-font-ui);cursor:pointer;white-space:nowrap;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out)}
-        .ms-settings-tab[aria-selected="true"]{background:var(--ms-accent);border-color:var(--ms-accent);color:white}
+        .ms-settings-tab[aria-selected="true"]{background:var(--ms-accent-tint);border-color:var(--ms-accent-line);color:var(--ms-text);box-shadow:inset 0 -2px 0 var(--ms-accent)}
         .ms-settings-page[hidden]{display:none!important}
-        .ms-r34-settings-modal button:not(:disabled):hover{background:var(--ms-hover)!important;border-color:var(--ms-line-strong)!important;color:var(--ms-text)!important}
+        .ms-r34-settings-modal button:not(:disabled):not([aria-selected="true"]):not(.is-success):not(.is-error):not(.ms-r34-save):hover{background:var(--ms-hover)!important;border-color:var(--ms-line)!important;color:var(--ms-text)!important}
         .ms-r34-settings-modal button:focus-visible{outline:2px solid var(--ms-accent);outline-offset:2px}
         .ms-r34-settings-modal button:disabled{opacity:.45;cursor:default}
         .ms-settings-row>button{padding:8px 12px;min-height:34px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);font:600 12px/1.25 var(--ms-font-ui);cursor:pointer;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out),opacity 140ms var(--ms-ease-out)}
@@ -3292,7 +3336,8 @@ export const OVERLAY_CSS = String.raw`
         .ms-settings-row>button.is-success{border-color:var(--ms-accent-line);background:var(--ms-accent-tint)}
         .ms-settings-row>button.is-error{border-color:rgba(239,96,96,.58);color:#f3b0b0}
         .ms-settings-row>select,.ms-settings-row>input[type="number"],.ms-settings-label{font-family:var(--ms-font-ui)}
-        .ms-settings-label small,.ms-position-control,.ms-info-postmeta,.ms-tags-like-count{font-family:var(--ms-font-data);font-variant-numeric:tabular-nums}
+        .ms-position-control,.ms-info-postmeta,.ms-tags-like-count{font-family:var(--ms-font-data);font-variant-numeric:tabular-nums}
+        .ms-settings-label small{font-family:var(--ms-font-ui)}
         .ms-gallery-overlay[data-ms-feed-loading="1"] .ms-position-control::after{content:"";display:inline-block;width:6px;height:6px;margin-left:7px;border-radius:50%;background:var(--ms-accent);box-shadow:0 0 0 3px var(--ms-accent-tint);animation:ms-feed-pulse 900ms var(--ms-ease-out) infinite alternate}
         @keyframes ms-feed-pulse{from{opacity:.38;transform:scale(.82)}to{opacity:1;transform:scale(1)}}
         .ms-gallery-overlay :where(button, a, input, select, textarea):focus-visible {
@@ -3416,7 +3461,9 @@ export const LAUNCHER_CSS = String.raw`
             z-index: 3 !important;
         }
         .ms-open-in-gallery:hover {
-            background: var(--ms-hover);
+            background: var(--ms-surface-3) !important;
+            color: var(--ms-text) !important;
+            border-color: var(--ms-line-strong) !important;
         }
         .ms-open-in-gallery:active {
             transform: scale(0.97);
@@ -3459,7 +3506,7 @@ export const LAUNCHER_CSS = String.raw`
             border-color: var(--ms-line-strong);
         }
         .ms-site-settings-btn:hover svg {
-            transform: rotate(45deg);
+            transform: none;
         }
         #ms-site-redirect-btn {
             position: fixed;

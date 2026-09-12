@@ -260,6 +260,16 @@ function paint(root, state) {
         const active = isFilterStateActive(state);
         trigger.classList.toggle('active', active);
         trigger.setAttribute('aria-pressed', active ? 'true' : 'false');
+        const count = (state.kind !== 'all' ? 1 : 0)
+            + state.types.length
+            + (state.minMb != null || state.maxMb != null ? 1 : 0)
+            + (String(state.query || '').trim() ? 1 : 0)
+            + (state.hideUnavailable ? 1 : 0);
+        const badge = trigger.querySelector('.ms-filter-count');
+        if (badge) {
+            badge.hidden = !count;
+            badge.textContent = String(count);
+        }
     }
     paintChips(root, state);
 }

@@ -38,6 +38,7 @@ function panelHtml(doc, html, className) {
 export function renderPostPanel(options) {
     const { content, model } = options;
     const doc = content.ownerDocument;
+    const previousScrollTop = options.preserveState ? content.scrollTop : 0;
     content.replaceChildren();
     const panel = panelElement(doc, 'div', 'ms-post-panel');
     const body = panelElement(doc, 'div', 'ms-post-body');
@@ -64,7 +65,7 @@ export function renderPostPanel(options) {
         const meta = panelElement(doc, 'div', 'ms-info-postmeta', info.time || (model.reserveHeader ? '\u00a0' : ''));
         if (info.repostedFrom) meta.append(doc.createTextNode(' · reposted from '), user(info.repostedFrom, true));
         head.append(meta);
-        body.append(head);
+        panel.insertBefore(head, body);
     }
     const captions = Array.isArray(info.captions) && info.captions.length ? info.captions : [{ html: model.description }];
     const caption = panelElement(doc, 'div', 'ms-panel-caption');
@@ -174,6 +175,10 @@ export function renderPostPanel(options) {
     }
     if (footer.childNodes.length) panel.append(footer);
     if (!body.childNodes.length) body.append(panelElement(doc, 'div', 'ms-info-empty', 'No description or tags available.'));
+    if (options.preserveState) requestAnimationFrame(() => {
+        if (content.isConnected) content.scrollTop = previousScrollTop;
+    });
+    else content.scrollTop = 0;
 }
 
 export function createSettingsPanel(options) {

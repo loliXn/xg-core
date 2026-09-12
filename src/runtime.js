@@ -4,6 +4,27 @@ export function createViewerRuntime(bridge) {
 function protectHostControl(button, compact) {
     const values = {appearance:'none',background:'#191b20',color:'#e7e8eb',border:'1px solid rgba(255,255,255,.24)','border-radius':compact?'8px':'10px',font:'600 12px/1 system-ui, sans-serif','text-shadow':'none','box-shadow':'0 2px 8px rgba(0,0,0,.25)','text-transform':'none',opacity:'1',filter:'none','backdrop-filter':'none','box-sizing':'border-box'};
     for (const [key,value] of Object.entries(values)) button.style.setProperty(key,value,'important');
+    if (button.dataset.msProtectedHover !== '1') {
+        button.dataset.msProtectedHover = '1';
+        const rest = () => {
+            button.style.setProperty('background', '#191b20', 'important');
+            button.style.setProperty('border-color', 'rgba(255,255,255,.24)', 'important');
+        };
+        const hover = () => {
+            if (button.disabled) return;
+            button.style.setProperty('background', '#292c31', 'important');
+            button.style.setProperty('border-color', 'rgba(255,255,255,.34)', 'important');
+        };
+        const press = () => {
+            if (!button.disabled) button.style.setProperty('background', '#32353a', 'important');
+        };
+        button.addEventListener('pointerenter', hover);
+        button.addEventListener('pointerleave', rest);
+        button.addEventListener('focus', hover);
+        button.addEventListener('blur', rest);
+        button.addEventListener('pointerdown', press);
+        button.addEventListener('pointerup', hover);
+    }
 }
 function createLauncher(options) {
     if(document.getElementById(options.id))return document.getElementById(options.id);
@@ -63,7 +84,11 @@ function showPostPanel(model, item) {
     const panel = bridge.state.overlay && bridge.state.overlay.querySelector('.ms-tags-overlay');
     if (!panel) return;
     panel.querySelector('.ms-tags-header h3').textContent = model.title || 'Post';
-    renderPostPanel({content:panel.querySelector('.ms-tags-content'),model,captionControls:content => appendCaptionModeControls(content,item)});
+    const content = panel.querySelector('.ms-tags-content');
+    const itemKey = String((bridge.mediaKey && bridge.mediaKey(item)) || item?.src || '');
+    const preserveState = !!itemKey && content.dataset.msPostKey === itemKey;
+    renderPostPanel({content,model,preserveState,captionControls:target => appendCaptionModeControls(target,item)});
+    content.dataset.msPostKey = itemKey;
     updateMediaCaptionOverlay(item);
 }
 function setInfoPanelVisible(show) {
@@ -677,10 +702,7 @@ function updateButtons() {
         const triggerThumbs = bridge.state.overlay.querySelector('[data-act="thumbs-trigger"], [data-act="thumbs-toggle"]');
 
         if (triggerFilter) {
-            if (bridge.filterMode === 1) setBtnLabel(triggerFilter, 'Filter: Img');
-            else if (bridge.filterMode === 2) setBtnLabel(triggerFilter, 'Filter: Vid');
-            else if (bridge.filterMode === 3) setBtnLabel(triggerFilter, 'Filter: Img+GIF');
-            else setBtnLabel(triggerFilter, 'Filter: All');
+            setBtnLabel(triggerFilter, 'FILTER');
         }
         if (triggerFit) {
             setBtnLabel(triggerFit, bridge.fitVertical ? 'Fit: Vert' : 'Fit: Std');
