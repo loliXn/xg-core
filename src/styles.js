@@ -2626,6 +2626,14 @@ export const OVERLAY_CSS = String.raw`
             margin: 4px 0 6px;
             width: 100%;
         }
+        .ms-tag-group-owner {
+            color: var(--ms-text-2);
+            text-decoration: none;
+            transition: color 150ms var(--ms-ease);
+        }
+        .ms-tag-group-owner:hover {
+            color: var(--ms-accent);
+        }
         .ms-tag-pill {
             display: inline-flex;
             align-items: center;

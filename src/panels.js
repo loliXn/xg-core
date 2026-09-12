@@ -68,11 +68,19 @@ export function renderPostPanel(options) {
         caption.append(card);
     });
     if (caption.childNodes.length) panel.append(caption);
-    if (model.tags && model.tags.length) {
+    const appendTags = (label, tags, profileUrl = '') => {
+        if (!tags || !tags.length) return;
         const tagsSection = panelElement(doc, 'section', 'ms-post-section ms-post-tags');
-        tagsSection.append(panelElement(doc, 'div', 'ms-info-tags-label', 'Tags'));
+        const heading = panelElement(doc, 'div', 'ms-info-tags-label');
+        if (profileUrl) {
+            const owner = panelElement(doc, 'a', 'ms-tag-group-owner', label);
+            owner.href = profileUrl;
+            heading.append(owner, doc.createTextNode(' tags'));
+            panelLinks(heading);
+        } else heading.textContent = label;
+        tagsSection.append(heading);
         const pills = panelElement(doc, 'div', 'ms-tag-pills');
-        model.tags.forEach(tag => {
+        tags.forEach(tag => {
             const link = panelElement(doc, 'a', 'ms-tag-pill', '#' + tag.label);
             if (tag.category) link.classList.add('ms-tag-pill-' + tag.category);
             link.href = tag.href || '#';
@@ -87,6 +95,11 @@ export function renderPostPanel(options) {
         });
         tagsSection.append(pills);
         panel.append(tagsSection);
+    };
+    if (model.tagGroups && model.tagGroups.length) {
+        model.tagGroups.forEach(group => appendTags(group.owner || 'Tags', group.tags, group.profileUrl));
+    } else if (model.tags && model.tags.length) {
+        appendTags('Tags', model.tags);
     }
     const context = panelElement(doc, 'div', 'ms-post-context');
     if (info.originalPost && info.originalPost.username) {
