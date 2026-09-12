@@ -12,7 +12,8 @@ export const DEFAULT_FILTER_STATE = Object.freeze({
     maxMb: null,
     minAlbum: null,
     maxAlbum: null,
-    extrasOpen: false
+    extrasOpen: false,
+    hideUnavailable: false
 });
 
 function asNumber(value) {
@@ -35,7 +36,8 @@ export function normalizeFilterState(input) {
         maxMb: asNumber(src.maxMb),
         minAlbum: asNumber(src.minAlbum),
         maxAlbum: asNumber(src.maxAlbum),
-        extrasOpen: src.extrasOpen === true
+        extrasOpen: src.extrasOpen === true,
+        hideUnavailable: src.hideUnavailable === true
     };
 }
 
@@ -45,6 +47,7 @@ export function isFilterStateActive(input) {
         || state.types.length > 0
         || state.minMb != null
         || state.maxMb != null
+        || state.hideUnavailable
         || String(state.query || '').trim() !== '';
 }
 
@@ -86,6 +89,14 @@ export function itemSearchText(item) {
 
 export function itemExtension(item) {
     if (!item) return '';
+    const mime = String(item.mediaMime || item.mimeType || '').toLowerCase();
+    if (mime === 'image/gif') return 'gif';
+    if (mime === 'image/webp') return 'webp';
+    if (mime === 'image/jpeg') return 'jpg';
+    if (mime === 'image/png') return 'png';
+    if (mime === 'video/mp4') return 'mp4';
+    if (mime === 'video/webm') return 'webm';
+    if (item.isGif) return 'gif';
     const name = String(item.filename || item.src || item.thumbSrc || '').split('?')[0];
     const match = name.match(/\.([a-z0-9]{2,5})$/i);
     if (!match) return '';
@@ -123,6 +134,7 @@ function haystackHas(haystack, token) {
 
 export function matchGalleryItem(item, state) {
     const filter = normalizeFilterState(state);
+    if (filter.hideUnavailable && item && item._msUnavailable === true) return false;
     if (filter.kind !== 'all' && itemKind(item) !== filter.kind) return false;
     if (filter.types.length) {
         const ext = itemExtension(item);
@@ -195,6 +207,7 @@ export function filterBarMarkup() {
         '      <input class="ms-filter-min-mb" type="number" min="0" inputmode="numeric" placeholder="Min MB">',
         '      <input class="ms-filter-max-mb" type="number" min="0" inputmode="numeric" placeholder="Max MB">',
         '    </div></label>',
+        '    <label class="ms-filter-unavailable"><input type="checkbox" class="ms-filter-hide-unavailable"><span>Hide unavailable media</span></label>',
         '  </div>',
         '  <div class="ms-filter-chips" hidden></div>',
         '</form>'
@@ -235,6 +248,8 @@ function paint(root, state) {
     if (maxMb && !isActiveControl(maxMb)) maxMb.value = state.maxMb == null ? '' : String(state.maxMb);
     if (minAlbum && !isActiveControl(minAlbum)) minAlbum.value = state.minAlbum == null ? '' : String(state.minAlbum);
     if (maxAlbum && !isActiveControl(maxAlbum)) maxAlbum.value = state.maxAlbum == null ? '' : String(state.maxAlbum);
+    const hideUnavailable = root.querySelector('.ms-filter-hide-unavailable');
+    if (hideUnavailable) hideUnavailable.checked = state.hideUnavailable;
     const overlay = root.closest('.ms-gallery-overlay');
     const trigger = overlay && overlay.querySelector('[data-act="filter-toggle"]');
     if (trigger) {
@@ -261,7 +276,8 @@ function readForm(root, extrasOpen) {
         maxMb: root.querySelector('.ms-filter-max-mb') && root.querySelector('.ms-filter-max-mb').value,
         minAlbum: root.querySelector('.ms-filter-min-album') && root.querySelector('.ms-filter-min-album').value,
         maxAlbum: root.querySelector('.ms-filter-max-album') && root.querySelector('.ms-filter-max-album').value,
-        extrasOpen: extrasOpen
+        extrasOpen: extrasOpen,
+        hideUnavailable: !!(root.querySelector('.ms-filter-hide-unavailable') && root.querySelector('.ms-filter-hide-unavailable').checked)
     });
 }
 

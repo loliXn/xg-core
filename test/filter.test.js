@@ -20,7 +20,10 @@ const item = (id, extra = {}) => ({
     filename: extra.filename,
     bytes: extra.bytes,
     albumSize: extra.albumSize,
-    postInfo: extra.postInfo
+    postInfo: extra.postInfo,
+    mediaMime: extra.mediaMime,
+    isGif: extra.isGif,
+    _msUnavailable: extra._msUnavailable
 });
 
 test('isFilterStateActive ignores an open panel and empty defaults', () => {
@@ -50,6 +53,17 @@ test('matchGalleryItem applies kind, extension, size and query', () => {
     assert.equal(matchGalleryItem(photo, { query: '"enmarchenoire.png"' }), true);
 });
 
+test('semantic MIME wins over a misleading thumbnail extension', () => {
+    const gif = item('animated', { src: 'https://cdn.example/preview.jpg', mediaMime: 'image/gif', isGif: true });
+    assert.equal(matchGalleryItem(gif, { types: ['gif'] }), true);
+    assert.equal(matchGalleryItem(gif, { types: ['jpg', 'png'] }), false);
+});
+
+test('hide unavailable only removes confirmed failures', () => {
+    assert.equal(matchGalleryItem(item('missing', { _msUnavailable: true }), { hideUnavailable: true }), false);
+    assert.equal(matchGalleryItem(item('temporary'), { hideUnavailable: true }), true);
+});
+
 test('applyGalleryFilter maps wrapper entries', () => {
     const entries = [
         { item: item('keep', { tags: ['red'] }) },
@@ -68,6 +82,7 @@ test('overlay shell includes the filter bar', () => {
     assert.equal(overlay.querySelector('.ms-filter-copy'), null);
     assert.equal(overlay.querySelector('.ms-filter-min-album'), null);
     assert.ok(overlay.querySelector('.ms-filter-min-mb'));
+    assert.ok(overlay.querySelector('.ms-filter-hide-unavailable'));
     assert.ok(overlay.querySelector('[data-act="filter-toggle"]'));
     assert.equal(overlay.querySelector('.ms-filter-bar').getAttribute('aria-hidden'), 'true');
 });

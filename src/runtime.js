@@ -1902,7 +1902,8 @@ function thumbPreviewRevision(entry) {
         const token = source.length > 180
             ? source.length + ':' + source.slice(0, 96) + ':' + source.slice(-48)
             : source;
-        return token + '|' + String(item.type || '');
+        return token + '|' + String(item.type || '') + '|' + String(item.mediaMime || item.mimeType || '')
+            + '|' + Number(!!item.isGif) + '|' + Number(!!item.isVideo);
     }
 
 function takeThumbVisual(el) {
@@ -2049,7 +2050,6 @@ function fillThumbButton(btn, entry, index, groupCounts) {
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-placeholder'),
             loadImage: (img) => {
                 if (animated) {
-                    img.src = thumbSrc;
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
                     bridge.setCachedImgSrc(img, thumbSrc);
@@ -2197,19 +2197,22 @@ function paintLoadMarks(track, visibleStart, visibleEnd) {
         }
         const n = bridge.state.items.length;
         layer.style.width = Math.max(0, n * bridge.MS_THUMB_STRIDE) + 'px';
-        layer.innerHTML = '';
-        if (!bridge.galleryLoadMarks.length) return;
         const start = Math.max(0, Number.isFinite(visibleStart) ? visibleStart : 0);
         const end = Math.min(n, Number.isFinite(visibleEnd) ? visibleEnd : n);
-        for (let m = 0; m < bridge.galleryLoadMarks.length; m++) {
-            const atSrc = bridge.galleryLoadMarks[m];
-            let index = -1;
-            for (let i = 0; i < n; i++) {
-                const it = bridge.state.items[i].item || bridge.state.items[i];
-                if (it && it.src === atSrc) { index = i; break; }
-            }
-            if (index < 1) continue;
-            if (index < start || index > end) continue;
+        const indexesBySrc = new Map();
+        for (let i = 0; i < n; i++) {
+            const it = bridge.state.items[i].item || bridge.state.items[i];
+            if (it && it.src && !indexesBySrc.has(it.src)) indexesBySrc.set(it.src, i);
+        }
+        const visibleMarks = bridge.galleryLoadMarks.map((src) => indexesBySrc.get(src))
+            .filter((index) => Number.isFinite(index) && index >= 1 && index >= start && index <= end);
+        const signature = n + '|' + start + '|' + end + '|' + visibleMarks.join(',');
+        if (layer.dataset.msPaintSignature === signature) return;
+        layer.dataset.msPaintSignature = signature;
+        layer.innerHTML = '';
+        if (!visibleMarks.length) return;
+        for (let m = 0; m < visibleMarks.length; m++) {
+            const index = visibleMarks[m];
             const mark = document.createElement('div');
             mark.className = 'ms-load-mark';
             mark.title = 'Loaded more';
@@ -2226,7 +2229,6 @@ function paintThumbGroupOutlines(track, groupData, visibleStart, visibleEnd) {
             layer.className = 'ms-thumb-group-layer';
             track.appendChild(layer);
         }
-        layer.innerHTML = '';
         const data = groupData || thumbGroupData();
         const runs = data.runs;
         const start = Math.max(0, Number.isFinite(visibleStart) ? visibleStart : 0);
@@ -2238,8 +2240,17 @@ function paintThumbGroupOutlines(track, groupData, visibleStart, visibleEnd) {
             if (runs[mid].end <= start) low = mid + 1;
             else high = mid;
         }
+        const visibleRuns = [];
         for (let r = low; r < runs.length && runs[r].start < end; r++) {
-            const run = runs[r];
+            visibleRuns.push(runs[r]);
+        }
+        const signature = bridge.state.items.length + '|' + start + '|' + end + '|'
+            + visibleRuns.map((run) => run.gid + ':' + run.start + ':' + run.end).join(',');
+        if (layer.dataset.msPaintSignature === signature) return;
+        layer.dataset.msPaintSignature = signature;
+        layer.innerHTML = '';
+        for (let r = 0; r < visibleRuns.length; r++) {
+            const run = visibleRuns[r];
             const box = document.createElement('div');
             box.className = 'ms-thumb-group-box';
 
@@ -2406,7 +2417,6 @@ function fillGridCell(cell, entry, index) {
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-grid-placeholder'),
             loadImage: (img) => {
                 if (animated) {
-                    img.src = thumbSrc;
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
                     bridge.setCachedImgSrc(img, thumbSrc);
@@ -2485,6 +2495,7 @@ function updateSingleThumb(index, entry) {
 function markItemMediaLoaded(item) {
         if (!item || !bridge.state.overlay) return;
         item._msMediaLoaded = true;
+        item._msUnavailable = false;
         try {
             if (typeof bridge.onMediaLoaded === 'function') bridge.onMediaLoaded(item);
         } catch (e) { }
@@ -2581,6 +2592,14 @@ function appendErrorBanner(container, errMsg) {
     }
 
 function renderErrorStage(container, errMsg, url, item) {
+        if (item && /(?:\b404\b|\b410\b|not found|gone|terminal)/i.test(String(errMsg || ''))) {
+            item._msUnavailable = true;
+        }
+        if (item && item.type === 'video' && item._msUnavailable !== true && url && typeof bridge.probeUrlStatus === 'function') {
+            bridge.probeUrlStatus(url).then((probe) => {
+                if (probe && (probe.status === 404 || probe.status === 410)) item._msUnavailable = true;
+            }).catch(() => { });
+        }
         globalThis.XGalleryCore.renderErrorStage({
             document: document,
             container: container,
@@ -2594,6 +2613,7 @@ function renderErrorStage(container, errMsg, url, item) {
                     bridge.resolvingFileUrlCache.delete(resolveUrl);
                 }
                 item.needsResolve = true;
+                item._msUnavailable = false;
                 delete item.error;
                 bridge.renderCurrent();
             }
