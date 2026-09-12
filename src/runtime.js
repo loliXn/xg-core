@@ -977,11 +977,9 @@ function buildGridCell(entry, index) {
                 img.referrerPolicy = 'no-referrer';
                 img.onload = function () { img.classList.add('ms-loaded'); };
                 if (bridge.isFreezableAnimatedThumb(item)) {
-
-                    img.src = thumbSrc;
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
-                    bridge.setCachedImgSrc(img, thumbSrc);
+                    bridge.setCachedImgSrc(img, thumbSrc, item);
                 }
                 img.onerror = function () {
                     if (img.parentNode === cell && !cell.classList.contains('ms-grid-placeholder')) {
@@ -1891,19 +1889,20 @@ function thumbSourceClass(item) {
 function thumbItemKey(entry) {
         const item = entry && (entry.item || entry);
         if (!item) return '';
-        if (!item._msCoreThumbKey) item._msCoreThumbKey = String(bridge.mediaKey(item));
+        item._msCoreThumbKey = String(bridge.mediaKey(item));
         return item._msCoreThumbKey;
     }
 
 function thumbPreviewRevision(entry) {
         const item = entry && (entry.item || entry);
         if (!item) return '';
-        const source = String(item._frozenThumb || item.thumbSrc || item.src || '');
+        const rawSource = String(item._frozenThumb || item.thumbSrc || item.src || '');
+        const source = bridge.thumbnailIdentity ? bridge.thumbnailIdentity(rawSource) : rawSource;
         const token = source.length > 180
             ? source.length + ':' + source.slice(0, 96) + ':' + source.slice(-48)
             : source;
         return token + '|' + String(item.type || '') + '|' + String(item.mediaMime || item.mimeType || '')
-            + '|' + Number(!!item.isGif) + '|' + Number(!!item.isVideo);
+            + '|' + Number(!!item.isGif) + '|' + Number(!!item.isVideo) + '|' + String(item.thumbnailFormat || '');
     }
 
 function takeThumbVisual(el) {
@@ -1933,7 +1932,10 @@ function armThumbHandoff(el, oldVisual, revision) {
         }
         incoming.classList.add('ms-thumb-handoff-in');
         el.insertBefore(oldVisual, incoming);
-        const finish = () => {
+        const finish = async () => {
+            if (incoming.tagName === 'IMG' && incoming.decode) {
+                try { await incoming.decode(); } catch (e) { return; }
+            }
             if (!incoming.isConnected || incoming.parentNode !== el || el.dataset.msThumbRevision !== revision) return;
             incoming.classList.add('ms-thumb-handoff-ready');
             oldVisual.classList.add('ms-thumb-handoff-leaving');
@@ -1955,6 +1957,10 @@ function armThumbHandoff(el, oldVisual, revision) {
 
 function resetMediaThumbEl(el) {
         if (!el) return;
+        el.querySelectorAll('img').forEach(img => {
+            if (img._msCancelThumb) img._msCancelThumb();
+            img.removeAttribute('src');
+        });
         if (el._msThumbHandoffTimer) {
             clearTimeout(el._msThumbHandoffTimer);
             el._msThumbHandoffTimer = null;
@@ -2052,7 +2058,7 @@ function fillThumbButton(btn, entry, index, groupCounts) {
                 if (animated) {
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
-                    bridge.setCachedImgSrc(img, thumbSrc);
+                    bridge.setCachedImgSrc(img, thumbSrc, item);
                 }
             }
         });
@@ -2176,12 +2182,13 @@ function paintThumbsWindow(track, groupData) {
         }
         for (let i = 0; i < pool.length; i++) {
             if (used.has(pool[i])) continue;
-            if (pool[i].querySelector('video, [data-ms-lazy-mp4]')) resetMediaThumbEl(pool[i]);
+            resetMediaThumbEl(pool[i]);
             pool[i].style.display = 'none';
             pool[i].removeAttribute('data-index');
         }
-        while (pool.length > want + 8) {
-            const extra = pool.pop();
+        for (let i = pool.length - 1; pool.length > want + 8 && i >= 0; i--) {
+            if (used.has(pool[i])) continue;
+            const extra = pool.splice(i, 1)[0];
             try { extra.remove(); } catch (e) { }
         }
         paintThumbGroupOutlines(track, data, start, end);
@@ -2199,11 +2206,18 @@ function paintLoadMarks(track, visibleStart, visibleEnd) {
         layer.style.width = Math.max(0, n * bridge.MS_THUMB_STRIDE) + 'px';
         const start = Math.max(0, Number.isFinite(visibleStart) ? visibleStart : 0);
         const end = Math.min(n, Number.isFinite(visibleEnd) ? visibleEnd : n);
-        const indexesBySrc = new Map();
-        for (let i = 0; i < n; i++) {
-            const it = bridge.state.items[i].item || bridge.state.items[i];
-            if (it && it.src && !indexesBySrc.has(it.src)) indexesBySrc.set(it.src, i);
+        const cache = bridge.state;
+        if (cache.markItems !== cache.items || cache.markCount !== n || cache.markLength !== bridge.galleryLoadMarks.length) {
+            cache.markItems = cache.items;
+            cache.markCount = n;
+            cache.markLength = bridge.galleryLoadMarks.length;
+            cache.markIndexes = new Map();
+            if (cache.markLength) for (let i = 0; i < n; i++) {
+                const it = cache.items[i].item || cache.items[i];
+                if (it && it.src && !cache.markIndexes.has(it.src)) cache.markIndexes.set(it.src, i);
+            }
         }
+        const indexesBySrc = cache.markIndexes || new Map();
         const visibleMarks = bridge.galleryLoadMarks.map((src) => indexesBySrc.get(src))
             .filter((index) => Number.isFinite(index) && index >= 1 && index >= start && index <= end);
         const signature = n + '|' + start + '|' + end + '|' + visibleMarks.join(',');
@@ -2272,9 +2286,6 @@ function syncThumbsWindow(opts) {
         if (opts && opts.center) bridge.state.thumbsFollowCenter = true;
         if (bridge.state.thumbsFollowCenter && n) {
             applyThumbStripCenter(track, !!(opts && opts.center));
-        } else if (typeof prevIndex === 'number' && prevIndex !== bridge.state.currentIndex) {
-            stopThumbTrackAnimation();
-            track.scrollLeft += (bridge.state.currentIndex - prevIndex) * bridge.MS_THUMB_STRIDE;
         }
         bridge.state.thumbsPaintIndex = bridge.state.currentIndex;
         paintThumbsWindow(track, thumbGroupData());
@@ -2419,7 +2430,7 @@ function fillGridCell(cell, entry, index) {
                 if (animated) {
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
-                    bridge.setCachedImgSrc(img, thumbSrc);
+                    bridge.setCachedImgSrc(img, thumbSrc, item);
                 }
             },
             indexLabel: index + 1
@@ -2459,7 +2470,15 @@ function renderThumbs(options) {
         itemKeys.forEach((key) => bridge.state.thumbKnownKeys.add(key));
         invalidateThumbGroupData();
         const followedCenter = bridge.state.thumbsFollowCenter;
-        if (anchorKey) bridge.state.thumbsFollowCenter = false;
+        if (anchorKey) {
+            bridge.state.thumbsFollowCenter = false;
+            stopThumbTrackAnimation();
+            const index = bridge.state.items.findIndex(entry => thumbItemKey(entry) === anchorKey);
+            if (index >= 0) {
+                ensureThumbsWindow(track).style.width = (bridge.state.items.length * bridge.MS_THUMB_STRIDE) + 'px';
+                track.scrollLeft = index * bridge.MS_THUMB_STRIDE - (anchorX - track.getBoundingClientRect().left);
+            }
+        }
         syncThumbsWindow();
         bridge.state.thumbsFollowCenter = followedCenter;
         if (track && anchorKey) {
@@ -3209,6 +3228,9 @@ function renderCurrent() {
                         item.src = item.imageFallbackSrc;
                         item.type = 'img';
                         item.isVideo = false;
+                        item.mediaMime = '';
+                        item.detectedFormat = '';
+                        item.detectedFormatSource = '';
                         item.isGif = /\.gif(?:\?|#|$)/i.test(item.src);
                         item.needsResolve = false;
                         const itemIndex = bridge.state.items.findIndex((entry) => (entry.item || entry) === item);

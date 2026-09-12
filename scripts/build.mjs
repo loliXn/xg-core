@@ -18,6 +18,7 @@ function moduleBody(file) {
 
 const body = [
     moduleBody('contract.js'),
+    moduleBody('media-format.js'),
     moduleBody('bridge.js'),
     moduleBody('controller.js'),
     moduleBody('styles.js'),
@@ -41,6 +42,7 @@ const bundle = [
     '        CORE_MANIFEST_URL,',
     '        CORE_UPDATE_INTERVAL_MS,',
     '        GalleryController,',
+    '        inspectImageFormat,',
     '        createViewerRuntime,',
     '        renderPostPanel,',
     '        createSettingsPanel,',

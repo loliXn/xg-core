@@ -10,6 +10,7 @@ export {
     verifiedCoreRecord
 } from './update.js';
 export { GalleryController } from './controller.js';
+export { inspectImageFormat } from './media-format.js';
 export { createViewerRuntime } from './runtime.js';
 export { renderPostPanel, createSettingsPanel } from './panels.js';
 export { OVERLAY_CSS, LAUNCHER_CSS, installOverlayStyles, installLauncherStyles } from './styles.js';

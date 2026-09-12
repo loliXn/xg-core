@@ -57,10 +57,12 @@ function showPlaceholder(options) {
     host.classList.add(options.placeholderClass);
     host.replaceChildren(createPlaceholderIcon(options.document, options.isVideo));
     if (options.showDomain) appendDomain(options.document, host, options.sourceUrl);
+    appendTypeBadge(options);
 }
 
 function appendTypeBadge(options) {
     const doc = options.document;
+    options.host.querySelectorAll('.ms-thumb-video-icon, .ms-thumb-gif-icon').forEach(node => node.remove());
     if (options.isVideo && !options.isAnimated) {
         const badge = doc.createElement('div');
         badge.className = 'ms-thumb-video-icon';
@@ -91,6 +93,8 @@ export function renderThumbnailCell(options) {
         document: doc,
         host,
         isVideo: !!options.isVideo,
+        isAnimated: !!options.isAnimated,
+        animatedLabel: options.animatedLabel,
         sourceUrl: options.sourceUrl,
         showDomain: options.showDomain !== false,
         placeholderClass

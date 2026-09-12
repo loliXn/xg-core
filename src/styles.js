@@ -456,26 +456,7 @@ export const OVERLAY_CSS = String.raw`
             text-transform: uppercase;
             color: var(--ms-text-4);
         }
-        .ms-filter-unavailable {
-            min-height: 40px;
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            padding: 0 11px;
-            border: 1px solid var(--ms-line);
-            border-radius: 9px;
-            background: var(--ms-surface-1);
-            color: var(--ms-text-3);
-            font-size: 12px;
-            cursor: pointer;
-        }
-        .ms-filter-unavailable:hover { border-color: var(--ms-line-strong); color: var(--ms-text); }
-        .ms-filter-unavailable input {
-            width: 15px;
-            height: 15px;
-            margin: 0;
-            accent-color: var(--ms-accent);
-        }
+        .ms-filter-hide-unavailable { justify-self: start; padding-inline: 12px; }
         .ms-filter-types {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));

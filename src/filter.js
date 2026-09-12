@@ -89,7 +89,8 @@ export function itemSearchText(item) {
 
 export function itemExtension(item) {
     if (!item) return '';
-    const mime = String(item.mediaMime || item.mimeType || '').toLowerCase();
+    if (item.detectedFormat && item.detectedFormatSource === item.src) return item.detectedFormat;
+    const mime = String(item.mediaMime || item.mimeType || '').toLowerCase().split(';')[0].trim();
     if (mime === 'image/gif') return 'gif';
     if (mime === 'image/webp') return 'webp';
     if (mime === 'image/jpeg') return 'jpg';
@@ -207,7 +208,7 @@ export function filterBarMarkup() {
         '      <input class="ms-filter-min-mb" type="number" min="0" inputmode="numeric" placeholder="Min MB">',
         '      <input class="ms-filter-max-mb" type="number" min="0" inputmode="numeric" placeholder="Max MB">',
         '    </div></label>',
-        '    <label class="ms-filter-unavailable"><input type="checkbox" class="ms-filter-hide-unavailable"><span>Hide unavailable media</span></label>',
+        '    <button type="button" class="ms-filter-type ms-filter-hide-unavailable" aria-pressed="false">Hide unavailable</button>',
         '  </div>',
         '  <div class="ms-filter-chips" hidden></div>',
         '</form>'
@@ -249,7 +250,10 @@ function paint(root, state) {
     if (minAlbum && !isActiveControl(minAlbum)) minAlbum.value = state.minAlbum == null ? '' : String(state.minAlbum);
     if (maxAlbum && !isActiveControl(maxAlbum)) maxAlbum.value = state.maxAlbum == null ? '' : String(state.maxAlbum);
     const hideUnavailable = root.querySelector('.ms-filter-hide-unavailable');
-    if (hideUnavailable) hideUnavailable.checked = state.hideUnavailable;
+    if (hideUnavailable) {
+        hideUnavailable.classList.toggle('is-active', state.hideUnavailable);
+        hideUnavailable.setAttribute('aria-pressed', String(state.hideUnavailable));
+    }
     const overlay = root.closest('.ms-gallery-overlay');
     const trigger = overlay && overlay.querySelector('[data-act="filter-toggle"]');
     if (trigger) {
@@ -277,7 +281,7 @@ function readForm(root, extrasOpen) {
         minAlbum: root.querySelector('.ms-filter-min-album') && root.querySelector('.ms-filter-min-album').value,
         maxAlbum: root.querySelector('.ms-filter-max-album') && root.querySelector('.ms-filter-max-album').value,
         extrasOpen: extrasOpen,
-        hideUnavailable: !!(root.querySelector('.ms-filter-hide-unavailable') && root.querySelector('.ms-filter-hide-unavailable').checked)
+        hideUnavailable: root.querySelector('.ms-filter-hide-unavailable')?.getAttribute('aria-pressed') === 'true'
     });
 }
 
@@ -329,6 +333,11 @@ export function bindFilterBar(root, options = {}) {
         });
     }
     root.addEventListener('click', (event) => {
+        if (event.target.closest('.ms-filter-hide-unavailable')) {
+            state.hideUnavailable = !state.hideUnavailable;
+            emit();
+            return;
+        }
         const kind = event.target.closest('.ms-filter-kind');
         if (kind) {
             state.kind = kind.getAttribute('data-kind') || 'all';
