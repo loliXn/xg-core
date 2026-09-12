@@ -103,6 +103,8 @@ export function renderThumbnailCell(options) {
     } else {
         const img = doc.createElement('img');
         img.loading = 'eager';
+        img.decoding = 'async';
+        img.fetchPriority = options.active ? 'high' : 'low';
         img.referrerPolicy = 'no-referrer';
         img.onload = () => img.classList.add('ms-loaded');
         img.onerror = () => {

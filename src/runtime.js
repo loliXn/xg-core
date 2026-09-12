@@ -1891,11 +1891,73 @@ function thumbSourceClass(item) {
 function thumbItemKey(entry) {
         const item = entry && (entry.item || entry);
         if (!item) return '';
-        return String(bridge.mediaKey(item)) + '|' + String(item.thumbSrc || '') + '|' + (item._frozenThumb ? 'frozen' : 'live');
+        if (!item._msCoreThumbKey) item._msCoreThumbKey = String(bridge.mediaKey(item));
+        return item._msCoreThumbKey;
+    }
+
+function thumbPreviewRevision(entry) {
+        const item = entry && (entry.item || entry);
+        if (!item) return '';
+        const source = String(item._frozenThumb || item.thumbSrc || item.src || '');
+        const token = source.length > 180
+            ? source.length + ':' + source.slice(0, 96) + ':' + source.slice(-48)
+            : source;
+        return token + '|' + String(item.type || '');
+    }
+
+function takeThumbVisual(el) {
+        if (!el) return null;
+        const visual = Array.from(el.children).reverse().find((child) => {
+            if (!child || child.classList.contains('ms-thumb-video-icon') || child.classList.contains('ms-thumb-gif-icon')) return false;
+            if (child.matches && child.matches('img')) return child.complete && child.naturalWidth > 0;
+            return child.matches && child.matches('svg');
+        });
+        if (!visual) return null;
+        if (bridge.lazyThumbObserver) {
+            try { bridge.lazyThumbObserver.unobserve(visual); } catch (e) { }
+        }
+        visual.remove();
+        visual.classList.remove('ms-thumb-handoff-in', 'ms-thumb-handoff-ready', 'ms-thumb-handoff-leaving');
+        visual.classList.add('ms-thumb-handoff-old');
+        return visual;
+    }
+
+function armThumbHandoff(el, oldVisual, revision) {
+        if (!el || !oldVisual) return;
+        const incoming = Array.from(el.children).find((child) =>
+            child !== oldVisual && child.matches && child.matches('img, video'));
+        if (!incoming) {
+            oldVisual.remove();
+            return;
+        }
+        incoming.classList.add('ms-thumb-handoff-in');
+        el.insertBefore(oldVisual, incoming);
+        const finish = () => {
+            if (!incoming.isConnected || incoming.parentNode !== el || el.dataset.msThumbRevision !== revision) return;
+            incoming.classList.add('ms-thumb-handoff-ready');
+            oldVisual.classList.add('ms-thumb-handoff-leaving');
+            if (el._msThumbHandoffTimer) clearTimeout(el._msThumbHandoffTimer);
+            el._msThumbHandoffTimer = setTimeout(() => {
+                el._msThumbHandoffTimer = null;
+                if (oldVisual.parentNode === el) oldVisual.remove();
+                incoming.classList.remove('ms-thumb-handoff-in', 'ms-thumb-handoff-ready');
+            }, 180);
+        };
+        if (incoming.tagName === 'IMG') {
+            incoming.addEventListener('load', finish, { once: true });
+            if (incoming.complete && incoming.naturalWidth) requestAnimationFrame(finish);
+        } else {
+            incoming.addEventListener('loadeddata', finish, { once: true });
+            if (incoming.readyState >= 2) requestAnimationFrame(finish);
+        }
     }
 
 function resetMediaThumbEl(el) {
         if (!el) return;
+        if (el._msThumbHandoffTimer) {
+            clearTimeout(el._msThumbHandoffTimer);
+            el._msThumbHandoffTimer = null;
+        }
         if (bridge.lazyThumbObserver) el.querySelectorAll('[data-ms-lazy-mp4]').forEach(img => bridge.lazyThumbObserver.unobserve(img));
         const vid = el.querySelector('video');
         if (vid) {
@@ -1912,6 +1974,7 @@ function resetMediaThumbEl(el) {
         el.classList.remove('ms-thumb-entering');
         el.removeAttribute('data-hd-src');
         delete el.dataset.msKey;
+        delete el.dataset.msThumbRevision;
     }
 
 function onWindowedThumbClick(e) {
@@ -1947,6 +2010,10 @@ function onWindowedGridClick(e) {
     }
 
 function fillThumbButton(btn, entry, index, groupCounts) {
+        const key = thumbItemKey(entry);
+        const revision = thumbPreviewRevision(entry);
+        const oldVisual = btn.dataset.msKey === key && btn.dataset.msThumbRevision !== revision
+            ? takeThumbVisual(btn) : null;
         resetMediaThumbEl(btn);
         const item = entry.item || entry;
         const thumbSrc = item.thumbSrc || item.src;
@@ -1957,7 +2024,8 @@ function fillThumbButton(btn, entry, index, groupCounts) {
         const hasPoster = !!(item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc));
         const isPlaceholder = thumbMediaIsPlaceholder(item, thumbSrc);
         btn.setAttribute('data-index', String(index));
-        btn.dataset.msKey = thumbItemKey(entry);
+        btn.dataset.msKey = key;
+        btn.dataset.msThumbRevision = revision;
         btn.style.display = '';
         btn.style.left = (index * bridge.MS_THUMB_STRIDE) + 'px';
         btn.style.boxShadow = '';
@@ -1988,6 +2056,7 @@ function fillThumbButton(btn, entry, index, groupCounts) {
                 }
             }
         });
+        if (oldVisual && !isPlaceholder) armThumbHandoff(btn, oldVisual, revision);
         if (bridge.state.thumbEnteringKeys && bridge.state.thumbEnteringKeys.has(btn.dataset.msKey)) {
             btn.classList.add('ms-thumb-entering');
         }
@@ -2098,6 +2167,9 @@ function paintThumbsWindow(track, groupData) {
             if (btn.dataset.msKey === key) {
                 btn.setAttribute('data-index', String(index));
                 btn.classList.toggle('active', index === bridge.state.currentIndex);
+                if (btn.dataset.msThumbRevision !== thumbPreviewRevision(entry)) {
+                    fillThumbButton(btn, entry, index, groupCounts);
+                }
                 continue;
             }
             fillThumbButton(btn, entry, index, groupCounts);

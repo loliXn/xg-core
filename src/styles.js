@@ -1257,7 +1257,7 @@ export const OVERLAY_CSS = String.raw`
             display: block;
             pointer-events: none;
             opacity: 1;
-            transition: none;
+            transition: opacity 150ms cubic-bezier(0.23, 1, 0.32, 1);
         }
         .ms-thumb img.ms-loaded,
         .ms-thumb img[src^="data:"],
@@ -1267,6 +1267,30 @@ export const OVERLAY_CSS = String.raw`
         .ms-thumb > img:not(.ms-loaded),
         .ms-grid-cell > img:not(.ms-loaded) {
             opacity: 0;
+        }
+        .ms-thumb > .ms-thumb-handoff-old,
+        .ms-thumb > .ms-thumb-handoff-in {
+            position: absolute;
+            inset: 0;
+        }
+        .ms-thumb > .ms-thumb-handoff-old {
+            z-index: 1;
+            opacity: 1;
+            margin: auto;
+        }
+        .ms-thumb > img.ms-thumb-handoff-in,
+        .ms-thumb > video.ms-thumb-handoff-in {
+            z-index: 2;
+            opacity: 0;
+            transition: opacity 150ms cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        .ms-thumb > img.ms-thumb-handoff-in.ms-thumb-handoff-ready,
+        .ms-thumb > video.ms-thumb-handoff-in.ms-thumb-handoff-ready {
+            opacity: 1;
+        }
+        .ms-thumb > .ms-thumb-handoff-old.ms-thumb-handoff-leaving {
+            opacity: 0;
+            transition: opacity 150ms cubic-bezier(0.23, 1, 0.32, 1);
         }
         .ms-thumb:has(> img:not(.ms-loaded))::before,
         .ms-grid-cell:has(> img:not(.ms-loaded))::before {
@@ -1282,6 +1306,9 @@ export const OVERLAY_CSS = String.raw`
             border-radius: 50%;
             animation: ms-spin 0.8s linear infinite;
             z-index: 2;
+        }
+        .ms-thumb:has(> .ms-thumb-handoff-old)::before {
+            display: none;
         }
         .ms-thumb-group {
             display: inline-flex;
@@ -3097,6 +3124,8 @@ export const OVERLAY_CSS = String.raw`
             .ms-gallery-overlay .ms-gallery-topbar,
             .ms-gallery-overlay .ms-gallery-stage,
             .ms-gallery-overlay .ms-thumbs-wrap,
+            .ms-gallery-overlay .ms-thumb img,
+            .ms-gallery-overlay .ms-thumb-handoff-old,
             .ms-nav svg { transition-duration: 0.01ms !important; transform: none !important; }
             .ms-thumb.ms-thumb-entering { animation: none !important; }
         }
