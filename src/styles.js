@@ -277,8 +277,8 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay .ms-gallery-topbar .ms-icon-btn { width: 30px; }
         .ms-gallery-overlay .ms-gallery-topbar .ms-btn-icon,
         .ms-gallery-overlay .ms-gallery-topbar .ms-icon-btn svg {
-            width: 15px;
-            height: 15px;
+            width: 12px;
+            height: 12px;
         }
         .ms-btn-icon {
             width: 16px;
@@ -760,8 +760,9 @@ export const OVERLAY_CSS = String.raw`
 
         .ms-nav {
             position: absolute;
-            top: var(--ms-topbar-h);
-            bottom: var(--ms-thumbs-h);
+            top: calc(var(--ms-topbar-h) + (100% - var(--ms-topbar-h) - var(--ms-thumbs-h)) / 4);
+            bottom: auto;
+            height: calc((100% - var(--ms-topbar-h) - var(--ms-thumbs-h)) / 2);
             width: clamp(76px, 10vw, 128px);
             border: 0;
             border-radius: 0;
