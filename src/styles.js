@@ -695,7 +695,11 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-caption-footer .ms-caption-mode {
             width: auto;
-            flex: 1 1 auto;
+            flex: 0 0 auto;
+        }
+        .ms-caption-footer .ms-caption-mode button {
+            flex: 0 0 auto;
+            padding: 0 10px;
         }
         .ms-caption-mode button {
             flex: 1 1 0;
@@ -2675,9 +2679,9 @@ export const OVERLAY_CSS = String.raw`
             display: flex;
             flex: 1 0 auto;
             flex-direction: column;
-            gap: 15px;
+            gap: 20px;
             width: 100%;
-            padding: 16px 16px 20px;
+            padding: 6px 18px 24px;
             box-sizing: border-box;
         }
         .ms-post-section {
@@ -2686,16 +2690,16 @@ export const OVERLAY_CSS = String.raw`
         .ms-tag-pills {
             display: flex;
             flex-wrap: wrap;
-            gap: 5px;
+            gap: 6px;
             width: 100%;
         }
         .ms-info-tags-label {
-            color: var(--ms-text-3);
-            font-size: 0.74em;
-            font-weight: 700;
+            color: var(--ms-text-4);
+            font-size: 11px;
+            font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            margin: 4px 0 6px;
+            margin: 0 0 8px;
             width: 100%;
         }
         .ms-tag-group-owner {
@@ -2706,66 +2710,58 @@ export const OVERLAY_CSS = String.raw`
         .ms-tag-group-owner:hover {
             color: var(--ms-accent);
         }
+        /* Tags are soft chips: a quiet fill, no outline. The chip is the
+           busiest element in the panel, so it carries the least ink. */
         .ms-tag-pill {
             display: inline-flex;
             align-items: center;
+            gap: 6px;
             max-width: 100%;
             box-sizing: border-box;
-            background: var(--ms-surface-3);
-            border: 1px solid var(--ms-line);
-            color: var(--ms-text-2);
-            padding: 4px 8px;
-            border-radius: 20px;
-            font-size: 11px;
-            line-height: 1.2;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid transparent;
+            color: var(--ms-text-3);
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            line-height: 1.25;
             text-decoration: none;
             word-break: break-word;
-            transition: background 150ms var(--ms-ease), border-color 150ms var(--ms-ease), color 150ms var(--ms-ease);
+            transition: background 150ms var(--ms-ease), color 150ms var(--ms-ease);
         }
         .ms-tag-pill:hover {
             background: var(--ms-hover);
-            border-color: var(--ms-line-strong);
             color: var(--ms-text);
         }
         .ms-tag-overflow[hidden] { display: none !important; }
         .ms-tag-more {
-            min-height: 25px;
-            padding: 3px 8px;
-            border: 1px dashed var(--ms-line);
-            border-radius: 20px;
+            min-height: 26px;
+            padding: 4px 10px;
+            border: 1px solid transparent;
+            border-radius: 999px;
             background: transparent;
             color: var(--ms-text-4);
-            font: 600 11px/1.2 var(--ms-font-ui);
+            font: 500 12px/1.25 var(--ms-font-ui);
             cursor: pointer;
         }
-        .ms-tag-more:hover { border-color: var(--ms-line-strong); color: var(--ms-text); background: var(--ms-hover); }
-        .ms-tag-more[aria-expanded="true"] { border-color: var(--ms-accent-line); color: var(--ms-text); background: var(--ms-accent-tint); }
-        /* Optional tag-category tints. Adapters assign these classes. */
-        .ms-tag-pill-artist {
-            background: rgba(170, 0, 0, 0.18);
-            border-color: #a33;
-            color: #ffb3b3;
+        .ms-tag-more:hover { color: var(--ms-text); background: var(--ms-hover); }
+        .ms-tag-more[aria-expanded="true"] { color: var(--ms-text-2); background: rgba(255, 255, 255, 0.05); }
+        /* Optional tag categories, assigned by adapters. A small leading dot
+           carries the category; the chip itself stays neutral, so a long
+           categorised tag list does not turn into a wall of colour. */
+        .ms-tag-pill[class*="ms-tag-pill-"]::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            flex-shrink: 0;
+            border-radius: 50%;
+            background: var(--ms-tag-dot, var(--ms-text-4));
         }
-        .ms-tag-pill-copyright {
-            background: rgba(153, 0, 153, 0.18);
-            border-color: #939;
-            color: #e3b3ff;
-        }
-        .ms-tag-pill-character {
-            background: rgba(0, 153, 0, 0.18);
-            border-color: #393;
-            color: #b3ffb3;
-        }
-        .ms-tag-pill-general {
-            background: rgba(0, 102, 204, 0.16);
-            border-color: #369;
-            color: #bcdcff;
-        }
-        .ms-tag-pill-metadata {
-            background: rgba(204, 102, 0, 0.18);
-            border-color: #b76;
-            color: #ffdcb3;
-        }
+        .ms-tag-pill-artist { --ms-tag-dot: hsl(0, 62%, 64%); }
+        .ms-tag-pill-copyright { --ms-tag-dot: hsl(290, 48%, 66%); }
+        .ms-tag-pill-character { --ms-tag-dot: hsl(130, 42%, 58%); }
+        .ms-tag-pill-general { --ms-tag-dot: hsl(210, 60%, 66%); }
+        .ms-tag-pill-metadata { --ms-tag-dot: hsl(32, 70%, 62%); }
         .ms-info-description p {
             margin: 0 0 6px;
         }
@@ -2773,8 +2769,8 @@ export const OVERLAY_CSS = String.raw`
             margin-bottom: 0;
         }
         .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-desc-username) {
-            color: var(--ms-accent) !important;
-            font-weight: 600;
+            color: hsl(223, 90%, 72%) !important;
+            font-weight: 500;
             text-decoration: underline !important;
             text-decoration-color: var(--ms-accent-line) !important;
             text-decoration-thickness: 1px;
@@ -2782,7 +2778,7 @@ export const OVERLAY_CSS = String.raw`
             transition: color 150ms var(--ms-ease), text-decoration-color 150ms var(--ms-ease);
         }
         .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-desc-username):hover {
-            color: hsl(223, 92%, 70%) !important;
+            color: hsl(223, 95%, 82%) !important;
             text-decoration-color: currentColor !important;
         }
         .ms-info-description .ms-desc-divider {
@@ -2848,17 +2844,70 @@ export const OVERLAY_CSS = String.raw`
         .ms-position-control {
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
+        /* The header stays pinned while a long caption scrolls, but it is
+           separated by a short fade rather than a rule, so it reads as the
+           top of the post and not as a toolbar. */
         .ms-info-posthead {
             position: sticky;
             top: 0;
             z-index: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
             width: 100%;
             min-height: 32px;
             margin: 0;
-            padding: 12px 16px;
-            border-bottom: 1px solid var(--ms-hairline);
+            padding: 14px 18px 10px;
             background: var(--ms-surface-2);
             box-sizing: border-box;
+        }
+        .ms-info-posthead::after {
+            content: '';
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 100%;
+            height: 12px;
+            background: linear-gradient(var(--ms-surface-2), transparent);
+            pointer-events: none;
+        }
+        .ms-post-byline {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            min-width: 0;
+        }
+        .ms-post-byline > .ms-info-user {
+            min-width: 0;
+        }
+        .ms-post-byline .ms-info-desc-username {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .ms-post-repost {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+            padding-left: 32px; /* avatar 24px + gap 8px: aligns under the name */
+            color: var(--ms-text-4);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+        .ms-post-repost-icon {
+            display: inline-flex;
+            flex-shrink: 0;
+            color: var(--ms-text-4);
+        }
+        .ms-post-repost-icon svg {
+            width: 13px;
+            height: 13px;
+        }
+        .ms-post-repost .ms-info-user-sm .ms-info-desc-username {
+            color: var(--ms-text-2);
+            font-weight: 500;
         }
         .ms-info-user {
             display: flex;
@@ -2880,11 +2929,11 @@ export const OVERLAY_CSS = String.raw`
             font-size: 12px;
         }
         .ms-info-postmeta {
-            margin-top: 3px;
-            padding-left: 32px;
-            font-size: 11px;
+            flex-shrink: 0;
+            font-size: 12px;
             color: var(--ms-text-4);
             line-height: 1.5;
+            white-space: nowrap;
         }
         .ms-info-description .ms-info-user-sm {
             margin-bottom: 6px;
@@ -2892,22 +2941,26 @@ export const OVERLAY_CSS = String.raw`
         .ms-info-original {
             width: 100%;
             margin: 0;
-            font-size: 11px;
+            font-size: 12px;
             color: var(--ms-text-4);
         }
         .ms-info-stats {
             display: flex;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 4px 0;
             width: 100%;
             margin: 0;
-            font-size: 11px;
+            font-size: 12px;
             color: var(--ms-text-4);
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
+        }
+        .ms-info-stat + .ms-info-stat::before {
+            content: '·';
+            margin: 0 8px;
+            color: var(--ms-text-4);
         }
         .ms-info-stats b {
             color: var(--ms-text-2);
+            font-weight: 500;
             font-variant-numeric: tabular-nums;
         }
         .ms-info-desc-role {
@@ -2955,37 +3008,39 @@ export const OVERLAY_CSS = String.raw`
         .ms-post-context {
             display: flex;
             flex-direction: column;
-            gap: 7px;
-            padding: 10px 2px 0;
-            border-top: 1px solid var(--ms-line);
+            gap: 6px;
         }
         .ms-post-footer {
             position: sticky;
             bottom: 0;
             z-index: 3;
             display: flex;
-            flex-direction: column;
-            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px 12px;
             margin-top: auto;
-            padding: 11px 14px 12px;
+            padding: 10px 12px;
             border-top: 1px solid var(--ms-hairline);
             background: var(--ms-surface-2);
-            box-shadow: 0 -8px 20px rgba(0, 0, 0, 0.14);
         }
         .ms-caption-footer {
             display: flex;
+            flex: 1 1 auto;
             align-items: center;
             justify-content: space-between;
-            gap: 10px;
+            gap: 8px;
         }
         .ms-caption-mode-label {
             display: inline-flex;
             margin: 0;
             color: var(--ms-text-4);
-            font: 650 10px/1.2 var(--ms-font-data);
-            letter-spacing: 0.08em;
+            font: 600 11px/1.2 var(--ms-font-ui);
+            letter-spacing: 0.5px;
             text-transform: uppercase;
         }
+        /* Post actions are ghost buttons: no fill and no outline until the
+           pointer arrives, so the footer stays quiet under the text. */
         .ms-tags-action-btn,
         .ms-tags-like-btn,
         .ms-tags-hide-btn,
@@ -2993,12 +3048,12 @@ export const OVERLAY_CSS = String.raw`
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            height: 34px;
-            padding: 0 14px;
-            gap: 7px;
-            background: var(--ms-surface-3);
-            border: 1px solid var(--ms-line);
-            color: var(--ms-text-2);
+            height: 32px;
+            padding: 0 10px;
+            gap: 6px;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--ms-text-3);
             border-radius: 8px;
             font-size: 12px;
             font-weight: 600;
@@ -3013,7 +3068,6 @@ export const OVERLAY_CSS = String.raw`
         .ms-tags-hide-btn:hover,
         .adv-hide-btn-list:hover {
             background: var(--ms-hover);
-            border-color: var(--ms-line-strong);
             color: var(--ms-text);
         }
         .ms-tags-action-btn:active,
@@ -3032,19 +3086,23 @@ export const OVERLAY_CSS = String.raw`
             flex-shrink: 0;
         }
         .ms-tags-like-btn svg {
-            width: 15px;
-            height: 15px;
-            fill: currentColor;
-            stroke: none;
+            width: 16px;
+            height: 16px;
+            fill: none;
+            stroke: currentColor;
             flex-shrink: 0;
+            transition: fill 150ms var(--ms-ease), stroke 150ms var(--ms-ease);
+        }
+        .ms-tags-like-btn:hover svg {
+            stroke: #ff2a54;
         }
         .ms-tags-like-btn.active {
             color: #ff2a54;
-            border-color: rgba(255, 42, 84, 0.45);
-            background: rgba(255, 42, 84, 0.14);
+            background: rgba(255, 42, 84, 0.1);
         }
         .ms-tags-like-btn.active svg {
             fill: #ff2a54;
+            stroke: #ff2a54;
         }
         .ms-tags-like-count {
             padding-left: 2px;
@@ -3063,14 +3121,7 @@ export const OVERLAY_CSS = String.raw`
             font-size: 14px;
             font-weight: 600;
         }
-        .ms-gallery-overlay .ms-info-postmeta {
-            font-size: 11px;
-        }
-        .ms-gallery-overlay .ms-info-stats {
-            font-size: 11px;
-            text-transform: none;
-            letter-spacing: 0;
-        }
+
         .ms-gallery-overlay .ms-tags-content {
             font-size: 14px;
         }
@@ -3353,7 +3404,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-settings-row>button.is-success{border-color:var(--ms-accent-line);background:var(--ms-accent-tint)}
         .ms-settings-row>button.is-error{border-color:rgba(239,96,96,.58);color:#f3b0b0}
         .ms-settings-row>select,.ms-settings-row>input[type="number"],.ms-settings-label{font-family:var(--ms-font-ui)}
-        .ms-position-control,.ms-info-postmeta,.ms-tags-like-count{font-family:var(--ms-font-data);font-variant-numeric:tabular-nums}
+        .ms-position-control{font-family:var(--ms-font-data);font-variant-numeric:tabular-nums}.ms-info-postmeta,.ms-tags-like-count{font-family:var(--ms-font-ui);font-variant-numeric:tabular-nums}
         .ms-settings-label small{font-family:var(--ms-font-ui)}
         .ms-gallery-overlay[data-ms-feed-loading="1"] .ms-position-control::after{content:"";display:inline-block;width:6px;height:6px;margin-left:7px;border-radius:50%;background:var(--ms-accent);box-shadow:0 0 0 3px var(--ms-accent-tint);animation:ms-feed-pulse 900ms var(--ms-ease-out) infinite alternate}
         @keyframes ms-feed-pulse{from{opacity:.38;transform:scale(.82)}to{opacity:1;transform:scale(1)}}

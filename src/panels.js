@@ -28,6 +28,8 @@ export function revealOnNextFrame(el, className) {
 // changes animate.
 const POST_ENTER_MIN_GAP_MS = 180;
 
+const REPOST_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></svg>';
+
 function panelElement(doc, tag, className, text) {
     const node = doc.createElement(tag);
     if (className) node.className = className;
@@ -93,11 +95,21 @@ export function renderPostPanel(options) {
     };
     const info = model.postInfo || {};
     if (info.author || model.reserveHeader) {
+        // Read like a message header: who, when, and where it came from.
         const head = panelElement(doc, 'div', 'ms-info-posthead');
-        head.append(user(info.author || {}));
-        const meta = panelElement(doc, 'div', 'ms-info-postmeta', info.time || (model.reserveHeader ? '\u00a0' : ''));
-        if (info.repostedFrom) meta.append(doc.createTextNode(' · reposted from '), user(info.repostedFrom, true));
-        head.append(meta);
+        const byline = panelElement(doc, 'div', 'ms-post-byline');
+        byline.append(user(info.author || {}));
+        const date = panelElement(doc, 'span', 'ms-info-postmeta', info.time || (model.reserveHeader ? '\u00a0' : ''));
+        if (info.time) date.title = info.time;
+        byline.append(date);
+        head.append(byline);
+        if (info.repostedFrom) {
+            const repost = panelElement(doc, 'div', 'ms-post-repost');
+            const icon = panelElement(doc, 'span', 'ms-post-repost-icon');
+            icon.innerHTML = REPOST_ICON;
+            repost.append(icon, panelElement(doc, 'span', 'ms-post-repost-label', 'reposted from'), user(info.repostedFrom, true));
+            head.append(repost);
+        }
         panel.insertBefore(head, body);
     }
     const captions = Array.isArray(info.captions) && info.captions.length ? info.captions : [{ html: model.description }];
@@ -170,8 +182,11 @@ export function renderPostPanel(options) {
     }
     if (info.stats) {
         const stats = panelElement(doc, 'div', 'ms-info-stats');
-        for (const [key, label] of [['views', 'Views'], ['reposts', 'Reposts']]) {
-            if (info.stats[key]) stats.append(panelElement(doc, 'span', '', info.stats[key] + ' ' + label));
+        for (const [key, label] of [['views', 'views'], ['reposts', 'reposts']]) {
+            if (!info.stats[key]) continue;
+            const stat = panelElement(doc, 'span', 'ms-info-stat');
+            stat.append(panelElement(doc, 'b', '', info.stats[key]), doc.createTextNode(' ' + label));
+            stats.append(stat);
         }
         if (stats.childNodes.length) context.append(stats);
     }
@@ -202,6 +217,8 @@ export function renderPostPanel(options) {
     }
     if (options.captionControls) {
         const modes = panelElement(doc, 'div', 'ms-caption-footer');
+        modes.setAttribute('role', 'group');
+        modes.setAttribute('aria-label', 'Caption display');
         modes.append(panelElement(doc, 'span', 'ms-caption-mode-label', 'Caption'));
         options.captionControls(modes);
         if (modes.childNodes.length > 1) footer.append(modes);
