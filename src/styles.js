@@ -3345,7 +3345,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-settings-tab{border:1px solid var(--ms-line);border-radius:8px;padding:8px 12px;background:transparent;color:var(--ms-text);font:600 12px/1.3 var(--ms-font-ui);cursor:pointer;white-space:nowrap;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out)}
         .ms-settings-tab[aria-selected="true"]{background:var(--ms-accent-tint);border-color:var(--ms-accent-line);color:var(--ms-text);box-shadow:inset 0 -2px 0 var(--ms-accent)}
         .ms-settings-page[hidden]{display:none!important}
-        .ms-r34-settings-modal button:not(:disabled):not([aria-selected="true"]):not(.is-success):not(.is-error):not(.ms-r34-save):hover{background:var(--ms-hover)!important;border-color:var(--ms-line)!important;color:var(--ms-text)!important}
+        .ms-r34-settings-modal button:not(:disabled):not([aria-selected="true"]):not(.is-success):not(.is-error):not(.ms-r34-save):not(:active):hover{background:var(--ms-hover)!important;border-color:var(--ms-line)!important;color:var(--ms-text)!important}
         .ms-r34-settings-modal button:focus-visible{outline:2px solid var(--ms-accent);outline-offset:2px}
         .ms-r34-settings-modal button:disabled{opacity:.45;cursor:default}
         .ms-settings-row>button{padding:8px 12px;min-height:34px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);font:600 12px/1.25 var(--ms-font-ui);cursor:pointer;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out),opacity 140ms var(--ms-ease-out)}
@@ -3362,7 +3362,7 @@ export const OVERLAY_CSS = String.raw`
             outline-offset: 2px;
         }
         .ms-gallery-overlay :where(button, [role="button"], a.ms-tag-pill, a.ms-tags-action-btn):not(:disabled) {
-            transition-property: color, background-color, border-color, opacity, transform;
+            transition-property: color, background-color, border-color, box-shadow, opacity, transform, scale;
             transition-duration: 140ms;
             transition-timing-function: var(--ms-ease-out);
         }
@@ -3374,6 +3374,85 @@ export const OVERLAY_CSS = String.raw`
             border-color: transparent !important;
             box-shadow: none !important;
         }
+        /* ---------------------------------------------------------------------
+           Interaction states: one system for every control.
+
+             rest      transparent, or the control's own surface
+             hover     neutral fill (buttons) or a firmer edge (fields)
+             press     pressed fill and a slight shrink
+             open      pressed fill and an inset ring (disclosure triggers)
+             selected  accent tint and accent text (per component)
+             focus     2px accent outline (global rule above)
+
+           Press uses the independent scale property rather than transform.
+           Several controls already use transform for placement (centred with
+           translateX(-50%), lifted with translateY(-1px)); scale composes with
+           that instead of replacing it, so nothing jumps when pressed.
+           Selected controls keep their tint while pressed.
+           --------------------------------------------------------------------- */
+        .ms-gallery-overlay :where(button, [role="button"], a.ms-tag-pill, a.ms-tags-action-btn):not(:disabled):not(.ms-nav):active,
+        .ms-r34-settings-overlay :where(button, [role="button"]):not(:disabled):active {
+            scale: 0.97;
+        }
+        .ms-gallery-overlay :where(.ms-filter-kind, .ms-filter-type, .ms-filter-reset, .ms-tags-font-btn, .ms-tags-close,
+            .ms-tag-more, .ms-tag-pill, .ms-retry-btn, .ms-grid-loadmore, .ms-caption-mode button):not(:disabled):not(.active):not(.is-active):not([aria-pressed="true"]):not([aria-expanded="true"]):active {
+            background-color: var(--ms-pressed) !important;
+        }
+        .ms-r34-settings-overlay :where(.ms-settings-close, .ms-settings-tab, .ms-settings-row > button, .ms-blacklist-pill):not(:disabled):not([aria-selected="true"]):not([aria-pressed="true"]):active {
+            background-color: var(--ms-pressed) !important;
+        }
+        /* The previous/next strip is the whole screen edge; press the chevron. */
+        .ms-gallery-overlay .ms-nav:not(:disabled):active svg {
+            scale: 0.92;
+        }
+        /* Thumbnails and grid cells are media, not surfaces: press dims them. */
+        .ms-gallery-overlay :where(.ms-thumb, .ms-grid-cell):active {
+            scale: 0.96;
+        }
+
+        /* Fields: hover firms the edge. Focus keeps its own accent rule, so a
+           focused field is left alone. */
+        .ms-gallery-overlay :where(.ms-filter-input, .ms-filter-pair input):not(:disabled):not(:focus):hover,
+        .ms-r34-settings-overlay :where(input:not([type="checkbox"]):not([type="range"]), select, textarea):not(:disabled):not(:focus):hover {
+            border-color: var(--ms-line-strong);
+        }
+        .ms-gallery-overlay .ms-position-control:not(:focus-within):hover {
+            border-color: var(--ms-line);
+            background-color: var(--ms-surface-3);
+        }
+
+        /* Toggle switch: the track answers hover, the thumb answers press. */
+        .ms-r34-settings-overlay .ms-toggle:hover .ms-toggle-track,
+        .ms-gallery-overlay .ms-toggle:hover .ms-toggle-track {
+            border-color: var(--ms-line-strong);
+        }
+        .ms-r34-settings-overlay .ms-toggle:hover input:checked + .ms-toggle-track,
+        .ms-gallery-overlay .ms-toggle:hover input:checked + .ms-toggle-track {
+            background: hsl(223, 88%, 62%);
+        }
+        .ms-r34-settings-overlay .ms-toggle:active .ms-toggle-thumb,
+        .ms-gallery-overlay .ms-toggle:active .ms-toggle-thumb {
+            scale: 0.86;
+        }
+        .ms-toggle-thumb {
+            transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1), background 160ms var(--ms-ease), scale 120ms var(--ms-ease);
+        }
+
+        /* Range thumbs grow a little under the pointer, like the zoom slider. */
+        .ms-grid-size-slider::-webkit-slider-thumb,
+        .ms-grid-controls input[type="range"]::-webkit-slider-thumb {
+            transition: transform 90ms var(--ms-ease);
+        }
+        .ms-grid-size-slider:hover::-webkit-slider-thumb,
+        .ms-grid-controls input[type="range"]:hover::-webkit-slider-thumb {
+            transform: scale(1.12);
+        }
+        .ms-grid-size-slider:active::-webkit-slider-thumb,
+        .ms-grid-controls input[type="range"]:active::-webkit-slider-thumb,
+        .ms-zoom-slider:active::-webkit-slider-thumb {
+            transform: scale(1.25);
+        }
+
         /* A disclosure trigger whose panel is open. It must differ from hover:
            right after the click the pointer is still on the button, and a
            state that paints the same fill as hover shows no change at all.
