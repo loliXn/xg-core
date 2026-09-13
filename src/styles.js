@@ -1204,6 +1204,7 @@ export const OVERLAY_CSS = String.raw`
 
         .ms-thumb {
             --ms-thumb-rest-opacity: 0.7;
+            padding: 0 !important;
             position: relative;
             display: inline-block;
             width: 70px;
