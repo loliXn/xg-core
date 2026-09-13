@@ -1,6 +1,33 @@
 import { OVERLAY_CSS } from './styles.js';
 import { HEART_ICON } from './view.js';
 
+// Mount hidden but fully laid out, then drop the class on the next frame so
+// the transition runs. Toggling straight out of display:none cannot animate.
+export function revealOnNextFrame(el, className) {
+    if (!el || !className) return;
+    const view = el.ownerDocument && el.ownerDocument.defaultView;
+    if (view && view.matchMedia && view.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    el.classList.add(className);
+    // Reading layout commits the hidden starting style, so removing the class
+    // afterwards transitions whether that happens on a frame or a timer.
+    void el.offsetWidth;
+    let done = false;
+    const reveal = () => {
+        if (done) return;
+        done = true;
+        el.classList.remove(className);
+    };
+    // requestAnimationFrame is paused in background tabs and undrawn views;
+    // content must never be left invisible waiting for a frame.
+    if (view && view.requestAnimationFrame) view.requestAnimationFrame(reveal);
+    setTimeout(reveal, 50);
+}
+
+// Rapid navigation (held arrow keys) re-renders the panel faster than a fade
+// can finish; fading each step would read as flicker, so only settled
+// changes animate.
+const POST_ENTER_MIN_GAP_MS = 180;
+
 function panelElement(doc, tag, className, text) {
     const node = doc.createElement(tag);
     if (className) node.className = className;
@@ -39,6 +66,12 @@ export function renderPostPanel(options) {
     const { content, model } = options;
     const doc = content.ownerDocument;
     const previousScrollTop = options.preserveState ? content.scrollTop : 0;
+    const wasLoading = content.dataset.msPostLoading === '1';
+    const isLoading = !!model.loading;
+    const now = Date.now();
+    const lastRender = Number(content.dataset.msPostRenderedAt || 0);
+    content.dataset.msPostLoading = isLoading ? '1' : '';
+    content.dataset.msPostRenderedAt = String(now);
     content.replaceChildren();
     const panel = panelElement(doc, 'div', 'ms-post-panel');
     const body = panelElement(doc, 'div', 'ms-post-body');
@@ -174,7 +207,22 @@ export function renderPostPanel(options) {
         if (modes.childNodes.length > 1) footer.append(modes);
     }
     if (footer.childNodes.length) panel.append(footer);
-    if (!body.childNodes.length) body.append(panelElement(doc, 'div', 'ms-info-empty', 'No description or tags available.'));
+    if (!body.childNodes.length && isLoading) {
+        // Details are still on their way: hold the space with a quiet
+        // placeholder instead of claiming there is nothing to show.
+        const skeleton = panelElement(doc, 'div', 'ms-post-skeleton');
+        skeleton.setAttribute('aria-label', 'Loading post details');
+        skeleton.setAttribute('role', 'status');
+        ['ms-skel-line ms-skel-wide', 'ms-skel-line', 'ms-skel-line ms-skel-short', 'ms-skel-chips'].forEach(cls => skeleton.append(panelElement(doc, 'span', cls)));
+        body.append(skeleton);
+    } else if (!body.childNodes.length) {
+        body.append(panelElement(doc, 'div', 'ms-info-empty', 'No description or tags available.'));
+    }
+    // A different post, or the same post's details arriving: settle the body in.
+    // The header and footer stay put so nothing around the text jumps.
+    const arrived = options.preserveState && wasLoading && !isLoading;
+    const newPost = !options.preserveState && now - lastRender > POST_ENTER_MIN_GAP_MS;
+    if (arrived || newPost) revealOnNextFrame(body, 'ms-post-entering');
     if (options.preserveState) requestAnimationFrame(() => {
         if (content.isConnected) content.scrollTop = previousScrollTop;
     });

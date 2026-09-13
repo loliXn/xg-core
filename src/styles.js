@@ -3375,6 +3375,59 @@ export const OVERLAY_CSS = String.raw`
             box-shadow: none !important;
         }
         /* ---------------------------------------------------------------------
+           Entrances. Opacity plus a few pixels of the independent translate
+           property, so they compose with transforms controls use for layout.
+           Navigation itself never animates; these cover content that arrives.
+           --------------------------------------------------------------------- */
+        .ms-post-body {
+            transition: opacity 160ms var(--ms-ease-out), translate 160ms var(--ms-ease-out);
+        }
+        .ms-post-body.ms-post-entering {
+            opacity: 0;
+            translate: 0 4px;
+            transition: none;
+        }
+        .ms-post-skeleton {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding-top: 2px;
+        }
+        .ms-skel-line,
+        .ms-skel-chips {
+            display: block;
+            height: 12px;
+            width: 92%;
+            border-radius: 6px;
+            background: linear-gradient(90deg, var(--ms-surface-3) 0%, hsl(220, 7%, 17%) 50%, var(--ms-surface-3) 100%);
+            background-size: 200% 100%;
+            animation: ms-skel-shimmer 1.4s ease-in-out infinite;
+        }
+        .ms-skel-wide { width: 100%; }
+        .ms-skel-short { width: 58%; }
+        .ms-skel-chips {
+            height: 22px;
+            width: 70%;
+            margin-top: 6px;
+            border-radius: 11px;
+        }
+        @keyframes ms-skel-shimmer {
+            from { background-position: 100% 0; }
+            to { background-position: -100% 0; }
+        }
+        .ms-grid-cell.ms-grid-entering {
+            animation: ms-grid-enter 200ms var(--ms-ease-out) backwards;
+        }
+        @keyframes ms-grid-enter {
+            from { opacity: 0; translate: 0 6px; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .ms-post-body { transition: none; }
+            .ms-skel-line, .ms-skel-chips { animation: none; }
+            .ms-grid-cell.ms-grid-entering { animation: none; }
+        }
+
+        /* ---------------------------------------------------------------------
            Interaction states: one system for every control.
 
              rest      transparent, or the control's own surface

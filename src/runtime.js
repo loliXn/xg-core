@@ -1,4 +1,4 @@
-import { renderPostPanel } from './panels.js';
+import { renderPostPanel, revealOnNextFrame } from './panels.js';
 // Shared viewer behavior. Host operations and persisted preferences enter through the bridge.
 export function createViewerRuntime(bridge) {
 function protectHostControl(button, compact) {
@@ -62,6 +62,8 @@ function clearViewerMedia() {
     for(const key of ['thumbsWindowRaf','gridWindowRaf'])if(bridge.state[key]){cancelAnimationFrame(bridge.state[key]);bridge.state[key]=null;}
     if(bridge.state.thumbEnteringTimer){clearTimeout(bridge.state.thumbEnteringTimer);bridge.state.thumbEnteringTimer=null;}
     bridge.state.thumbKnownKeys=null;bridge.state.thumbEnteringKeys=null;
+    bridge.state.gridKnownKeys=null;bridge.state.gridEnteringKeys=null;
+    if(bridge.state.gridEnteringTimer){clearTimeout(bridge.state.gridEnteringTimer);bridge.state.gridEnteringTimer=null;}
     overlay.classList.remove('ms-grid-mode','ms-stage-fullscreen');
     const grid=overlay.querySelector('.ms-grid');if(grid)grid.replaceChildren();
     bridge.state.gridPool=[];bridge.state.gridSizer=null;
@@ -1052,9 +1054,18 @@ function buildGridCell(entry, index) {
         return cell;
     }
 
-function renderGrid() {
+function renderGrid(options) {
         if (!bridge.state.overlay) return;
         bridge.syncCoreItems('grid-render');
+        // Same rule as the strip: only items that were never in the gallery
+        // before get an entrance. Cells are pooled and refilled on scroll, so
+        // keying the animation to "cell filled" would animate every scroll.
+        const gridKeys = new Set(bridge.state.items.map(thumbItemKey).filter(Boolean));
+        if (!bridge.state.gridKnownKeys) bridge.state.gridKnownKeys = new Set(gridKeys);
+        bridge.state.gridEnteringKeys = options && options.animateNew
+            ? new Set(Array.from(gridKeys).filter((key) => !bridge.state.gridKnownKeys.has(key)))
+            : null;
+        gridKeys.forEach((key) => bridge.state.gridKnownKeys.add(key));
         const grid = bridge.state.overlay.querySelector('.ms-grid');
         const gridWrap = bridge.state.overlay.querySelector('.ms-grid-wrap');
         if (!grid) return;
@@ -2487,6 +2498,16 @@ function paintGridWindow() {
                 continue;
             }
             fillGridCell(cell, entry, index);
+            if (bridge.state.gridEnteringKeys && bridge.state.gridEnteringKeys.has(key)) {
+                cell.classList.add('ms-grid-entering');
+                if (bridge.state.gridEnteringTimer) clearTimeout(bridge.state.gridEnteringTimer);
+                bridge.state.gridEnteringTimer = setTimeout(() => {
+                    bridge.state.gridEnteringTimer = null;
+                    bridge.state.gridEnteringKeys = null;
+                    const grid = bridge.state.overlay && bridge.state.overlay.querySelector('.ms-grid');
+                    if (grid) grid.querySelectorAll('.ms-grid-entering').forEach((node) => node.classList.remove('ms-grid-entering'));
+                }, 260);
+            }
         }
         for (let i = 0; i < pool.length; i++) {
             if (used.has(pool[i])) continue;
