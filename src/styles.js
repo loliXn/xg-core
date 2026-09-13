@@ -3421,7 +3421,18 @@ export const OVERLAY_CSS = String.raw`
         @keyframes ms-grid-enter {
             from { opacity: 0; translate: 0 6px; }
         }
+        /* Status pills (resolving, loading GIF, checking availability) wait a
+           moment before fading in. Work that finishes quickly, like a cached
+           load, never flashes a pill; slow work still gets one. Updating the
+           text of a pill already on screen does not replay this. */
+        .ms-resolve-loading {
+            animation: ms-pill-in 160ms var(--ms-ease-out) 220ms backwards;
+        }
+        @keyframes ms-pill-in {
+            from { opacity: 0; translate: 0 4px; }
+        }
         @media (prefers-reduced-motion: reduce) {
+            .ms-resolve-loading { animation: none; }
             .ms-post-body { transition: none; }
             .ms-skel-line, .ms-skel-chips { animation: none; }
             .ms-grid-cell.ms-grid-entering { animation: none; }
