@@ -463,7 +463,9 @@ function onOverlayClick(e) {
                 bridge.globalLoop = !bridge.globalLoop;
                 bridge.savePreference('MS_BETTER_VIDEO_LOOP', bridge.globalLoop);
                 const video = bridge.state.overlay ? bridge.state.overlay.querySelector('.ms-media-wrap video') : null;
-                if (video) video.loop = bridge.globalLoop;
+                const loopEntry = bridge.state.items[bridge.state.currentIndex];
+                const loopItem = loopEntry ? (loopEntry.item || loopEntry) : null;
+                if (video) video.loop = bridge.globalLoop || !!(loopItem && loopItem.imageFallbackSrc);
                 bridge.updateTopbarStates();
             } else if (act === 'fav-toggle') {
                 const entry = bridge.state.items[bridge.state.currentIndex];
@@ -1798,6 +1800,23 @@ function isStaticVideoThumbUrl(url) {
         return typeof bridge.isImageThumbSource === 'function' && bridge.isImageThumbSource(url);
     }
 
+function mayBeAnimatedImageUrl(url) {
+        const value = String(url || '');
+        if (/^data:image\/(?:gif|webp)/i.test(value)) return true;
+        if (/^(?:data|blob):/i.test(value)) return false;
+        return /\.(?:gif|webp)(?:[?#]|$)/i.test(value.split('?')[0]) || /[?&]format=(?:gif|webp)/i.test(value);
+    }
+
+function appendFrozenVideoThumb(host, url, item, onError) {
+        const img = document.createElement('img');
+        img.referrerPolicy = 'no-referrer';
+        img.onload = () => img.classList.add('ms-loaded');
+        if (onError) img.onerror = () => onError(img);
+        img.style.cssText = 'width:100%;height:100%;object-fit:cover;pointer-events:none;display:block;background:#111;';
+        host.appendChild(img);
+        bridge.setCachedImgSrc(img, url, item);
+    }
+
 function appendStaticVideoThumb(host, url, onError) {
         const img = document.createElement('img');
         img.referrerPolicy = 'no-referrer';
@@ -1850,7 +1869,16 @@ function appendVideoThumbMedia(host, item, thumbSrc, isVideo, placeholderClass) 
             return;
         }
         if (isStaticVideoThumbUrl(thumbSrc) || isStaticVideoThumbUrl(item.thumbSrc)) {
-            appendStaticVideoThumb(host, isStaticVideoThumbUrl(thumbSrc) ? thumbSrc : item.thumbSrc, extractPoster);
+            const posterUrl = isStaticVideoThumbUrl(thumbSrc) ? thumbSrc : item.thumbSrc;
+            // "Static" here only means "an image URL". When a video stands in
+            // for an animated GIF/WebP, its poster is often that animated file,
+            // and a plain <img> would play it in the strip. Route those through
+            // the same inspect-and-freeze path image thumbnails use.
+            if (mayBeAnimatedImageUrl(posterUrl) && typeof bridge.setCachedImgSrc === 'function') {
+                appendFrozenVideoThumb(host, posterUrl, item, extractPoster);
+                return;
+            }
+            appendStaticVideoThumb(host, posterUrl, extractPoster);
             return;
         }
         const videoUrl = item.src || thumbSrc || '';
@@ -3177,7 +3205,10 @@ function renderCurrent() {
                 poster: videoPoster,
                 volume: bridge.globalVolume,
                 muted: bridge.globalMuted,
-                loop: bridge.globalLoop,
+                // A video that stands in for an animated image (it carries the
+                // image as its fallback) loops like the image would, whatever
+                // the Loop preference for real videos says.
+                loop: bridge.globalLoop || !!item.imageFallbackSrc,
                 preload: usedPredicted ? '' : (bufferedVideo ? 'auto' : 'metadata')
             });
 
