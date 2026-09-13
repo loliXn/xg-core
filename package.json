@@ -6,6 +6,7 @@
   "exports": "./src/index.js",
   "scripts": {
     "build": "node scripts/build.mjs",
+    "build:dev": "node scripts/build.mjs --dev",
     "test": "node --test test/controller.test.js test/update.test.js test/filter.test.js"
   }
 }

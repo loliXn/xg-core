@@ -8,6 +8,10 @@ const src = path.join(root, 'src');
 const dist = path.join(root, 'dist');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const version = String(pkg.version || '0.0.0');
+// --dev writes an untracked bundle for local iteration. It is flagged so the
+// userscript never swaps it out for a cached or downloaded release, and it
+// never touches the release artifacts or latest.json.
+const dev = process.argv.includes('--dev');
 
 function moduleBody(file) {
     return fs.readFileSync(path.join(src, file), 'utf8')
@@ -49,6 +53,7 @@ const bundle = [
     '        MEDIA_TYPES,',
     '        XGALLERY_CORE_API_VERSION,',
     '        XGALLERY_CORE_VERSION,',
+    '        XGALLERY_CORE_LOCAL: ' + (dev ? 'true' : 'false') + ',',
     '        compareCoreVersions,',
     '        OVERLAY_CSS,',
     '        configureVideoElement,',
@@ -93,6 +98,11 @@ const bundle = [
 ].join('\n').replace(/[ \t]+$/gm, '');
 
 fs.mkdirSync(dist, { recursive: true });
+if (dev) {
+    fs.writeFileSync(path.join(dist, 'xgallery-core.dev.iife.js'), bundle, 'utf8');
+    console.log('built dist/xgallery-core.dev.iife.js (local, not a release)');
+    process.exit(0);
+}
 const sha256 = crypto.createHash('sha256').update(bundle).digest('hex');
 const versionedName = 'xgallery-core-' + version + '.iife.js';
 fs.writeFileSync(path.join(dist, 'xgallery-core.iife.js'), bundle, 'utf8');
