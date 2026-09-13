@@ -1271,11 +1271,16 @@ export const OVERLAY_CSS = String.raw`
             from { opacity: 0; transform: translateY(4px); }
             to { opacity: var(--ms-thumb-rest-opacity); transform: translateY(0); }
         }
-        .ms-gallery-overlay .ms-thumb > img,
-        .ms-gallery-overlay .ms-thumb > video {
-            width: 100%;
-            height: 100%;
+        .ms-thumb > img,
+        .ms-thumb > video {
+            width: 100% !important;
+            height: 100% !important;
+            min-width: 100% !important;
+            min-height: 100% !important;
+            max-width: none !important;
+            max-height: none !important;
             object-fit: cover !important;
+            margin: 0 !important;
             background: var(--ms-bg);
             display: block;
             pointer-events: none;

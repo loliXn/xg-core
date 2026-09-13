@@ -76,6 +76,19 @@ function appendTypeBadge(options) {
     }
 }
 
+function lockThumbnailFill(host) {
+    host.querySelectorAll(':scope > img, :scope > video').forEach(media => {
+        media.style.setProperty('width', '100%', 'important');
+        media.style.setProperty('height', '100%', 'important');
+        media.style.setProperty('min-width', '100%', 'important');
+        media.style.setProperty('min-height', '100%', 'important');
+        media.style.setProperty('max-width', 'none', 'important');
+        media.style.setProperty('max-height', 'none', 'important');
+        media.style.setProperty('object-fit', 'cover', 'important');
+        media.style.setProperty('margin', '0', 'important');
+    });
+}
+
 export function renderThumbnailCell(options) {
     const doc = options.document || document;
     const host = options.host;
@@ -126,6 +139,7 @@ export function renderThumbnailCell(options) {
         isAnimated: !!options.isAnimated,
         animatedLabel: options.animatedLabel
     });
+    lockThumbnailFill(host);
 
     if (options.indexLabel !== undefined) {
         const index = doc.createElement('div');
