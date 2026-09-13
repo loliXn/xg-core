@@ -195,11 +195,9 @@ export const OVERLAY_CSS = String.raw`
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        .ms-info-author:hover {
+        .ms-gallery-overlay .ms-info-author:hover {
             text-decoration: none;
-            background: var(--ms-hover);
-            box-shadow: 0 0 0 4px var(--ms-hover);
-            border-radius: 4px;
+            color: var(--ms-accent) !important;
         }
         .ms-info-sep { color: #71767b; margin-right: 2px; }
         .ms-info-byline > a:last-child {
@@ -1998,9 +1996,7 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-gallery-info a:hover {
             text-decoration: none;
-            background: var(--ms-hover);
-            box-shadow: 0 0 0 4px var(--ms-hover);
-            border-radius: 4px;
+            color: var(--ms-accent);
         }
 
         .ms-thumb.ms-placeholder.ms-source-saint {
@@ -2709,9 +2705,6 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-tag-group-owner:hover {
             color: var(--ms-accent);
-            background: var(--ms-hover);
-            box-shadow: 0 0 0 3px var(--ms-hover);
-            border-radius: 3px;
         }
         .ms-tag-pill {
             display: inline-flex;
@@ -2791,9 +2784,6 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-desc-username):hover {
             color: hsl(223, 92%, 70%) !important;
             text-decoration-color: currentColor !important;
-            background: var(--ms-hover);
-            box-shadow: 0 0 0 3px var(--ms-hover);
-            border-radius: 3px;
         }
         .ms-info-description .ms-desc-divider {
             border: none;
@@ -2819,12 +2809,18 @@ export const OVERLAY_CSS = String.raw`
             font-size: 14px;
             color: var(--ms-text);
             text-decoration: none;
+            transition: color 150ms var(--ms-ease);
         }
-        a.ms-info-desc-username:hover {
+        /* Inline name links turn accent without drawing a box (guidelines,
+           interactive state table). A name without a profile URL renders as a
+           span and is not interactive, so it deliberately does not react. */
+        .ms-gallery-overlay a.ms-info-desc-username:hover,
+        .ms-gallery-overlay a.ms-info-desc-username:focus-visible {
             text-decoration: none;
-            background: var(--ms-hover);
-            box-shadow: 0 0 0 3px var(--ms-hover);
-            border-radius: 3px;
+            color: var(--ms-accent);
+        }
+        .ms-gallery-overlay .ms-info-user:has(> a.ms-info-desc-username:hover) > .ms-info-desc-avatar {
+            box-shadow: 0 0 0 2px var(--ms-accent-line);
         }
         .ms-info-description {
             color: var(--ms-text-2);
@@ -3377,6 +3373,16 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-topbar .ms-btn {
             border-color: transparent !important;
             box-shadow: none !important;
+        }
+        /* A disclosure trigger whose panel is open. It must differ from hover:
+           right after the click the pointer is still on the button, and a
+           state that paints the same fill as hover shows no change at all.
+           Kept after the topbar reset above, which clears box-shadow. */
+        .ms-gallery-overlay .ms-gallery-topbar .ms-filter-trigger.is-open,
+        .ms-gallery-overlay .ms-gallery-topbar .ms-filter-trigger.active.is-open {
+            color: var(--ms-text) !important;
+            background: var(--ms-pressed) !important;
+            box-shadow: inset 0 0 0 1px var(--ms-line-strong) !important;
         }
         @media (prefers-reduced-motion: reduce) {
             .ms-gallery-overlay :where(button, [role="button"], a, input) {
