@@ -97,6 +97,15 @@ export function createOverlayShell(options = {}) {
         host.style.setProperty('display', 'block', 'important');
         const shadow = host.attachShadow({ mode: 'open' });
         const style = doc.createElement('style');
+        // Dark Reader rewrites the colours of every stylesheet it can reach,
+        // shadow roots included. It maps light values to dark ones, so the
+        // overlay's white-alpha hairlines, drawn on an already dark surface,
+        // come out dark and vanish. Its style manager skips any sheet carrying
+        // the class "darkreader" (shouldManageStyle), which leaves this one
+        // alone. This must stay on the shadow sheet only: when Dark Reader is
+        // turned off it removes every .darkreader node it finds in the light
+        // DOM, but it does not search shadow roots.
+        style.className = 'darkreader';
         style.textContent = String(options.shadowCss);
         shadow.append(style, overlay);
         Object.defineProperty(overlay, 'msRootHost', { value: host });
