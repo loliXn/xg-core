@@ -3941,7 +3941,10 @@
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
                 overflow: hidden;
             }
-            #ms-site-cluster:empty { display: none; }
+            /* The inline shield sets display, so this has to outrank it: a
+               cluster with nothing in it would otherwise be a bordered empty box
+               floating on the page. */
+            #ms-site-cluster:empty { display: none !important; }
             #ms-site-cluster > .ms-site-cluster-btn {
                 appearance: none !important;
                 box-sizing: border-box !important;
@@ -4248,7 +4251,10 @@
                 box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
                 overflow: hidden;
             }
-            #ms-site-cluster:empty { display: none; }
+            /* The inline shield sets display, so this has to outrank it: a
+               cluster with nothing in it would otherwise be a bordered empty box
+               floating on the page. */
+            #ms-site-cluster:empty { display: none !important; }
             #ms-site-cluster > .ms-site-cluster-btn {
                 appearance: none !important;
                 box-sizing: border-box !important;
