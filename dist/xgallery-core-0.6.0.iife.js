@@ -2,7 +2,7 @@
     'use strict';
 
     const XGALLERY_CORE_API_VERSION = 1;
-    const XGALLERY_CORE_VERSION = '0.5.18';
+    const XGALLERY_CORE_VERSION = '0.6.0';
 
     const MEDIA_TYPES = Object.freeze([
         'img',
