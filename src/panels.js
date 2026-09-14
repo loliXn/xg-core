@@ -410,6 +410,23 @@ export function createSettingsPanel(options) {
     });
     shadow.append(overlay);
     doc.body.append(host);
+    // Every page gets the height of the tallest one, so switching tabs cannot
+    // resize the dialog. Measured after the host is in the document, because
+    // a detached subtree has no layout; done synchronously rather than on a
+    // frame, since a settings panel opened from a click is always foreground
+    // and a resize one frame later would be visible.
+    try {
+        let tallest = 0;
+        groups.forEach(({group}) => {
+            const wasHidden = group.hidden;
+            if (wasHidden) group.hidden = false;
+            tallest = Math.max(tallest, group.scrollHeight);
+            if (wasHidden) group.hidden = true;
+        });
+        if (tallest > 0) {
+            groups.forEach(({group}) => { group.style.minHeight = tallest + 'px'; });
+        }
+    } catch (error) { }
     requestAnimationFrame(() => { overlay.classList.add('ms-settings-open'); close.focus(); });
     return overlay;
 }

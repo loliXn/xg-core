@@ -1501,7 +1501,7 @@ export const OVERLAY_CSS = String.raw`
             box-shadow: var(--ms-shadow-md);
         }
         .ms-site-settings-btn:hover svg {
-            transform: none;
+            transform: rotate(45deg);
         }
         /* Optional host-page companion button next to Gallery. */
         #ms-site-redirect-btn {
@@ -3271,9 +3271,36 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay.ms-stage-fullscreen .ms-nav {
             display: none !important;
         }
+        /* Fit to page means the media, not our chrome: the bar itself goes
+           away and only its controls are left floating over the image. It
+           still slides off after the idle delay, and still comes back on
+           pointer movement - only the panel behind the buttons is dropped. */
         .ms-gallery-overlay.ms-stage-fullscreen .ms-gallery-topbar {
             transform: translateX(-50%) translateY(0);
-            transition: transform 200ms var(--ms-ease-out);
+            transition: transform 200ms var(--ms-ease-out), background-color 200ms var(--ms-ease);
+            background: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            border-color: transparent;
+            box-shadow: none;
+        }
+        /* Without the panel behind them the buttons sit straight on the photo,
+           so they need their own contrast: a fill of their own and a shadow
+           under the glyphs. */
+        .ms-gallery-overlay.ms-stage-fullscreen .ms-gallery-topbar .ms-btn,
+        .ms-gallery-overlay.ms-stage-fullscreen .ms-gallery-topbar .ms-position-group,
+        .ms-gallery-overlay.ms-stage-fullscreen .ms-gallery-topbar .ms-zoom-slider-wrap {
+            background: rgba(24, 25, 28, 0.72);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .ms-gallery-overlay.ms-stage-fullscreen .ms-gallery-topbar .ms-position-group > .ms-btn {
+            background: transparent;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+        }
+        .ms-gallery-overlay.ms-stage-fullscreen .ms-gallery-info {
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
         }
         .ms-gallery-overlay.ms-stage-fullscreen.ms-topbar-idle .ms-gallery-topbar {
             transform: translateX(-50%) translateY(-160%);
@@ -3769,7 +3796,17 @@ export const OVERLAY_CSS = String.raw`
             outline-offset: -2px !important;
         }
         #ms-site-cluster > #ms-site-settings-btn { width: 36px !important; padding: 0 !important; }
-        #ms-site-cluster > #ms-site-settings-btn svg { display: block; width: 18px; height: 18px; }
+        #ms-site-cluster > #ms-site-settings-btn svg {
+            display: block;
+            width: 18px;
+            height: 18px;
+            transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        #ms-site-cluster > #ms-site-settings-btn:hover svg { transform: rotate(45deg); }
+        @media (prefers-reduced-motion: reduce) {
+            #ms-site-cluster > #ms-site-settings-btn svg { transition: none; }
+            #ms-site-cluster > #ms-site-settings-btn:hover svg { transform: none; }
+        }
         #ms-site-cluster > #ms-site-settings-btn svg path,
         #ms-site-cluster > #ms-site-settings-btn svg circle {
             fill: none !important;
@@ -3966,7 +4003,7 @@ export const LAUNCHER_CSS = String.raw`
             border-color: var(--ms-line-strong);
         }
         .ms-site-settings-btn:hover svg {
-            transform: none;
+            transform: rotate(45deg);
         }
         #ms-site-redirect-btn {
             position: fixed;
@@ -4079,7 +4116,17 @@ export const LAUNCHER_CSS = String.raw`
             outline-offset: -2px !important;
         }
         #ms-site-cluster > #ms-site-settings-btn { width: 36px !important; padding: 0 !important; }
-        #ms-site-cluster > #ms-site-settings-btn svg { display: block; width: 18px; height: 18px; }
+        #ms-site-cluster > #ms-site-settings-btn svg {
+            display: block;
+            width: 18px;
+            height: 18px;
+            transition: transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+        }
+        #ms-site-cluster > #ms-site-settings-btn:hover svg { transform: rotate(45deg); }
+        @media (prefers-reduced-motion: reduce) {
+            #ms-site-cluster > #ms-site-settings-btn svg { transition: none; }
+            #ms-site-cluster > #ms-site-settings-btn:hover svg { transform: none; }
+        }
         #ms-site-cluster > #ms-site-settings-btn svg path,
         #ms-site-cluster > #ms-site-settings-btn svg circle {
             fill: none !important;

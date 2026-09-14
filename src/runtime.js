@@ -52,17 +52,50 @@ function ensureLauncherCluster() {
     document.body.append(cluster);return cluster;
 }
 
-// Each button keeps its own inline shield too, but only for the properties that
-// must stay neutral so the children read as one control rather than three.
+// Inline !important is the only thing that outranks a host sheet appended after
+// ours - but it also outranks our own stylesheet, so anything that changes
+// (the seam, hover, press) has to be written inline too. That is the mistake
+// this replaces: the CSS said there was a 1px seam and a hover fill, and the
+// inline shield silently won, so the buttons looked fused and dead.
+const CLUSTER_SEAM = '1px solid rgba(255,255,255,.24)';
+const CLUSTER_REST = 'transparent';
+const CLUSTER_HOVER = 'rgba(255,255,255,.10)';
+const CLUSTER_PRESS = 'rgba(255,255,255,.16)';
+
 function protectClusterButton(button) {
     const values = {appearance:'none','box-sizing':'border-box',position:'static',margin:'0',
         height:'36px','min-height':'36px','max-height':'36px',display:'inline-flex',
         'align-items':'center','justify-content':'center',gap:'6px',flex:'0 0 auto',
-        border:'0','border-radius':'0',background:'transparent',color:'#e7e8eb',
+        border:'0','border-radius':'0',background:CLUSTER_REST,color:'#e7e8eb',
         font:'600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif','text-shadow':'none',
         'text-transform':'none','text-decoration':'none','white-space':'nowrap',
-        opacity:'1',filter:'none','backdrop-filter':'none','box-shadow':'none'};
+        opacity:'1',filter:'none','backdrop-filter':'none','box-shadow':'none',
+        transition:'background-color 150ms cubic-bezier(0.4, 0, 0.2, 1)'};
     for (const [key,value] of Object.entries(values)) button.style.setProperty(key,value,'important');
+    if (button.dataset.msClusterStates === '1') return;
+    button.dataset.msClusterStates = '1';
+    const paint = (value) => button.style.setProperty('background', value, 'important');
+    button.addEventListener('pointerenter', () => { if (!button.disabled) paint(CLUSTER_HOVER); });
+    button.addEventListener('pointerleave', () => paint(CLUSTER_REST));
+    button.addEventListener('pointerdown', () => { if (!button.disabled) paint(CLUSTER_PRESS); });
+    button.addEventListener('pointerup', () => { if (!button.disabled) paint(CLUSTER_HOVER); });
+    button.addEventListener('blur', () => paint(CLUSTER_REST));
+    button.addEventListener('focus', () => {
+        // Keyboard focus only: a click already painted the hover fill, and
+        // repainting it here would strand it after the pointer leaves.
+        let visible = false;
+        try { visible = button.matches(':focus-visible'); } catch (e) { }
+        if (visible) paint(CLUSTER_HOVER);
+    });
+}
+
+// Seams are drawn inline for the same reason, and repainted on every insert so
+// that N buttons always show N-1 divisions - including after one is removed.
+function paintClusterSeams(cluster) {
+    Array.prototype.forEach.call(cluster.children, (kid, index) => {
+        kid.style.setProperty('border', '0', 'important');
+        if (index > 0) kid.style.setProperty('border-left', CLUSTER_SEAM, 'important');
+    });
 }
 
 function placeInCluster(cluster, el, slot) {
@@ -70,6 +103,7 @@ function placeInCluster(cluster, el, slot) {
     el.dataset.msOrder=String(rank);
     const next=Array.prototype.find.call(cluster.children,kid=>Number(kid.dataset.msOrder||0)>rank);
     cluster.insertBefore(el,next||null);
+    paintClusterSeams(cluster);
 }
 
 function createLauncher(options) {
@@ -1006,7 +1040,11 @@ function flyGhost(fromRect, toRect, src, options) {
         if (opts.fadeOut) frames.splice(1, 0, { opacity: 1, offset: 0.55 });
         let anim = null;
         try {
-            anim = ghost.animate(frames, { duration: 200, easing: 'cubic-bezier(0.215, 0.61, 0.355, 1)', fill: 'both' });
+            anim = ghost.animate(frames, {
+                duration: typeof opts.duration === 'number' ? opts.duration : 200,
+                easing: 'cubic-bezier(0.215, 0.61, 0.355, 1)',
+                fill: 'both'
+            });
         } catch (e) {
             try { ghost.remove(); } catch (e2) { }
             releaseFlyHidden();
@@ -1051,36 +1089,34 @@ function scrollGridToCurrent() {
         wrap.scrollTop = Math.max(0, Math.min(target, limit));
     }
 
-    // Coming back out of the grid, renderCurrent is asynchronous: the media box
-    // does not exist, and is not sized, until the image decodes. Wait for it by
-    // frame with a deadline, so a slow or failed load just means no animation.
-function flyFromCell(fromRect, src) {
+    // Coming back out of the grid, renderCurrent is asynchronous: the media does
+    // not exist, and is not sized, until the image decodes. Waiting for it meant
+    // the flight only began after the user had already seen the image appear,
+    // which reads as a teleport followed by a stray flash - so predict the
+    // landing box instead and start immediately. The grid cell's own image is
+    // already decoded, and its aspect ratio is the full image's, so a contain
+    // fit inside the stage gives the destination to within a pixel or two; the
+    // real media then arrives underneath and the ghost fades out over it.
+function flyFromCell(fromRect, src, aspect) {
         const overlay = bridge.state.overlay;
         if (!overlay || prefersReducedMotion()) return;
         const wrap = overlay.querySelector('.ms-media-wrap');
         if (!wrap) return;
-        const token = bridge.state.renderToken;
-        const deadline = Date.now() + 700;
-        const tryStart = () => {
-            if (!bridge.state.overlay || bridge.state.gridMode) return;
-            if (token !== bridge.state.renderToken) return;
-            const media = wrap.querySelector('img.ms-media.ms-ready, video.ms-media.ms-ready');
-            // Prefer the media box: it is sized to the image's own aspect box,
-            // so a cover ghost filling it is undistorted. Auto-pan moves the
-            // image out of the box, and then the image's own rect is the truth.
-            const box = media ? media.closest('.ms-media-box') : null;
-            const target = box || media;
-            const toRect = target ? target.getBoundingClientRect() : null;
-            if (toRect && toRect.width > 2 && toRect.height > 2) {
-                // No hide here: the real media stays underneath and the ghost
-                // fades out over it, so there is never a blank frame.
-                flyGhost(fromRect, toRect, src, { fadeOut: true, fromRadius: 6, toRadius: 4 });
-                return;
-            }
-            if (Date.now() > deadline) return;
-            requestAnimationFrame(tryStart);
-        };
-        requestAnimationFrame(tryStart);
+        const wrapRect = wrap.getBoundingClientRect();
+        if (wrapRect.width < 4 || wrapRect.height < 4) return;
+        const ratio = (aspect > 0 ? aspect : (fromRect.height ? fromRect.width / fromRect.height : 1));
+        let width = wrapRect.width;
+        let height = width / ratio;
+        if (height > wrapRect.height) {
+            height = wrapRect.height;
+            width = height * ratio;
+        }
+        flyGhost(fromRect, {
+            left: wrapRect.left + (wrapRect.width - width) / 2,
+            top: wrapRect.top + (wrapRect.height - height) / 2,
+            width: width,
+            height: height
+        }, src, { fadeOut: true, fromRadius: 6, toRadius: 4, duration: 180 });
     }
 
 function setGridMode(on) {
@@ -1092,6 +1128,7 @@ function setGridMode(on) {
         let flySrc = '';
         let backRect = null;
         let backSrc = '';
+        let backAspect = 0;
         if (enable) {
             disablePan();
             const mediaEl = bridge.state.overlay.querySelector('.ms-media-wrap img.ms-media.ms-ready, .ms-media-wrap video.ms-media');
@@ -1122,6 +1159,11 @@ function setGridMode(on) {
                 if (r.width > 2 && r.height > 2) {
                     backRect = { left: r.left, top: r.top, width: r.width, height: r.height };
                     backSrc = cellImg.currentSrc || cellImg.src;
+                    // The cell is square and covers, so its own rect says
+                    // nothing about the image's shape - the decoded thumbnail
+                    // does.
+                    backAspect = (cellImg.naturalWidth && cellImg.naturalHeight)
+                        ? cellImg.naturalWidth / cellImg.naturalHeight : 0;
                 }
             }
         }
@@ -1159,7 +1201,7 @@ function setGridMode(on) {
             bridge.state.cameFromGrid = true;
             renderThumbs();
             bridge.renderCurrent();
-            if (backRect && backSrc) flyFromCell(backRect, backSrc);
+            if (backRect && backSrc) flyFromCell(backRect, backSrc, backAspect);
 
             if (bridge.state.tagsPanelWanted) bridge.applyTagsPanel(true);
         }
@@ -3949,5 +3991,5 @@ async function openFavoriteFolders(item, anchor) {
             setFavoriteMenuStatus(menu, error && error.message ? error.message : 'Could not load favorite folders.', 'error');
         }
     }
-return { mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
+return { paintClusterSeams, mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
 }
