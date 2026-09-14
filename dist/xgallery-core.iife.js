@@ -1757,15 +1757,15 @@
             }
             /* Hide the host page while the overlay is open. Adapters may use a
                lighter variant that still allows layout. */
-            body.ms-host-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
-            body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
+            body.ms-host-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster),
+            body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster) {
                 visibility: hidden !important;
                 pointer-events: none !important;
                 contain: layout paint style;
                 content-visibility: hidden;
             }
-            body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
-            body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
+            body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster),
+            body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster) {
                 visibility: hidden !important;
                 pointer-events: none !important;
             }
@@ -1836,7 +1836,7 @@
                 flex: 1;
                 min-width: 0;
                 font-size: 15px;
-                font-weight: 650;
+                font-weight: 600;
                 color: var(--ms-text);
                 letter-spacing: -0.01em;
                 text-wrap: balance;
@@ -1865,14 +1865,13 @@
             .ms-settings-close:hover {
                 background: var(--ms-hover);
                 color: var(--ms-text);
-                border-color: var(--ms-line);
             }
             .ms-settings-close svg {
                 width: 14px;
                 height: 14px;
             }
             .ms-settings-body {
-                padding: 14px 16px 8px;
+                padding: 0 16px 8px;
                 overflow-y: auto;
                 scrollbar-width: thin;
                 scrollbar-color: var(--ms-line-strong) transparent;
@@ -2194,6 +2193,40 @@
                 align-items: center;
                 height: 1em;
                 line-height: 1;
+            }
+            /* Counter plus Grid, merged at the seam: one outer border, one 1px
+               division, square inner corners. The group owns the border so the
+               two halves cannot drift apart, and Grid can never be separated
+               from the counter by a button appearing or disappearing next to it. */
+            .ms-position-group {
+                display: inline-flex;
+                align-items: stretch;
+                flex-shrink: 0;
+                height: 32px;
+                box-sizing: border-box;
+                border: 1px solid var(--ms-hairline);
+                border-radius: 8px;
+                background: var(--ms-surface-2);
+                overflow: hidden;
+            }
+            .ms-position-group > .ms-position-control {
+                height: 100%;
+                border: 0;
+                border-radius: 0;
+                background: transparent;
+                box-shadow: none;
+            }
+            /* The ring lives on the group: overflow: hidden would clip it if it
+               were drawn on the input's own box. */
+            .ms-position-group:focus-within {
+                border-color: var(--ms-accent-line);
+                box-shadow: 0 0 0 2px var(--ms-accent-tint);
+            }
+            .ms-gallery-overlay .ms-gallery-topbar .ms-position-group > .ms-btn {
+                height: 100%;
+                border: 0;
+                border-inline-start: 1px solid var(--ms-hairline);
+                border-radius: 0;
             }
             .ms-position-control:focus-within {
                 border-color: var(--ms-accent-line);
@@ -3479,6 +3512,13 @@
             .ms-gallery-topbar.ms-icons-only .ms-btn-label { display: none; }
             .ms-gallery-topbar.ms-icons-only .ms-btn { padding: 0 8px; }
             .ms-gallery-topbar.ms-icons-only .ms-btn-icon { margin-right: 0; }
+            /* A pinned control is exempt from every compaction tier. Grid is a
+               primary mode switch rather than a setting, so it keeps its label
+               and its padding at any width - it is the one button in the bar that
+               must look the same wherever the window is. */
+            .ms-gallery-topbar.ms-icons-only .ms-btn-pinned .ms-btn-label { display: inline !important; }
+            .ms-gallery-topbar.ms-icons-only .ms-btn-pinned { padding: 0 10px; }
+            .ms-gallery-topbar.ms-icons-only .ms-btn-pinned .ms-btn-icon { margin-right: 6px; }
             /* The centre cluster has to give ground too: .ms-icon-btn is a fixed
                32px with padding:0 !important so the rules above can't touch it,
                and the zoom slider is a fixed 90px that never hid. Together those
@@ -3539,6 +3579,18 @@
             .ms-zoom-slider-wrap.ms-zoom-idle {
                 visibility: hidden;
                 pointer-events: none;
+            }
+            /* Zoom mode is off but the current item is still zoomable. The slider
+               keeps its place and stays live - dragging it re-enters zoom on its
+               own - it just reads as inactive. Distinct from ms-zoom-idle, which
+               means zoom does not apply to this item at all. */
+            .ms-zoom-slider-wrap.ms-zoom-off {
+                opacity: 0.55;
+                transition: opacity 150ms var(--ms-ease);
+            }
+            .ms-zoom-slider-wrap.ms-zoom-off:hover,
+            .ms-zoom-slider-wrap.ms-zoom-off:focus-within {
+                opacity: 1;
             }
             .ms-zoom-value {
                 display: inline-block;
@@ -3609,16 +3661,66 @@
             .ms-zoom-slider:focus-visible {
                 filter: drop-shadow(0 0 3px var(--ms-accent));
             }
-    .ms-index-input{top:0!important;height:1em!important;display:inline-flex!important;align-items:center!important;}.ms-position-control>span{display:inline-flex;align-items:center;height:1em;line-height:1;}.ms-tags-overlay.active{z-index:20;}.ms-load-mark-layer{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:6;}.ms-load-mark{position:absolute;top:10px;width:14px;height:70px;display:flex;align-items:center;justify-content:center;color:var(--ms-accent);}.ms-load-mark::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:1px;background:var(--ms-accent);opacity:0.7;}.ms-load-mark svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;}.ms-settings-row.ms-settings-stack{flex-direction:column;align-items:stretch;gap:8px;}.ms-settings-textarea{width:100%;min-height:88px;resize:vertical;box-sizing:border-box;background:var(--ms-surface-3,#1b1d24);border:1px solid var(--ms-line,#333);border-radius:8px;color:var(--ms-text-2,#ddd);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:8px 10px;outline:none;}.ms-settings-textarea:focus{border-color:var(--ms-accent);}.ms-settings-hint{margin:0;font-size:11px;color:var(--ms-text-4,#888);}.ms-blacklist-pills{display:flex;flex-wrap:wrap;gap:6px;}.ms-blacklist-pill{border:1px solid var(--ms-line,#444);background:transparent;color:var(--ms-text-3,#ccc);border-radius:999px;padding:3px 9px;font-size:12px;cursor:pointer;}.ms-blacklist-pill[aria-pressed="true"]{background:hsla(0,72%,46%,0.18);border-color:hsla(0,72%,56%,0.55);color:#f2c0c0;}
+    .ms-index-input{top:0!important;height:1em!important;display:inline-flex!important;align-items:center!important;}.ms-position-control>span{display:inline-flex;align-items:center;height:1em;line-height:1;}.ms-tags-overlay.active{z-index:20;}.ms-load-mark-layer{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:6;}.ms-load-mark{position:absolute;top:10px;width:14px;height:70px;display:flex;align-items:center;justify-content:center;color:var(--ms-accent);}.ms-load-mark::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:1px;background:var(--ms-accent);opacity:0.7;}.ms-load-mark svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;}.ms-settings-row.ms-settings-stack{flex-direction:column;align-items:stretch;gap:8px;}.ms-settings-textarea{width:100%;min-height:88px;resize:vertical;box-sizing:border-box;background:var(--ms-surface-3,#1b1d24);border:1px solid var(--ms-line,#333);border-radius:8px;color:var(--ms-text-2,#ddd);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:8px 10px;outline:none;}.ms-settings-textarea:focus{border-color:var(--ms-accent);}.ms-settings-hint{margin:0;font-size:11px;color:var(--ms-text-4,#888);}.ms-blacklist-pills{display:flex;flex-wrap:wrap;gap:6px;}.ms-blacklist-pill{border:0;background:var(--ms-control-rest);color:var(--ms-text-3);border-radius:8px;padding:4px 10px;font:500 12px/1.3 var(--ms-font-ui);cursor:pointer;transition:background-color 150ms var(--ms-ease),color 150ms var(--ms-ease);}.ms-blacklist-pill:hover{background:var(--ms-hover);color:var(--ms-text);}.ms-blacklist-pill[aria-pressed="true"]{background:var(--ms-accent-tint);color:var(--ms-accent);}
             .ms-info-source{display:flex;flex-direction:column;min-width:0;gap:2px;line-height:1.25}
             .ms-info-source>a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
             .ms-info-date{font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ms-text-3,#aaa)}
             .ms-tags-action-btn,.ms-tags-action-btn *{text-decoration:none!important}
-            .ms-settings-tabs{display:flex;gap:6px;padding:0 20px 12px;overflow-x:auto}
-            .ms-settings-tab{border:1px solid var(--ms-line);border-radius:8px;padding:8px 12px;background:transparent;color:var(--ms-text);font:600 12px/1.3 var(--ms-font-ui);cursor:pointer;white-space:nowrap;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out)}
-            .ms-settings-tab[aria-selected="true"]{background:var(--ms-accent-tint);border-color:var(--ms-accent-line);color:var(--ms-text);box-shadow:inset 0 -2px 0 var(--ms-accent)}
+            /* A tab row, not a row of pills. Route nav in this design is quiet text
+               with an active underline, and four outlined buttons floating between
+               the header hairline and the body read as four separate controls
+               rather than one switch. The seam the row sits on is the only border
+               in the region; the tabs themselves carry none. */
+            .ms-settings-tabs {
+                display: flex;
+                gap: 2px;
+                flex-shrink: 0;
+                padding: 4px 16px 0;
+                margin-bottom: 12px;
+                border-bottom: 1px solid var(--ms-hairline);
+                /* overflow-y has to be stated: left alone it computes to auto
+                   next to overflow-x, and the active underline below then earns
+                   the row a vertical scrollbar of its own. */
+                overflow-x: auto;
+                overflow-y: hidden;
+                scrollbar-width: thin;
+                scrollbar-color: var(--ms-line-strong) transparent;
+            }
+            .ms-settings-tab {
+                position: relative;
+                flex-shrink: 0;
+                height: 36px;
+                padding: 0 12px;
+                border: 0;
+                border-radius: 8px 8px 0 0;
+                background: transparent;
+                color: var(--ms-text-3);
+                font: 500 13px/1 var(--ms-font-ui);
+                white-space: nowrap;
+                cursor: pointer;
+                transition: background-color 150ms var(--ms-ease), color 150ms var(--ms-ease);
+            }
+            .ms-settings-tab::after {
+                content: "";
+                position: absolute;
+                left: 8px;
+                right: 8px;
+                bottom: 0;
+                height: 2px;
+                border-radius: 1px 1px 0 0;
+                background: transparent;
+                transition: background-color 150ms var(--ms-ease);
+            }
+            .ms-settings-tab:hover { background: var(--ms-hover); color: var(--ms-text); }
+            .ms-settings-tab[aria-selected="true"] { color: var(--ms-accent); }
+            .ms-settings-tab[aria-selected="true"]::after { background: var(--ms-accent); }
+            .ms-settings-tab[aria-selected="true"]:hover { background: var(--ms-hover); }
+            /* The row is a scroll container, so an outward ring would be clipped. */
+            .ms-settings-tab:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: -2px; }
+            /* Switching from a long page to a short one must not resize the dialog. */
+            .ms-settings-page { min-height: 240px; }
             .ms-settings-page[hidden]{display:none!important}
-            .ms-r34-settings-modal button:not(:disabled):not([aria-selected="true"]):not(.is-success):not(.is-error):not(.ms-r34-save):not(:active):hover{background:var(--ms-hover)!important;border-color:var(--ms-line)!important;color:var(--ms-text)!important}
+            .ms-r34-settings-modal button:not(:disabled):not([aria-selected="true"]):not(.is-success):not(.is-error):not(.ms-r34-save):not(:active):hover{background:var(--ms-hover)!important;color:var(--ms-text)!important}
             .ms-r34-settings-modal button:focus-visible{outline:2px solid var(--ms-accent);outline-offset:2px}
             .ms-r34-settings-modal button:disabled{opacity:.45;cursor:default}
             .ms-settings-row>button{padding:8px 12px;min-height:34px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);font:600 12px/1.25 var(--ms-font-ui);cursor:pointer;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out),opacity 140ms var(--ms-ease-out)}
@@ -3805,7 +3907,98 @@
                     transition-duration: 0.01ms !important;
                 }
             }
-        `;
+
+            /* ------------------------------------------------------------------
+               The host-page launcher cluster.
+
+               These used to be three independent position:fixed boxes at
+               right: 20px / 118px / 166px, so the gaps between them were not
+               declared anywhere - they were what was left after subtracting two
+               content-dependent widths from three hardcoded offsets. That made
+               Gallery-to-settings about 26px and content-dependent, while
+               settings-to-auxiliary was exactly 10px, which is the uneven spacing
+               the auxiliary button appeared to cause.
+
+               One flex container fixes both complaints at once: spacing is now
+               structural (a shared 1px seam drawn by the adjacent-sibling rule),
+               so it is identical with and without the auxiliary button, and the
+               settings button cannot drift away from Gallery again. Outer corners
+               are rounded by the container, inner corners are square, because
+               overflow: hidden clips the children to the container's radius.
+               ------------------------------------------------------------------ */
+            #ms-site-cluster {
+                position: fixed;
+                top: 70px;
+                right: 20px;
+                z-index: 9999;
+                display: inline-flex;
+                align-items: stretch;
+                isolation: isolate;
+                box-sizing: border-box;
+                border: 1px solid rgba(255, 255, 255, 0.24);
+                border-radius: 10px;
+                background: #191b20;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+                overflow: hidden;
+            }
+            #ms-site-cluster:empty { display: none; }
+            #ms-site-cluster > .ms-site-cluster-btn {
+                appearance: none !important;
+                box-sizing: border-box !important;
+                height: 36px !important;
+                min-height: 36px !important;
+                max-height: 36px !important;
+                margin: 0 !important;
+                padding: 0 14px !important;
+                position: static !important;
+                inset: auto !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 6px !important;
+                flex: 0 0 auto !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                background: transparent !important;
+                color: #e7e8eb !important;
+                font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif !important;
+                letter-spacing: 0.5px;
+                text-transform: none !important;
+                text-shadow: none !important;
+                text-decoration: none !important;
+                white-space: nowrap !important;
+                cursor: pointer !important;
+                opacity: 1 !important;
+                filter: none !important;
+                backdrop-filter: none !important;
+                box-shadow: none !important;
+                transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            /* The seam. Written as an adjacent-sibling rule so N buttons always
+               produce N-1 identical divisions: removing a button (cum.st drops
+               Gallery) re-seams and re-rounds with no JS at all. */
+            #ms-site-cluster > .ms-site-cluster-btn + .ms-site-cluster-btn {
+                border-inline-start: 1px solid rgba(255, 255, 255, 0.24) !important;
+            }
+            #ms-site-cluster > .ms-site-cluster-btn:hover { background: rgba(255, 255, 255, 0.08) !important; }
+            #ms-site-cluster > .ms-site-cluster-btn:active { background: rgba(255, 255, 255, 0.12) !important; scale: 0.97; }
+            /* overflow: hidden on the container would clip an outward ring. */
+            #ms-site-cluster > .ms-site-cluster-btn:focus-visible {
+                outline: 2px solid hsl(223, 88%, 57%) !important;
+                outline-offset: -2px !important;
+            }
+            #ms-site-cluster > #ms-site-settings-btn { width: 36px !important; padding: 0 !important; }
+            #ms-site-cluster > #ms-site-settings-btn svg { display: block; width: 18px; height: 18px; }
+            #ms-site-cluster > #ms-site-settings-btn svg path,
+            #ms-site-cluster > #ms-site-settings-btn svg circle {
+                fill: none !important;
+                stroke: currentColor !important;
+            }
+            @media (prefers-reduced-motion: reduce) {
+                #ms-site-cluster > .ms-site-cluster-btn { transition-duration: 0.01ms !important; }
+                #ms-site-cluster > .ms-site-cluster-btn:active { scale: 1; }
+            }
+    `;
 
     function installOverlayStyles(addStyle) {
         if (typeof addStyle !== 'function') throw new TypeError('addStyle must be a function');
@@ -3854,45 +4047,85 @@
                 background: var(--ms-surface-3);
                 border-color: var(--ms-line-strong);
             }
+            /* Layout-neutral by construction. The old version was a fixed 28px
+               inline-flex, which as an atomic inline forces the line box to
+               contain its whole margin box - so on a host with a 21px line it
+               grew every line of prose it appeared in, and vertical-align: middle
+               hung it below the descent and made that worse. It is now sized in
+               em from the text beside it (1.3 x 0.82em = 1.07em against a typical
+               1.4 line-height), so it always fits inside the line it joins. */
             .ms-open-in-gallery {
                 display: inline-flex !important;
                 align-items: center !important;
                 justify-content: center !important;
-                gap: 6px !important;
-                height: 28px !important;
-                min-height: 28px !important;
+                gap: 0.4em !important;
                 box-sizing: border-box !important;
-                padding: 0 10px !important;
-                margin-inline-start: 12px;
-                vertical-align: middle;
+                height: 1.3em !important;
+                min-height: 0 !important;
+                max-height: none !important;
+                padding: 0 0.45em !important;
+                margin: 0 0 0 0.4em !important;
+                /* Sits inside the ascent/descent band rather than centred on the
+                   x-height, which is what used to push it past the descent. */
+                vertical-align: -0.25em !important;
                 background: var(--ms-surface-1) !important;
                 color: var(--ms-text) !important;
                 border: 1px solid var(--ms-line) !important;
-                border-radius: 8px !important;
+                border-radius: 999px !important;
                 cursor: pointer !important;
                 font-family: var(--ms-font-ui) !important;
-                font-size: 11px;
+                font-size: 0.82em;
                 font-weight: 600;
-                letter-spacing: 0.5px;
+                letter-spacing: 0.02em;
                 line-height: 1 !important;
-                text-transform: uppercase;
+                text-transform: none;
+                white-space: nowrap !important;
             }
             .ms-open-in-gallery svg {
-                width: 12px;
-                height: 12px;
-                flex-shrink: 0;
+                width: 1em;
+                height: 1em;
+                flex: 0 0 auto;
+                display: block;
+            }
+            /* In flow it is icon-only. The label was around 90px of inline width,
+               and that width is what wrapped prose and broke the two-up embed row
+               on simpcity - height was only half the problem. */
+            .ms-open-in-gallery:not(.ms-open-in-gallery--pinned):not(.ms-open-in-gallery--unfurl) {
+                padding: 0 !important;
+                width: 1.3em !important;
+                gap: 0 !important;
+            }
+            .ms-open-in-gallery:not(.ms-open-in-gallery--pinned):not(.ms-open-in-gallery--unfurl) .ms-btn-label {
+                display: none !important;
+            }
+            /* Out of flow, for block hosts. Takes no part in the host's layout at
+               all - including inside a flex or grid parent, where an absolutely
+               positioned child is not an item and so adds no track. */
+            .ms-open-in-gallery--pinned {
+                position: absolute !important;
+                top: auto !important;
+                left: auto !important;
+                right: 8px !important;
+                bottom: 8px !important;
+                margin: 0 !important;
+                vertical-align: baseline !important;
+                font-size: 11px !important;
+                height: 22px !important;
+                padding: 0 8px !important;
+                z-index: 4 !important;
+                box-shadow: var(--ms-shadow-md) !important;
             }
             .ms-open-in-gallery--embed {
                 margin-inline-start: 0;
-                margin-block-start: 8px;
+                margin-block-start: 0;
             }
             .ms-open-in-gallery--unfurl {
-                margin-inline-start: 8px;
+                margin-inline-start: 0.4em;
                 margin-block-start: 0;
-                height: 24px !important;
-                min-height: 24px !important;
-                padding: 0 8px;
-                font-size: 10px;
+                height: 1.5em !important;
+                min-height: 0 !important;
+                padding: 0 0.5em;
+                font-size: 0.78em;
                 position: relative !important;
                 z-index: 4 !important;
                 pointer-events: auto !important;
@@ -3906,10 +4139,13 @@
             .ms-open-in-gallery:hover {
                 background: var(--ms-surface-3) !important;
                 color: var(--ms-text) !important;
-                border-color: var(--ms-line-strong) !important;
+                border-color: var(--ms-line) !important;
             }
             .ms-open-in-gallery:active {
-                transform: scale(0.97);
+                scale: 0.97;
+            }
+            @media (prefers-reduced-motion: reduce) {
+                .ms-open-in-gallery:active { scale: 1; }
             }
             .ms-open-in-gallery:focus-visible {
                 outline: 2px solid var(--ms-accent);
@@ -3978,7 +4214,98 @@
                 background: var(--ms-surface-3);
                 border-color: var(--ms-line-strong);
             }
-        `;
+
+            /* ------------------------------------------------------------------
+               The host-page launcher cluster.
+
+               These used to be three independent position:fixed boxes at
+               right: 20px / 118px / 166px, so the gaps between them were not
+               declared anywhere - they were what was left after subtracting two
+               content-dependent widths from three hardcoded offsets. That made
+               Gallery-to-settings about 26px and content-dependent, while
+               settings-to-auxiliary was exactly 10px, which is the uneven spacing
+               the auxiliary button appeared to cause.
+
+               One flex container fixes both complaints at once: spacing is now
+               structural (a shared 1px seam drawn by the adjacent-sibling rule),
+               so it is identical with and without the auxiliary button, and the
+               settings button cannot drift away from Gallery again. Outer corners
+               are rounded by the container, inner corners are square, because
+               overflow: hidden clips the children to the container's radius.
+               ------------------------------------------------------------------ */
+            #ms-site-cluster {
+                position: fixed;
+                top: 70px;
+                right: 20px;
+                z-index: 9999;
+                display: inline-flex;
+                align-items: stretch;
+                isolation: isolate;
+                box-sizing: border-box;
+                border: 1px solid rgba(255, 255, 255, 0.24);
+                border-radius: 10px;
+                background: #191b20;
+                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+                overflow: hidden;
+            }
+            #ms-site-cluster:empty { display: none; }
+            #ms-site-cluster > .ms-site-cluster-btn {
+                appearance: none !important;
+                box-sizing: border-box !important;
+                height: 36px !important;
+                min-height: 36px !important;
+                max-height: 36px !important;
+                margin: 0 !important;
+                padding: 0 14px !important;
+                position: static !important;
+                inset: auto !important;
+                display: inline-flex !important;
+                align-items: center !important;
+                justify-content: center !important;
+                gap: 6px !important;
+                flex: 0 0 auto !important;
+                border: 0 !important;
+                border-radius: 0 !important;
+                background: transparent !important;
+                color: #e7e8eb !important;
+                font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif !important;
+                letter-spacing: 0.5px;
+                text-transform: none !important;
+                text-shadow: none !important;
+                text-decoration: none !important;
+                white-space: nowrap !important;
+                cursor: pointer !important;
+                opacity: 1 !important;
+                filter: none !important;
+                backdrop-filter: none !important;
+                box-shadow: none !important;
+                transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            }
+            /* The seam. Written as an adjacent-sibling rule so N buttons always
+               produce N-1 identical divisions: removing a button (cum.st drops
+               Gallery) re-seams and re-rounds with no JS at all. */
+            #ms-site-cluster > .ms-site-cluster-btn + .ms-site-cluster-btn {
+                border-inline-start: 1px solid rgba(255, 255, 255, 0.24) !important;
+            }
+            #ms-site-cluster > .ms-site-cluster-btn:hover { background: rgba(255, 255, 255, 0.08) !important; }
+            #ms-site-cluster > .ms-site-cluster-btn:active { background: rgba(255, 255, 255, 0.12) !important; scale: 0.97; }
+            /* overflow: hidden on the container would clip an outward ring. */
+            #ms-site-cluster > .ms-site-cluster-btn:focus-visible {
+                outline: 2px solid hsl(223, 88%, 57%) !important;
+                outline-offset: -2px !important;
+            }
+            #ms-site-cluster > #ms-site-settings-btn { width: 36px !important; padding: 0 !important; }
+            #ms-site-cluster > #ms-site-settings-btn svg { display: block; width: 18px; height: 18px; }
+            #ms-site-cluster > #ms-site-settings-btn svg path,
+            #ms-site-cluster > #ms-site-settings-btn svg circle {
+                fill: none !important;
+                stroke: currentColor !important;
+            }
+            @media (prefers-reduced-motion: reduce) {
+                #ms-site-cluster > .ms-site-cluster-btn { transition-duration: 0.01ms !important; }
+                #ms-site-cluster > .ms-site-cluster-btn:active { scale: 1; }
+            }
+    `;
     function installLauncherStyles(addStyle) { return addStyle(LAUNCHER_CSS); }
 
     const IMAGE_EXTS = Object.freeze(['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif', 'bmp']);
@@ -4394,7 +4721,10 @@
             '<div class="ms-gallery-topbar">',
             '  <div class="ms-gallery-info"></div>',
             '  <div class="ms-gallery-center">',
-            '    <label class="ms-position-control" title="Go to image"><input type="text" inputmode="numeric" pattern="[0-9]*" class="ms-index-input" value="1" aria-label="Go to image"><span aria-hidden="true">/</span><span class="ms-position-total">1</span></label>',
+            '    <div class="ms-position-group">',
+    '      <label class="ms-position-control" title="Go to image"><input type="text" inputmode="numeric" pattern="[0-9]*" class="ms-index-input" value="1" aria-label="Go to image"><span aria-hidden="true">/</span><span class="ms-position-total">1</span></label>',
+    '      <button class="ms-btn ms-btn-pinned ms-grid-btn" data-act="view-toggle" title="Grid"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="ms-btn-label">Grid</span></button>',
+    '    </div>',
             '    <div class="ms-topbar-spinner" title="Loading full image..."></div>',
             '    <button class="ms-btn ms-icon-btn ms-fullscreen-btn" data-act="fullscreen-toggle" title="Fit to page"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>',
             '    <button class="ms-btn ms-icon-btn ms-fav-btn" data-act="fav-toggle" style="display:none;" title="Favorite"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></button>',
@@ -4410,8 +4740,7 @@
             '    <button class="ms-btn ms-tags-btn" data-act="show-tags" style="display:' + (options.showInfo ? '' : 'none') + ';"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41L13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><circle cx="7" cy="7" r="1.5"/></svg><span class="ms-btn-label">' + String(options.infoLabel || 'Tags') + '</span></button>',
             '    <button class="ms-btn ms-loop-btn" data-act="loop-toggle" style="display:none;" title="Loop"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg><span class="ms-btn-label">Loop</span></button>',
             '    <button class="ms-btn ms-filter-trigger" data-act="filter-toggle" aria-expanded="false" title="Filter gallery"><svg class="ms-btn-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg><span class="ms-btn-label">FILTER</span><span class="ms-filter-count" hidden></span></button>',
-            '    <button class="ms-btn" data-act="view-toggle"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span class="ms-btn-label">Grid</span></button>',
-            '    <button class="ms-btn" data-act="pan-toggle" title="Zoom &amp; pan"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg><span class="ms-btn-label">Zoom</span></button>',
+                    '    <button class="ms-btn" data-act="pan-toggle" title="Zoom &amp; pan"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.35-4.35"/></svg><span class="ms-btn-label">Zoom</span></button>',
             '    <button class="ms-btn" data-act="download" title="Download"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M4 20h16"/></svg><span class="ms-btn-label">DL</span></button>',
             '    <div class="ms-dropdown">',
             '      <button class="ms-btn ms-dropdown-trigger" data-act="fit-trigger"><svg class="ms-btn-icon" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M8 7l4-4 4 4"/><path d="M8 17l4 4 4-4"/></svg><span class="ms-btn-label">Fit: Std</span></button>',
@@ -5191,6 +5520,12 @@
         host.style.cssText = 'all:initial!important;position:fixed!important;inset:0!important;z-index:2147483647!important;display:block!important;visibility:visible!important;pointer-events:auto!important;';
         const shadow = host.attachShadow({mode:'open'});
         const sheet = doc.createElement('style');
+        // Same reason as the gallery overlay's sheet (see view.js): Dark Reader
+        // rewrites stylesheets inside open shadow roots and turns our white-alpha
+        // hairlines dark, and its style manager skips any sheet carrying this
+        // class. Shadow sheets only - it removes .darkreader nodes from the light
+        // DOM when it is switched off, and does not search shadow roots.
+        sheet.className = 'darkreader';
         sheet.textContent = OVERLAY_CSS;
         shadow.append(sheet);
         const overlay = panelElement(doc, 'div', 'ms-r34-settings-overlay');
@@ -5207,8 +5542,11 @@
         tabs.setAttribute('aria-label', 'Settings category');
         const names = [...new Set(options.sections.map(section => section.tab || 'General'))];
         const groups = new Map();
+        // The tab key is the caller's string, but a bare hostname is a poor label;
+        // www. adds nothing the user needs to read.
+        const tabLabel = (name) => String(name).replace(/^www\./i, '');
         names.forEach((name, index) => {
-            const tab = panelElement(doc, 'button', 'ms-settings-tab', name);
+            const tab = panelElement(doc, 'button', 'ms-settings-tab', tabLabel(name));
             tab.type = 'button'; tab.setAttribute('role', 'tab');
             tab.id = 'ms-settings-tab-' + index;
             tab.setAttribute('aria-controls', 'ms-settings-page-' + index);
@@ -5368,17 +5706,64 @@
             button.addEventListener('pointerup', hover);
         }
     }
+    // Rank, not call order: addSiteGalleryButton creates Gallery before the
+    // auxiliary button exists, but the auxiliary button has to render leftmost -
+    // and CSS order cannot be used, because the seam and the clipped outer corners
+    // both key off real DOM order.
+    const LAUNCHER_SLOT_ORDER = {aux:10, settings:20, gallery:30};
+
+    // The cluster carries the visible chrome, so it is the thing that needs the
+    // shield protectHostControl used to put on each button: inline !important beats
+    // a host sheet appended after ours, which author !important does not.
+    function protectHostCluster(cluster) {
+        const values = {position:'fixed',display:'inline-flex','align-items':'stretch','box-sizing':'border-box',
+            background:'#191b20',border:'1px solid rgba(255,255,255,.24)','border-radius':'10px',
+            'box-shadow':'0 2px 8px rgba(0,0,0,.25)',overflow:'hidden',opacity:'1',filter:'none','backdrop-filter':'none',
+            'z-index':'9999',top:'70px',right:'20px',left:'auto',bottom:'auto',margin:'0',padding:'0',
+            'pointer-events':'auto',visibility:'visible',transform:'none'};
+        for (const [key,value] of Object.entries(values)) cluster.style.setProperty(key,value,'important');
+    }
+
+    function ensureLauncherCluster() {
+        let cluster=document.getElementById('ms-site-cluster');
+        if(cluster&&cluster.isConnected)return cluster;
+        if(!cluster){cluster=document.createElement('div');cluster.id='ms-site-cluster';}
+        protectHostCluster(cluster);
+        document.body.append(cluster);return cluster;
+    }
+
+    // Each button keeps its own inline shield too, but only for the properties that
+    // must stay neutral so the children read as one control rather than three.
+    function protectClusterButton(button) {
+        const values = {appearance:'none','box-sizing':'border-box',position:'static',margin:'0',
+            height:'36px','min-height':'36px','max-height':'36px',display:'inline-flex',
+            'align-items':'center','justify-content':'center',gap:'6px',flex:'0 0 auto',
+            border:'0','border-radius':'0',background:'transparent',color:'#e7e8eb',
+            font:'600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif','text-shadow':'none',
+            'text-transform':'none','text-decoration':'none','white-space':'nowrap',
+            opacity:'1',filter:'none','backdrop-filter':'none','box-shadow':'none'};
+        for (const [key,value] of Object.entries(values)) button.style.setProperty(key,value,'important');
+    }
+
+    function placeInCluster(cluster, el, slot) {
+        const rank=LAUNCHER_SLOT_ORDER[slot]||LAUNCHER_SLOT_ORDER.gallery;
+        el.dataset.msOrder=String(rank);
+        const next=Array.prototype.find.call(cluster.children,kid=>Number(kid.dataset.msOrder||0)>rank);
+        cluster.insertBefore(el,next||null);
+    }
+
     function createLauncher(options) {
-        if(document.getElementById(options.id))return document.getElementById(options.id);
-        const button=document.createElement('button');button.type='button';button.id=options.id;button.className=options.className||options.id;
+        const cluster=ensureLauncherCluster();
+        const existing=document.getElementById(options.id);
+        if(existing){if(existing.parentNode!==cluster)placeInCluster(cluster,existing,options.slot);return existing;}
+        const button=document.createElement('button');button.type='button';button.id=options.id;
+        button.className='ms-site-cluster-btn'+(options.className?' '+options.className:'');
         button.textContent=options.label||'Gallery';button.title=options.title||button.textContent;
         button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();options.onClick();});
-        protectHostControl(button,false);
-        button.style.setProperty('height','38px','important');
-        button.style.setProperty('min-height','38px','important');
-        button.style.setProperty('max-height','38px','important');
+        button.addEventListener('pointerdown',event=>event.stopPropagation());
+        protectClusterButton(button);
         button.style.setProperty('padding','0 14px','important');
-        document.body.append(button);return button;
+        placeInCluster(cluster,button,options.slot);return button;
     }
     function beginOpen() {
         const overlay=ensureOverlay();
@@ -5399,7 +5784,7 @@
     function clearViewerMedia() {
         const overlay=bridge.state.overlay;if(!overlay)return;
         ++bridge.state.renderToken;
-        clearFullscreenIdleTimer();stopThumbTrackAnimation();
+        clearFullscreenIdleTimer();stopThumbTrackAnimation();cancelFlyGhost();
         if(bridge.state.mediaFitObserver){bridge.state.mediaFitObserver.disconnect();bridge.state.mediaFitObserver=null;}
         for(const key of ['thumbsWindowRaf','gridWindowRaf'])if(bridge.state[key]){cancelAnimationFrame(bridge.state[key]);bridge.state[key]=null;}
         if(bridge.state.thumbEnteringTimer){clearTimeout(bridge.state.thumbEnteringTimer);bridge.state.thumbEnteringTimer=null;}
@@ -5905,7 +6290,7 @@
             e.stopPropagation();
             if (bridge.state.gridMode) return;
             const target = e.target;
-            if (target && target.closest('.ms-thumbs-wrap, .ms-gallery-controls, .ms-filter-bar')) return;
+            if (target && target.closest('.ms-thumbs-wrap, .ms-gallery-controls, .ms-gallery-center, .ms-filter-bar')) return;
             const tagsPanel = target && target.closest('.ms-tags-overlay');
             if (tagsPanel && tagsPanelIsScrollable(tagsPanel)) return;
             e.preventDefault();
@@ -5998,7 +6383,12 @@
             const vis = (el) => el
                 ? Array.prototype.map.call(el.children, (k) => (k.style.display === 'none' ? '0' : '1')).join('')
                 : '';
-            return topbar.clientWidth + '|' + vis(controls) + '|' + vis(center);
+            // A pinned button keeps its label at every tier, so its text is a real
+            // input to the layout and has to invalidate the memo - Grid becomes
+            // Viewer and back, and that is a real width change now that the label
+            // is never hidden.
+            const pinned = topbar.querySelector('.ms-btn-pinned .ms-btn-label');
+            return topbar.clientWidth + '|' + vis(controls) + '|' + vis(center) + '|' + (pinned ? pinned.textContent : '');
         }
 
     function updateTopbarCompact() {
@@ -6226,39 +6616,151 @@
             updateDropdownActiveStates();
         }
 
-    function animateFlyToGrid(fromRect, src, targetCell) {
-            try {
-                const toRect = targetCell.getBoundingClientRect();
-                if (!toRect.width || !toRect.height) return;
+    function prefersReducedMotion() {
+            return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        }
 
-                const ghost = document.createElement('img');
-                ghost.src = src;
-                ghost.style.cssText = 'position:fixed; z-index:2147483647; object-fit:cover; border-radius:6px;'
-                    + 'pointer-events:none; margin:0; will-change:transform;'
-                    + 'left:' + toRect.left + 'px; top:' + toRect.top + 'px;'
-                    + 'width:' + toRect.width + 'px; height:' + toRect.height + 'px;'
-                    + 'transform-origin: top left;';
-                const dx = fromRect.left - toRect.left;
-                const dy = fromRect.top - toRect.top;
-                const sx = fromRect.width / toRect.width;
-                const sy = fromRect.height / toRect.height;
-                ghost.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + sx + ', ' + sy + ')';
-                document.body.appendChild(ghost);
-                targetCell.style.visibility = 'hidden';
+        // The flight ghost is the one piece of our UI that lives in the light DOM:
+        // it has to sit above the overlay, and the overlay stylesheet is inside a
+        // shadow root that cannot reach it. So every rule here is inline, and the
+        // reduced-motion opt-out has to be a JS check rather than a media query.
+    function releaseFlyHidden() {
+            if (!bridge.state.overlay) return;
+            bridge.state.overlay.querySelectorAll('[data-ms-fly-hidden]').forEach((node) => {
+                node.removeAttribute('data-ms-fly-hidden');
+                node.style.removeProperty('visibility');
+            });
+        }
 
-                requestAnimationFrame(() => {
-                    requestAnimationFrame(() => {
-                        ghost.style.transition = 'transform 200ms ease';
-                        ghost.style.transform = 'none';
-                    });
-                });
-                setTimeout(() => {
-                    targetCell.style.visibility = '';
-                    ghost.remove();
-                }, 260);
-            } catch (e) {
-                try { targetCell.style.visibility = ''; } catch (e2) { }
+    function cancelFlyGhost() {
+            const live = bridge.state.flyGhost;
+            bridge.state.flyGhost = null;
+            if (live) {
+                try { if (live.anim) live.anim.cancel(); } catch (e) { }
+                try { live.ghost.remove(); } catch (e) { }
+                if (live.timer) clearTimeout(live.timer);
             }
+            releaseFlyHidden();
+        }
+
+        // A FLIP between two on-screen rectangles. Animating the box itself rather
+        // than a transform keeps an object-fit: cover ghost honest on every frame:
+        // scaling one bitmap between a 3:2 stage and a 1:1 cell squashed it for the
+        // whole flight, which is what the previous version did.
+    function flyGhost(fromRect, toRect, src, options) {
+            const opts = options || {};
+            if (!src || !fromRect || !toRect) { releaseFlyHidden(); return; }
+            if (!fromRect.width || !fromRect.height || !toRect.width || !toRect.height) { releaseFlyHidden(); return; }
+            if (prefersReducedMotion() || typeof Element.prototype.animate !== 'function') { releaseFlyHidden(); return; }
+
+            cancelFlyGhost();
+            const fromRadius = typeof opts.fromRadius === 'number' ? opts.fromRadius : 6;
+            const toRadius = typeof opts.toRadius === 'number' ? opts.toRadius : 4;
+            const ghost = document.createElement('img');
+            ghost.src = src;
+            ghost.setAttribute('aria-hidden', 'true');
+            ghost.style.cssText = 'position:fixed; z-index:2147483647; pointer-events:none; margin:0;'
+                + ' object-fit:cover; background:#000;'
+                + ' will-change:left, top, width, height, opacity;'
+                + ' left:' + fromRect.left + 'px; top:' + fromRect.top + 'px;'
+                + ' width:' + fromRect.width + 'px; height:' + fromRect.height + 'px;'
+                + ' border-radius:' + fromRadius + 'px;';
+            document.body.appendChild(ghost);
+
+            if (opts.hide && opts.hide.style) {
+                opts.hide.setAttribute('data-ms-fly-hidden', '1');
+                opts.hide.style.visibility = 'hidden';
+            }
+
+            // 200ms on the layout easing, the pair the motion table allows for
+            // anything that moves or resizes. The token itself only exists inside
+            // the shadow sheet, so the value is repeated rather than referenced.
+            const frames = [
+                { left: fromRect.left + 'px', top: fromRect.top + 'px',
+                  width: fromRect.width + 'px', height: fromRect.height + 'px',
+                  borderRadius: fromRadius + 'px', opacity: 1 },
+                { left: toRect.left + 'px', top: toRect.top + 'px',
+                  width: toRect.width + 'px', height: toRect.height + 'px',
+                  borderRadius: toRadius + 'px', opacity: opts.fadeOut ? 0 : 1 }
+            ];
+            if (opts.fadeOut) frames.splice(1, 0, { opacity: 1, offset: 0.55 });
+            let anim = null;
+            try {
+                anim = ghost.animate(frames, { duration: 200, easing: 'cubic-bezier(0.215, 0.61, 0.355, 1)', fill: 'both' });
+            } catch (e) {
+                try { ghost.remove(); } catch (e2) { }
+                releaseFlyHidden();
+                return;
+            }
+
+            const live = { ghost: ghost, anim: anim, timer: null };
+            bridge.state.flyGhost = live;
+            const done = () => {
+                if (bridge.state.flyGhost !== live) return;
+                bridge.state.flyGhost = null;
+                if (live.timer) clearTimeout(live.timer);
+                try { ghost.remove(); } catch (e) { }
+                releaseFlyHidden();
+            };
+            anim.addEventListener('finish', done);
+            anim.addEventListener('cancel', done);
+            // Animations are throttled in a background tab, so never let the ghost
+            // or the hidden cell depend on a frame that may never arrive.
+            live.timer = setTimeout(done, 900);
+        }
+
+        // The grid wrap is display:none outside grid mode, so its scrollTop is
+        // always 0 on the way in and the window painted only the first rows. Past
+        // the first screenful that left no active cell to scroll to and no cell to
+        // fly into, so both the scroll and the animation were silently skipped.
+        // Scroll before the paint, not after it.
+    function scrollGridToCurrent() {
+            if (!bridge.state.overlay) return;
+            const wrap = bridge.state.overlay.querySelector('.ms-grid-wrap');
+            const grid = bridge.state.overlay.querySelector('.ms-grid');
+            if (!wrap || !grid) return;
+            const sizer = ensureGridWindow(grid, wrap);
+            const m = gridMetrics(wrap, grid);
+            const rows = Math.ceil(bridge.state.items.length / m.cols);
+            // scrollTop is clamped to the current scrollHeight, so the sizer has to
+            // be tall before the scroll rather than when paintGridWindow gets to it.
+            sizer.style.height = Math.max(0, rows * m.rowH - m.gap) + 'px';
+            const row = Math.floor(Math.max(0, bridge.state.currentIndex) / m.cols);
+            const target = row * m.rowH - Math.max(0, (wrap.clientHeight - m.cell) / 2);
+            const limit = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
+            wrap.scrollTop = Math.max(0, Math.min(target, limit));
+        }
+
+        // Coming back out of the grid, renderCurrent is asynchronous: the media box
+        // does not exist, and is not sized, until the image decodes. Wait for it by
+        // frame with a deadline, so a slow or failed load just means no animation.
+    function flyFromCell(fromRect, src) {
+            const overlay = bridge.state.overlay;
+            if (!overlay || prefersReducedMotion()) return;
+            const wrap = overlay.querySelector('.ms-media-wrap');
+            if (!wrap) return;
+            const token = bridge.state.renderToken;
+            const deadline = Date.now() + 700;
+            const tryStart = () => {
+                if (!bridge.state.overlay || bridge.state.gridMode) return;
+                if (token !== bridge.state.renderToken) return;
+                const media = wrap.querySelector('img.ms-media.ms-ready, video.ms-media.ms-ready');
+                // Prefer the media box: it is sized to the image's own aspect box,
+                // so a cover ghost filling it is undistorted. Auto-pan moves the
+                // image out of the box, and then the image's own rect is the truth.
+                const box = media ? media.closest('.ms-media-box') : null;
+                const target = box || media;
+                const toRect = target ? target.getBoundingClientRect() : null;
+                if (toRect && toRect.width > 2 && toRect.height > 2) {
+                    // No hide here: the real media stays underneath and the ghost
+                    // fades out over it, so there is never a blank frame.
+                    flyGhost(fromRect, toRect, src, { fadeOut: true, fromRadius: 6, toRadius: 4 });
+                    return;
+                }
+                if (Date.now() > deadline) return;
+                requestAnimationFrame(tryStart);
+            };
+            requestAnimationFrame(tryStart);
         }
 
     function setGridMode(on) {
@@ -6268,6 +6770,8 @@
 
             let flyRect = null;
             let flySrc = '';
+            let backRect = null;
+            let backSrc = '';
             if (enable) {
                 disablePan();
                 const mediaEl = bridge.state.overlay.querySelector('.ms-media-wrap img.ms-media.ms-ready, .ms-media-wrap video.ms-media');
@@ -6283,6 +6787,22 @@
                     const curEntry = bridge.state.items[bridge.state.currentIndex];
                     const curItem = curEntry ? (curEntry.item || curEntry) : null;
                     if (curItem) flySrc = curItem.thumbSrc || '';
+                }
+            } else {
+                // Measure before ms-grid-mode is flipped below: after that the grid
+                // is display:none and every rect reads zero. The grid is windowed
+                // and pooled, so the cell for the current item may simply not be
+                // painted (Escape after scrolling away) - that is a skip, not a
+                // failure, and the return just happens without a flight.
+                const grid = bridge.state.overlay.querySelector('.ms-grid');
+                const cell = grid ? grid.querySelector('[data-grid-index="' + bridge.state.currentIndex + '"]') : null;
+                const cellImg = cell ? cell.querySelector('img') : null;
+                if (cell && cellImg && (cellImg.currentSrc || cellImg.src)) {
+                    const r = cell.getBoundingClientRect();
+                    if (r.width > 2 && r.height > 2) {
+                        backRect = { left: r.left, top: r.top, width: r.width, height: r.height };
+                        backSrc = cellImg.currentSrc || cellImg.src;
+                    }
                 }
             }
 
@@ -6301,15 +6821,25 @@
                     wrap.innerHTML = '';
                 }
                 setTopbarLoading(false);
+                // Scroll first, then paint: that is what makes the active cell
+                // exist at all, and it drops the scrollIntoView that used to
+                // repaint - and so re-pool - the cell a frame after the flight
+                // had already started from it.
+                scrollGridToCurrent();
                 renderGrid();
+                syncZoomSliderAvailability();
                 const grid = bridge.state.overlay.querySelector('.ms-grid');
                 const active = grid ? grid.querySelector('.ms-grid-cell.active') : null;
-                if (active) active.scrollIntoView({ block: 'center', behavior: 'auto' });
-                if (active && flyRect && flySrc) animateFlyToGrid(flyRect, flySrc, active);
+                if (active && flyRect && flySrc) {
+                    flyGhost(flyRect, active.getBoundingClientRect(), flySrc, {
+                        hide: active, fromRadius: 4, toRadius: 6
+                    });
+                }
             } else {
                 bridge.state.cameFromGrid = true;
                 renderThumbs();
                 bridge.renderCurrent();
+                if (backRect && backSrc) flyFromCell(backRect, backSrc);
 
                 if (bridge.state.tagsPanelWanted) bridge.applyTagsPanel(true);
             }
@@ -6416,6 +6946,30 @@
             syncGridWindow();
         }
 
+        // ms-zoom-idle means "zoom does not apply to what is on the stage" - a
+        // video, an iframe, nothing loaded yet, grid mode. It does NOT mean "zoom
+        // mode is off": turning the Zoom button off leaves a still image on screen
+        // that the slider still drives, because the slider's own input handler
+        // re-enters pan mode. disablePan used to add the class unconditionally,
+        // which is why the slider vanished when Zoom was switched off.
+    function syncZoomSliderAvailability() {
+            if (!bridge.state.overlay) return;
+            const sliderWrap = bridge.state.overlay.querySelector('.ms-zoom-slider-wrap');
+            const slider = bridge.state.overlay.querySelector('.ms-zoom-slider');
+            if (!sliderWrap || !slider) return;
+            const wrap = bridge.state.gridMode ? null : bridge.state.overlay.querySelector('.ms-media-wrap');
+            const img = wrap ? wrap.querySelector('img.ms-media.ms-ready') : null;
+            const usable = !!(img && img.naturalWidth && img.naturalHeight && wrap.clientWidth && wrap.clientHeight);
+            sliderWrap.classList.toggle('ms-zoom-idle', !usable);
+            sliderWrap.classList.toggle('ms-zoom-off', usable && !bridge.state.pan);
+            if (usable && !bridge.state.pan) {
+                // Also re-reads the value: zooming to 250% and then switching Zoom
+                // off left the slider showing 250% for an image back at fit.
+                const fitScale = containedImageScale(wrap, img);
+                configureZoomSlider(slider, fitScale, fitScale, isTallStripImage(img) ? 12 : 4);
+            }
+        }
+
     function disablePan() {
             if (bridge.state.pan && bridge.state.pan.cleanup) {
                 try { bridge.state.pan.cleanup(); } catch (e) { }
@@ -6423,10 +6977,7 @@
             bridge.state.pan = null;
             syncVerticalFitMediaBox();
             updateButtons();
-            if (bridge.state.overlay) {
-                const sliderWrap = bridge.state.overlay.querySelector('.ms-zoom-slider-wrap');
-                if (sliderWrap) sliderWrap.classList.add('ms-zoom-idle');
-            }
+            syncZoomSliderAvailability();
         }
 
     function containedImageScale(wrap, img) {
@@ -7049,14 +7600,22 @@
             }
 
             const rect = img.getBoundingClientRect();
-            if (!img.naturalWidth || !rect.width || rect.width >= img.naturalWidth) return;
+            if (!img.naturalWidth || !rect.width) return;
             const wasFill = !!(bridge.state.pan && bridge.state.pan.active);
             const px = (e.clientX - rect.left) / rect.width;
             const py = (e.clientY - rect.top) / rect.height;
             const wrapRect = wrap.getBoundingClientRect();
             const currentScale = rect.width / img.naturalWidth;
             const isTallStrip = isTallStripImage(img);
-            const nextScale = Math.min(1, currentScale * (isTallStrip ? 4 : 1.5));
+            // Click zoom used to stop at 100% of the source pixels, so on a large
+            // screen - where a photo already fits at close to 1:1 - a click moved
+            // almost nothing, and on an image smaller than the stage it did
+            // nothing at all. The slider has always gone further (see
+            // configureZoomSlider: fit x 4, or x 12 for a tall strip), so match it
+            // and let both controls reach the same place.
+            const maxScale = Math.max(1, containedImageScale(wrap, img) * (isTallStrip ? 12 : 4));
+            const nextScale = Math.min(maxScale, currentScale * (isTallStrip ? 4 : 1.5));
+            if (nextScale <= currentScale * 1.01) return;
             enablePanForImage(wrap, img, {
                 zoom: true,
                 scale: nextScale,
@@ -7861,6 +8420,10 @@
 
     function fillGridCell(cell, entry, index) {
             resetMediaThumbEl(cell);
+            // Pooled node: a flight that hid it may still owe us its cleanup, and
+            // by then this cell can already be showing a different item.
+            cell.removeAttribute('data-ms-fly-hidden');
+            cell.style.removeProperty('visibility');
             const item = entry.item || entry;
             const hdSrc = bridge.getHdSrc(item);
             if (hdSrc) cell.setAttribute('data-hd-src', hdSrc);
@@ -8181,6 +8744,52 @@
                 + '</svg>';
         }
 
+    const OPEN_IN_GALLERY_REPLACED = /^(IMG|VIDEO|AUDIO|IFRAME|EMBED|OBJECT|CANVAS|INPUT|BR|HR)$/;
+
+        // Promoting a static host to relative would steal the containing block
+        // from any absolutely positioned descendant, so check before doing it.
+        // Bounded: this runs per injected button on pages with many posts.
+    function hasOutOfFlowChild(el, depth) {
+            if (!el || depth <= 0) return false;
+            const kids = el.children || [];
+            for (let i = 0; i < kids.length && i < 24; i++) {
+                let position = '';
+                try { position = window.getComputedStyle(kids[i]).position; } catch (e) { }
+                if (position === 'absolute' || position === 'fixed') return true;
+                if (hasOutOfFlowChild(kids[i], depth - 1)) return true;
+            }
+            return false;
+        }
+
+        // Mount so the button cannot change the host's box. A block-ish host gets
+        // it as an out-of-flow child - the embed wrappers we target are already
+        // position: relative, so usually no positioning context is added at all.
+        // Inline hosts, and replaced elements that cannot hold children, keep it
+        // in the inline flow at text scale instead.
+    function mountOpenInGalleryButton(host, btn) {
+            if (!host || !btn) return;
+            if (host.nodeType === 1 && !OPEN_IN_GALLERY_REPLACED.test(host.tagName)) {
+                let position = '';
+                let display = '';
+                try {
+                    const cs = window.getComputedStyle(host);
+                    position = cs.position;
+                    display = cs.display;
+                } catch (e) { }
+                const blockish = display && display !== 'inline' && display !== 'contents';
+                const positioned = position && position !== 'static';
+                if (blockish && (positioned || !hasOutOfFlowChild(host, 3))) {
+                    if (!positioned) host.classList.add('ms-open-in-gallery-host');
+                    btn.classList.add('ms-open-in-gallery--pinned');
+                    btn.style.setProperty('font-size', '11px', 'important');
+                    btn.style.setProperty('height', '22px', 'important');
+                    host.appendChild(btn);
+                    return;
+                }
+            }
+            host.insertAdjacentElement('afterend', btn);
+        }
+
     function createOpenInGalleryButton(startNode, variant) {
             const btn = document.createElement('button');
             btn.type = 'button';
@@ -8189,6 +8798,15 @@
             btn.setAttribute('aria-label', 'Open in Gallery');
             btn.innerHTML = openInGalleryButtonHtml();
             protectHostControl(btn,true);
+            // protectHostControl writes a font shorthand inline and !important, so
+            // it would pin a fixed pixel size and the button would grow the host
+            // line box again. A later longhand in the same inline block wins over
+            // the earlier shorthand, so re-assert the em size here.
+            btn.style.setProperty('font-size', '0.82em', 'important');
+            btn.style.setProperty('height', '1.3em', 'important');
+            btn.style.setProperty('min-height', '0', 'important');
+            btn.style.setProperty('border-radius', '999px', 'important');
+            btn.style.setProperty('pointer-events', 'auto', 'important');
             btn.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -8471,15 +9089,7 @@
                     if (bridge.autoPanEnabled && !item.msNoAutoPan && shouldAutoPan(wrap, img)) {
                         enablePanForImage(wrap, img);
                     }
-                    if (!bridge.state.pan) {
-                        const sliderWrap = bridge.state.overlay.querySelector('.ms-zoom-slider-wrap');
-                        const slider = bridge.state.overlay.querySelector('.ms-zoom-slider');
-                        if (sliderWrap && slider) {
-                            sliderWrap.classList.remove('ms-zoom-idle');
-                            const fitScale = containedImageScale(wrap, img);
-                            configureZoomSlider(slider, fitScale, fitScale, isTallStripImage(img) ? 12 : 4);
-                        }
-                    }
+                    syncZoomSliderAvailability();
 
                     if (item.xUnplayable && item.watchUrl) {
                         const watch = document.createElement('a');
@@ -8886,10 +9496,17 @@
             }
         }
     function addSettingsGearButton() {
-            if (document.getElementById('ms-site-settings-btn')) return;
+            const cluster = ensureLauncherCluster();
+            const existingGear = document.getElementById('ms-site-settings-btn');
+            if (existingGear) {
+                // A rebuilt body can strand it outside the cluster; re-home rather
+                // than bail, or the seams and corners come out wrong.
+                if (existingGear.parentNode !== cluster) placeInCluster(cluster, existingGear, 'settings');
+                return;
+            }
             const gear = document.createElement('button');
             gear.id = 'ms-site-settings-btn';
-            gear.className = 'ms-site-settings-btn';
+            gear.className = 'ms-site-cluster-btn ms-site-settings-btn';
             gear.innerHTML = '<svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" fill="none"/><path fill="none" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
             gear.title = 'Gallery Settings';
             gear.addEventListener('click', (e) => {
@@ -8901,10 +9518,10 @@
             gear.addEventListener('pointerdown', (e) => {
                 e.stopPropagation();
             });
-            protectHostControl(gear,false);
-            for (const prop of ['height','min-height','max-height','width']) gear.style.setProperty(prop,'38px','important');
+            protectClusterButton(gear);
+            gear.style.setProperty('width','36px','important');
             gear.style.setProperty('padding','0','important');
-            document.body.appendChild(gear);
+            placeInCluster(cluster, gear, 'settings');
         }
 
     function closeFavoriteMenu() {
@@ -9012,7 +9629,7 @@
                 setFavoriteMenuStatus(menu, error && error.message ? error.message : 'Could not load favorite folders.', 'error');
             }
         }
-    return { createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, animateFlyToGrid, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
+    return { mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
     }
 
     root.XGalleryCore = Object.freeze({

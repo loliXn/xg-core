@@ -26,17 +26,64 @@ function protectHostControl(button, compact) {
         button.addEventListener('pointerup', hover);
     }
 }
+// Rank, not call order: addSiteGalleryButton creates Gallery before the
+// auxiliary button exists, but the auxiliary button has to render leftmost -
+// and CSS order cannot be used, because the seam and the clipped outer corners
+// both key off real DOM order.
+const LAUNCHER_SLOT_ORDER = {aux:10, settings:20, gallery:30};
+
+// The cluster carries the visible chrome, so it is the thing that needs the
+// shield protectHostControl used to put on each button: inline !important beats
+// a host sheet appended after ours, which author !important does not.
+function protectHostCluster(cluster) {
+    const values = {position:'fixed',display:'inline-flex','align-items':'stretch','box-sizing':'border-box',
+        background:'#191b20',border:'1px solid rgba(255,255,255,.24)','border-radius':'10px',
+        'box-shadow':'0 2px 8px rgba(0,0,0,.25)',overflow:'hidden',opacity:'1',filter:'none','backdrop-filter':'none',
+        'z-index':'9999',top:'70px',right:'20px',left:'auto',bottom:'auto',margin:'0',padding:'0',
+        'pointer-events':'auto',visibility:'visible',transform:'none'};
+    for (const [key,value] of Object.entries(values)) cluster.style.setProperty(key,value,'important');
+}
+
+function ensureLauncherCluster() {
+    let cluster=document.getElementById('ms-site-cluster');
+    if(cluster&&cluster.isConnected)return cluster;
+    if(!cluster){cluster=document.createElement('div');cluster.id='ms-site-cluster';}
+    protectHostCluster(cluster);
+    document.body.append(cluster);return cluster;
+}
+
+// Each button keeps its own inline shield too, but only for the properties that
+// must stay neutral so the children read as one control rather than three.
+function protectClusterButton(button) {
+    const values = {appearance:'none','box-sizing':'border-box',position:'static',margin:'0',
+        height:'36px','min-height':'36px','max-height':'36px',display:'inline-flex',
+        'align-items':'center','justify-content':'center',gap:'6px',flex:'0 0 auto',
+        border:'0','border-radius':'0',background:'transparent',color:'#e7e8eb',
+        font:'600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif','text-shadow':'none',
+        'text-transform':'none','text-decoration':'none','white-space':'nowrap',
+        opacity:'1',filter:'none','backdrop-filter':'none','box-shadow':'none'};
+    for (const [key,value] of Object.entries(values)) button.style.setProperty(key,value,'important');
+}
+
+function placeInCluster(cluster, el, slot) {
+    const rank=LAUNCHER_SLOT_ORDER[slot]||LAUNCHER_SLOT_ORDER.gallery;
+    el.dataset.msOrder=String(rank);
+    const next=Array.prototype.find.call(cluster.children,kid=>Number(kid.dataset.msOrder||0)>rank);
+    cluster.insertBefore(el,next||null);
+}
+
 function createLauncher(options) {
-    if(document.getElementById(options.id))return document.getElementById(options.id);
-    const button=document.createElement('button');button.type='button';button.id=options.id;button.className=options.className||options.id;
+    const cluster=ensureLauncherCluster();
+    const existing=document.getElementById(options.id);
+    if(existing){if(existing.parentNode!==cluster)placeInCluster(cluster,existing,options.slot);return existing;}
+    const button=document.createElement('button');button.type='button';button.id=options.id;
+    button.className='ms-site-cluster-btn'+(options.className?' '+options.className:'');
     button.textContent=options.label||'Gallery';button.title=options.title||button.textContent;
     button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();options.onClick();});
-    protectHostControl(button,false);
-    button.style.setProperty('height','38px','important');
-    button.style.setProperty('min-height','38px','important');
-    button.style.setProperty('max-height','38px','important');
+    button.addEventListener('pointerdown',event=>event.stopPropagation());
+    protectClusterButton(button);
     button.style.setProperty('padding','0 14px','important');
-    document.body.append(button);return button;
+    placeInCluster(cluster,button,options.slot);return button;
 }
 function beginOpen() {
     const overlay=ensureOverlay();
@@ -57,7 +104,7 @@ function finishOpen() {
 function clearViewerMedia() {
     const overlay=bridge.state.overlay;if(!overlay)return;
     ++bridge.state.renderToken;
-    clearFullscreenIdleTimer();stopThumbTrackAnimation();
+    clearFullscreenIdleTimer();stopThumbTrackAnimation();cancelFlyGhost();
     if(bridge.state.mediaFitObserver){bridge.state.mediaFitObserver.disconnect();bridge.state.mediaFitObserver=null;}
     for(const key of ['thumbsWindowRaf','gridWindowRaf'])if(bridge.state[key]){cancelAnimationFrame(bridge.state[key]);bridge.state[key]=null;}
     if(bridge.state.thumbEnteringTimer){clearTimeout(bridge.state.thumbEnteringTimer);bridge.state.thumbEnteringTimer=null;}
@@ -563,7 +610,7 @@ function onOverlayWheel(e) {
         e.stopPropagation();
         if (bridge.state.gridMode) return;
         const target = e.target;
-        if (target && target.closest('.ms-thumbs-wrap, .ms-gallery-controls, .ms-filter-bar')) return;
+        if (target && target.closest('.ms-thumbs-wrap, .ms-gallery-controls, .ms-gallery-center, .ms-filter-bar')) return;
         const tagsPanel = target && target.closest('.ms-tags-overlay');
         if (tagsPanel && tagsPanelIsScrollable(tagsPanel)) return;
         e.preventDefault();
@@ -656,7 +703,12 @@ function topbarLayoutSignature(topbar, controls) {
         const vis = (el) => el
             ? Array.prototype.map.call(el.children, (k) => (k.style.display === 'none' ? '0' : '1')).join('')
             : '';
-        return topbar.clientWidth + '|' + vis(controls) + '|' + vis(center);
+        // A pinned button keeps its label at every tier, so its text is a real
+        // input to the layout and has to invalidate the memo - Grid becomes
+        // Viewer and back, and that is a real width change now that the label
+        // is never hidden.
+        const pinned = topbar.querySelector('.ms-btn-pinned .ms-btn-label');
+        return topbar.clientWidth + '|' + vis(controls) + '|' + vis(center) + '|' + (pinned ? pinned.textContent : '');
     }
 
 function updateTopbarCompact() {
@@ -884,39 +936,151 @@ function toggleThumbs(forceHide) {
         updateDropdownActiveStates();
     }
 
-function animateFlyToGrid(fromRect, src, targetCell) {
-        try {
-            const toRect = targetCell.getBoundingClientRect();
-            if (!toRect.width || !toRect.height) return;
+function prefersReducedMotion() {
+        return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+    }
 
-            const ghost = document.createElement('img');
-            ghost.src = src;
-            ghost.style.cssText = 'position:fixed; z-index:2147483647; object-fit:cover; border-radius:6px;'
-                + 'pointer-events:none; margin:0; will-change:transform;'
-                + 'left:' + toRect.left + 'px; top:' + toRect.top + 'px;'
-                + 'width:' + toRect.width + 'px; height:' + toRect.height + 'px;'
-                + 'transform-origin: top left;';
-            const dx = fromRect.left - toRect.left;
-            const dy = fromRect.top - toRect.top;
-            const sx = fromRect.width / toRect.width;
-            const sy = fromRect.height / toRect.height;
-            ghost.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + sx + ', ' + sy + ')';
-            document.body.appendChild(ghost);
-            targetCell.style.visibility = 'hidden';
+    // The flight ghost is the one piece of our UI that lives in the light DOM:
+    // it has to sit above the overlay, and the overlay stylesheet is inside a
+    // shadow root that cannot reach it. So every rule here is inline, and the
+    // reduced-motion opt-out has to be a JS check rather than a media query.
+function releaseFlyHidden() {
+        if (!bridge.state.overlay) return;
+        bridge.state.overlay.querySelectorAll('[data-ms-fly-hidden]').forEach((node) => {
+            node.removeAttribute('data-ms-fly-hidden');
+            node.style.removeProperty('visibility');
+        });
+    }
 
-            requestAnimationFrame(() => {
-                requestAnimationFrame(() => {
-                    ghost.style.transition = 'transform 200ms ease';
-                    ghost.style.transform = 'none';
-                });
-            });
-            setTimeout(() => {
-                targetCell.style.visibility = '';
-                ghost.remove();
-            }, 260);
-        } catch (e) {
-            try { targetCell.style.visibility = ''; } catch (e2) { }
+function cancelFlyGhost() {
+        const live = bridge.state.flyGhost;
+        bridge.state.flyGhost = null;
+        if (live) {
+            try { if (live.anim) live.anim.cancel(); } catch (e) { }
+            try { live.ghost.remove(); } catch (e) { }
+            if (live.timer) clearTimeout(live.timer);
         }
+        releaseFlyHidden();
+    }
+
+    // A FLIP between two on-screen rectangles. Animating the box itself rather
+    // than a transform keeps an object-fit: cover ghost honest on every frame:
+    // scaling one bitmap between a 3:2 stage and a 1:1 cell squashed it for the
+    // whole flight, which is what the previous version did.
+function flyGhost(fromRect, toRect, src, options) {
+        const opts = options || {};
+        if (!src || !fromRect || !toRect) { releaseFlyHidden(); return; }
+        if (!fromRect.width || !fromRect.height || !toRect.width || !toRect.height) { releaseFlyHidden(); return; }
+        if (prefersReducedMotion() || typeof Element.prototype.animate !== 'function') { releaseFlyHidden(); return; }
+
+        cancelFlyGhost();
+        const fromRadius = typeof opts.fromRadius === 'number' ? opts.fromRadius : 6;
+        const toRadius = typeof opts.toRadius === 'number' ? opts.toRadius : 4;
+        const ghost = document.createElement('img');
+        ghost.src = src;
+        ghost.setAttribute('aria-hidden', 'true');
+        ghost.style.cssText = 'position:fixed; z-index:2147483647; pointer-events:none; margin:0;'
+            + ' object-fit:cover; background:#000;'
+            + ' will-change:left, top, width, height, opacity;'
+            + ' left:' + fromRect.left + 'px; top:' + fromRect.top + 'px;'
+            + ' width:' + fromRect.width + 'px; height:' + fromRect.height + 'px;'
+            + ' border-radius:' + fromRadius + 'px;';
+        document.body.appendChild(ghost);
+
+        if (opts.hide && opts.hide.style) {
+            opts.hide.setAttribute('data-ms-fly-hidden', '1');
+            opts.hide.style.visibility = 'hidden';
+        }
+
+        // 200ms on the layout easing, the pair the motion table allows for
+        // anything that moves or resizes. The token itself only exists inside
+        // the shadow sheet, so the value is repeated rather than referenced.
+        const frames = [
+            { left: fromRect.left + 'px', top: fromRect.top + 'px',
+              width: fromRect.width + 'px', height: fromRect.height + 'px',
+              borderRadius: fromRadius + 'px', opacity: 1 },
+            { left: toRect.left + 'px', top: toRect.top + 'px',
+              width: toRect.width + 'px', height: toRect.height + 'px',
+              borderRadius: toRadius + 'px', opacity: opts.fadeOut ? 0 : 1 }
+        ];
+        if (opts.fadeOut) frames.splice(1, 0, { opacity: 1, offset: 0.55 });
+        let anim = null;
+        try {
+            anim = ghost.animate(frames, { duration: 200, easing: 'cubic-bezier(0.215, 0.61, 0.355, 1)', fill: 'both' });
+        } catch (e) {
+            try { ghost.remove(); } catch (e2) { }
+            releaseFlyHidden();
+            return;
+        }
+
+        const live = { ghost: ghost, anim: anim, timer: null };
+        bridge.state.flyGhost = live;
+        const done = () => {
+            if (bridge.state.flyGhost !== live) return;
+            bridge.state.flyGhost = null;
+            if (live.timer) clearTimeout(live.timer);
+            try { ghost.remove(); } catch (e) { }
+            releaseFlyHidden();
+        };
+        anim.addEventListener('finish', done);
+        anim.addEventListener('cancel', done);
+        // Animations are throttled in a background tab, so never let the ghost
+        // or the hidden cell depend on a frame that may never arrive.
+        live.timer = setTimeout(done, 900);
+    }
+
+    // The grid wrap is display:none outside grid mode, so its scrollTop is
+    // always 0 on the way in and the window painted only the first rows. Past
+    // the first screenful that left no active cell to scroll to and no cell to
+    // fly into, so both the scroll and the animation were silently skipped.
+    // Scroll before the paint, not after it.
+function scrollGridToCurrent() {
+        if (!bridge.state.overlay) return;
+        const wrap = bridge.state.overlay.querySelector('.ms-grid-wrap');
+        const grid = bridge.state.overlay.querySelector('.ms-grid');
+        if (!wrap || !grid) return;
+        const sizer = ensureGridWindow(grid, wrap);
+        const m = gridMetrics(wrap, grid);
+        const rows = Math.ceil(bridge.state.items.length / m.cols);
+        // scrollTop is clamped to the current scrollHeight, so the sizer has to
+        // be tall before the scroll rather than when paintGridWindow gets to it.
+        sizer.style.height = Math.max(0, rows * m.rowH - m.gap) + 'px';
+        const row = Math.floor(Math.max(0, bridge.state.currentIndex) / m.cols);
+        const target = row * m.rowH - Math.max(0, (wrap.clientHeight - m.cell) / 2);
+        const limit = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
+        wrap.scrollTop = Math.max(0, Math.min(target, limit));
+    }
+
+    // Coming back out of the grid, renderCurrent is asynchronous: the media box
+    // does not exist, and is not sized, until the image decodes. Wait for it by
+    // frame with a deadline, so a slow or failed load just means no animation.
+function flyFromCell(fromRect, src) {
+        const overlay = bridge.state.overlay;
+        if (!overlay || prefersReducedMotion()) return;
+        const wrap = overlay.querySelector('.ms-media-wrap');
+        if (!wrap) return;
+        const token = bridge.state.renderToken;
+        const deadline = Date.now() + 700;
+        const tryStart = () => {
+            if (!bridge.state.overlay || bridge.state.gridMode) return;
+            if (token !== bridge.state.renderToken) return;
+            const media = wrap.querySelector('img.ms-media.ms-ready, video.ms-media.ms-ready');
+            // Prefer the media box: it is sized to the image's own aspect box,
+            // so a cover ghost filling it is undistorted. Auto-pan moves the
+            // image out of the box, and then the image's own rect is the truth.
+            const box = media ? media.closest('.ms-media-box') : null;
+            const target = box || media;
+            const toRect = target ? target.getBoundingClientRect() : null;
+            if (toRect && toRect.width > 2 && toRect.height > 2) {
+                // No hide here: the real media stays underneath and the ghost
+                // fades out over it, so there is never a blank frame.
+                flyGhost(fromRect, toRect, src, { fadeOut: true, fromRadius: 6, toRadius: 4 });
+                return;
+            }
+            if (Date.now() > deadline) return;
+            requestAnimationFrame(tryStart);
+        };
+        requestAnimationFrame(tryStart);
     }
 
 function setGridMode(on) {
@@ -926,6 +1090,8 @@ function setGridMode(on) {
 
         let flyRect = null;
         let flySrc = '';
+        let backRect = null;
+        let backSrc = '';
         if (enable) {
             disablePan();
             const mediaEl = bridge.state.overlay.querySelector('.ms-media-wrap img.ms-media.ms-ready, .ms-media-wrap video.ms-media');
@@ -941,6 +1107,22 @@ function setGridMode(on) {
                 const curEntry = bridge.state.items[bridge.state.currentIndex];
                 const curItem = curEntry ? (curEntry.item || curEntry) : null;
                 if (curItem) flySrc = curItem.thumbSrc || '';
+            }
+        } else {
+            // Measure before ms-grid-mode is flipped below: after that the grid
+            // is display:none and every rect reads zero. The grid is windowed
+            // and pooled, so the cell for the current item may simply not be
+            // painted (Escape after scrolling away) - that is a skip, not a
+            // failure, and the return just happens without a flight.
+            const grid = bridge.state.overlay.querySelector('.ms-grid');
+            const cell = grid ? grid.querySelector('[data-grid-index="' + bridge.state.currentIndex + '"]') : null;
+            const cellImg = cell ? cell.querySelector('img') : null;
+            if (cell && cellImg && (cellImg.currentSrc || cellImg.src)) {
+                const r = cell.getBoundingClientRect();
+                if (r.width > 2 && r.height > 2) {
+                    backRect = { left: r.left, top: r.top, width: r.width, height: r.height };
+                    backSrc = cellImg.currentSrc || cellImg.src;
+                }
             }
         }
 
@@ -959,15 +1141,25 @@ function setGridMode(on) {
                 wrap.innerHTML = '';
             }
             setTopbarLoading(false);
+            // Scroll first, then paint: that is what makes the active cell
+            // exist at all, and it drops the scrollIntoView that used to
+            // repaint - and so re-pool - the cell a frame after the flight
+            // had already started from it.
+            scrollGridToCurrent();
             renderGrid();
+            syncZoomSliderAvailability();
             const grid = bridge.state.overlay.querySelector('.ms-grid');
             const active = grid ? grid.querySelector('.ms-grid-cell.active') : null;
-            if (active) active.scrollIntoView({ block: 'center', behavior: 'auto' });
-            if (active && flyRect && flySrc) animateFlyToGrid(flyRect, flySrc, active);
+            if (active && flyRect && flySrc) {
+                flyGhost(flyRect, active.getBoundingClientRect(), flySrc, {
+                    hide: active, fromRadius: 4, toRadius: 6
+                });
+            }
         } else {
             bridge.state.cameFromGrid = true;
             renderThumbs();
             bridge.renderCurrent();
+            if (backRect && backSrc) flyFromCell(backRect, backSrc);
 
             if (bridge.state.tagsPanelWanted) bridge.applyTagsPanel(true);
         }
@@ -1074,6 +1266,30 @@ function renderGrid(options) {
         syncGridWindow();
     }
 
+    // ms-zoom-idle means "zoom does not apply to what is on the stage" - a
+    // video, an iframe, nothing loaded yet, grid mode. It does NOT mean "zoom
+    // mode is off": turning the Zoom button off leaves a still image on screen
+    // that the slider still drives, because the slider's own input handler
+    // re-enters pan mode. disablePan used to add the class unconditionally,
+    // which is why the slider vanished when Zoom was switched off.
+function syncZoomSliderAvailability() {
+        if (!bridge.state.overlay) return;
+        const sliderWrap = bridge.state.overlay.querySelector('.ms-zoom-slider-wrap');
+        const slider = bridge.state.overlay.querySelector('.ms-zoom-slider');
+        if (!sliderWrap || !slider) return;
+        const wrap = bridge.state.gridMode ? null : bridge.state.overlay.querySelector('.ms-media-wrap');
+        const img = wrap ? wrap.querySelector('img.ms-media.ms-ready') : null;
+        const usable = !!(img && img.naturalWidth && img.naturalHeight && wrap.clientWidth && wrap.clientHeight);
+        sliderWrap.classList.toggle('ms-zoom-idle', !usable);
+        sliderWrap.classList.toggle('ms-zoom-off', usable && !bridge.state.pan);
+        if (usable && !bridge.state.pan) {
+            // Also re-reads the value: zooming to 250% and then switching Zoom
+            // off left the slider showing 250% for an image back at fit.
+            const fitScale = containedImageScale(wrap, img);
+            configureZoomSlider(slider, fitScale, fitScale, isTallStripImage(img) ? 12 : 4);
+        }
+    }
+
 function disablePan() {
         if (bridge.state.pan && bridge.state.pan.cleanup) {
             try { bridge.state.pan.cleanup(); } catch (e) { }
@@ -1081,10 +1297,7 @@ function disablePan() {
         bridge.state.pan = null;
         syncVerticalFitMediaBox();
         updateButtons();
-        if (bridge.state.overlay) {
-            const sliderWrap = bridge.state.overlay.querySelector('.ms-zoom-slider-wrap');
-            if (sliderWrap) sliderWrap.classList.add('ms-zoom-idle');
-        }
+        syncZoomSliderAvailability();
     }
 
 function containedImageScale(wrap, img) {
@@ -1707,14 +1920,22 @@ function handleImageZoomClick(wrap, img, item, e) {
         }
 
         const rect = img.getBoundingClientRect();
-        if (!img.naturalWidth || !rect.width || rect.width >= img.naturalWidth) return;
+        if (!img.naturalWidth || !rect.width) return;
         const wasFill = !!(bridge.state.pan && bridge.state.pan.active);
         const px = (e.clientX - rect.left) / rect.width;
         const py = (e.clientY - rect.top) / rect.height;
         const wrapRect = wrap.getBoundingClientRect();
         const currentScale = rect.width / img.naturalWidth;
         const isTallStrip = isTallStripImage(img);
-        const nextScale = Math.min(1, currentScale * (isTallStrip ? 4 : 1.5));
+        // Click zoom used to stop at 100% of the source pixels, so on a large
+        // screen - where a photo already fits at close to 1:1 - a click moved
+        // almost nothing, and on an image smaller than the stage it did
+        // nothing at all. The slider has always gone further (see
+        // configureZoomSlider: fit x 4, or x 12 for a tall strip), so match it
+        // and let both controls reach the same place.
+        const maxScale = Math.max(1, containedImageScale(wrap, img) * (isTallStrip ? 12 : 4));
+        const nextScale = Math.min(maxScale, currentScale * (isTallStrip ? 4 : 1.5));
+        if (nextScale <= currentScale * 1.01) return;
         enablePanForImage(wrap, img, {
             zoom: true,
             scale: nextScale,
@@ -2519,6 +2740,10 @@ function paintGridWindow() {
 
 function fillGridCell(cell, entry, index) {
         resetMediaThumbEl(cell);
+        // Pooled node: a flight that hid it may still owe us its cleanup, and
+        // by then this cell can already be showing a different item.
+        cell.removeAttribute('data-ms-fly-hidden');
+        cell.style.removeProperty('visibility');
         const item = entry.item || entry;
         const hdSrc = bridge.getHdSrc(item);
         if (hdSrc) cell.setAttribute('data-hd-src', hdSrc);
@@ -2839,6 +3064,52 @@ function openInGalleryButtonHtml() {
             + '</svg>';
     }
 
+const OPEN_IN_GALLERY_REPLACED = /^(IMG|VIDEO|AUDIO|IFRAME|EMBED|OBJECT|CANVAS|INPUT|BR|HR)$/;
+
+    // Promoting a static host to relative would steal the containing block
+    // from any absolutely positioned descendant, so check before doing it.
+    // Bounded: this runs per injected button on pages with many posts.
+function hasOutOfFlowChild(el, depth) {
+        if (!el || depth <= 0) return false;
+        const kids = el.children || [];
+        for (let i = 0; i < kids.length && i < 24; i++) {
+            let position = '';
+            try { position = window.getComputedStyle(kids[i]).position; } catch (e) { }
+            if (position === 'absolute' || position === 'fixed') return true;
+            if (hasOutOfFlowChild(kids[i], depth - 1)) return true;
+        }
+        return false;
+    }
+
+    // Mount so the button cannot change the host's box. A block-ish host gets
+    // it as an out-of-flow child - the embed wrappers we target are already
+    // position: relative, so usually no positioning context is added at all.
+    // Inline hosts, and replaced elements that cannot hold children, keep it
+    // in the inline flow at text scale instead.
+function mountOpenInGalleryButton(host, btn) {
+        if (!host || !btn) return;
+        if (host.nodeType === 1 && !OPEN_IN_GALLERY_REPLACED.test(host.tagName)) {
+            let position = '';
+            let display = '';
+            try {
+                const cs = window.getComputedStyle(host);
+                position = cs.position;
+                display = cs.display;
+            } catch (e) { }
+            const blockish = display && display !== 'inline' && display !== 'contents';
+            const positioned = position && position !== 'static';
+            if (blockish && (positioned || !hasOutOfFlowChild(host, 3))) {
+                if (!positioned) host.classList.add('ms-open-in-gallery-host');
+                btn.classList.add('ms-open-in-gallery--pinned');
+                btn.style.setProperty('font-size', '11px', 'important');
+                btn.style.setProperty('height', '22px', 'important');
+                host.appendChild(btn);
+                return;
+            }
+        }
+        host.insertAdjacentElement('afterend', btn);
+    }
+
 function createOpenInGalleryButton(startNode, variant) {
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -2847,6 +3118,15 @@ function createOpenInGalleryButton(startNode, variant) {
         btn.setAttribute('aria-label', 'Open in Gallery');
         btn.innerHTML = openInGalleryButtonHtml();
         protectHostControl(btn,true);
+        // protectHostControl writes a font shorthand inline and !important, so
+        // it would pin a fixed pixel size and the button would grow the host
+        // line box again. A later longhand in the same inline block wins over
+        // the earlier shorthand, so re-assert the em size here.
+        btn.style.setProperty('font-size', '0.82em', 'important');
+        btn.style.setProperty('height', '1.3em', 'important');
+        btn.style.setProperty('min-height', '0', 'important');
+        btn.style.setProperty('border-radius', '999px', 'important');
+        btn.style.setProperty('pointer-events', 'auto', 'important');
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -3129,15 +3409,7 @@ function renderCurrent() {
                 if (bridge.autoPanEnabled && !item.msNoAutoPan && shouldAutoPan(wrap, img)) {
                     enablePanForImage(wrap, img);
                 }
-                if (!bridge.state.pan) {
-                    const sliderWrap = bridge.state.overlay.querySelector('.ms-zoom-slider-wrap');
-                    const slider = bridge.state.overlay.querySelector('.ms-zoom-slider');
-                    if (sliderWrap && slider) {
-                        sliderWrap.classList.remove('ms-zoom-idle');
-                        const fitScale = containedImageScale(wrap, img);
-                        configureZoomSlider(slider, fitScale, fitScale, isTallStripImage(img) ? 12 : 4);
-                    }
-                }
+                syncZoomSliderAvailability();
 
                 if (item.xUnplayable && item.watchUrl) {
                     const watch = document.createElement('a');
@@ -3544,10 +3816,17 @@ function paintPostActions(data) {
         }
     }
 function addSettingsGearButton() {
-        if (document.getElementById('ms-site-settings-btn')) return;
+        const cluster = ensureLauncherCluster();
+        const existingGear = document.getElementById('ms-site-settings-btn');
+        if (existingGear) {
+            // A rebuilt body can strand it outside the cluster; re-home rather
+            // than bail, or the seams and corners come out wrong.
+            if (existingGear.parentNode !== cluster) placeInCluster(cluster, existingGear, 'settings');
+            return;
+        }
         const gear = document.createElement('button');
         gear.id = 'ms-site-settings-btn';
-        gear.className = 'ms-site-settings-btn';
+        gear.className = 'ms-site-cluster-btn ms-site-settings-btn';
         gear.innerHTML = '<svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" fill="none"/><path fill="none" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
         gear.title = 'Gallery Settings';
         gear.addEventListener('click', (e) => {
@@ -3559,10 +3838,10 @@ function addSettingsGearButton() {
         gear.addEventListener('pointerdown', (e) => {
             e.stopPropagation();
         });
-        protectHostControl(gear,false);
-        for (const prop of ['height','min-height','max-height','width']) gear.style.setProperty(prop,'38px','important');
+        protectClusterButton(gear);
+        gear.style.setProperty('width','36px','important');
         gear.style.setProperty('padding','0','important');
-        document.body.appendChild(gear);
+        placeInCluster(cluster, gear, 'settings');
     }
 
 function closeFavoriteMenu() {
@@ -3670,5 +3949,5 @@ async function openFavoriteFolders(item, anchor) {
             setFavoriteMenuStatus(menu, error && error.message ? error.message : 'Could not load favorite folders.', 'error');
         }
     }
-return { createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, animateFlyToGrid, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
+return { mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
 }

@@ -1535,15 +1535,15 @@ export const OVERLAY_CSS = String.raw`
         }
         /* Hide the host page while the overlay is open. Adapters may use a
            lighter variant that still allows layout. */
-        body.ms-host-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
-        body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
+        body.ms-host-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster),
+        body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster) {
             visibility: hidden !important;
             pointer-events: none !important;
             contain: layout paint style;
             content-visibility: hidden;
         }
-        body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn),
-        body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-gallery-btn):not(#ms-site-settings-btn):not(#ms-site-redirect-btn) {
+        body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster),
+        body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster) {
             visibility: hidden !important;
             pointer-events: none !important;
         }
@@ -1614,7 +1614,7 @@ export const OVERLAY_CSS = String.raw`
             flex: 1;
             min-width: 0;
             font-size: 15px;
-            font-weight: 650;
+            font-weight: 600;
             color: var(--ms-text);
             letter-spacing: -0.01em;
             text-wrap: balance;
@@ -1643,14 +1643,13 @@ export const OVERLAY_CSS = String.raw`
         .ms-settings-close:hover {
             background: var(--ms-hover);
             color: var(--ms-text);
-            border-color: var(--ms-line);
         }
         .ms-settings-close svg {
             width: 14px;
             height: 14px;
         }
         .ms-settings-body {
-            padding: 14px 16px 8px;
+            padding: 0 16px 8px;
             overflow-y: auto;
             scrollbar-width: thin;
             scrollbar-color: var(--ms-line-strong) transparent;
@@ -1972,6 +1971,40 @@ export const OVERLAY_CSS = String.raw`
             align-items: center;
             height: 1em;
             line-height: 1;
+        }
+        /* Counter plus Grid, merged at the seam: one outer border, one 1px
+           division, square inner corners. The group owns the border so the
+           two halves cannot drift apart, and Grid can never be separated
+           from the counter by a button appearing or disappearing next to it. */
+        .ms-position-group {
+            display: inline-flex;
+            align-items: stretch;
+            flex-shrink: 0;
+            height: 32px;
+            box-sizing: border-box;
+            border: 1px solid var(--ms-hairline);
+            border-radius: 8px;
+            background: var(--ms-surface-2);
+            overflow: hidden;
+        }
+        .ms-position-group > .ms-position-control {
+            height: 100%;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
+            box-shadow: none;
+        }
+        /* The ring lives on the group: overflow: hidden would clip it if it
+           were drawn on the input's own box. */
+        .ms-position-group:focus-within {
+            border-color: var(--ms-accent-line);
+            box-shadow: 0 0 0 2px var(--ms-accent-tint);
+        }
+        .ms-gallery-overlay .ms-gallery-topbar .ms-position-group > .ms-btn {
+            height: 100%;
+            border: 0;
+            border-inline-start: 1px solid var(--ms-hairline);
+            border-radius: 0;
         }
         .ms-position-control:focus-within {
             border-color: var(--ms-accent-line);
@@ -3257,6 +3290,13 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-topbar.ms-icons-only .ms-btn-label { display: none; }
         .ms-gallery-topbar.ms-icons-only .ms-btn { padding: 0 8px; }
         .ms-gallery-topbar.ms-icons-only .ms-btn-icon { margin-right: 0; }
+        /* A pinned control is exempt from every compaction tier. Grid is a
+           primary mode switch rather than a setting, so it keeps its label
+           and its padding at any width - it is the one button in the bar that
+           must look the same wherever the window is. */
+        .ms-gallery-topbar.ms-icons-only .ms-btn-pinned .ms-btn-label { display: inline !important; }
+        .ms-gallery-topbar.ms-icons-only .ms-btn-pinned { padding: 0 10px; }
+        .ms-gallery-topbar.ms-icons-only .ms-btn-pinned .ms-btn-icon { margin-right: 6px; }
         /* The centre cluster has to give ground too: .ms-icon-btn is a fixed
            32px with padding:0 !important so the rules above can't touch it,
            and the zoom slider is a fixed 90px that never hid. Together those
@@ -3317,6 +3357,18 @@ export const OVERLAY_CSS = String.raw`
         .ms-zoom-slider-wrap.ms-zoom-idle {
             visibility: hidden;
             pointer-events: none;
+        }
+        /* Zoom mode is off but the current item is still zoomable. The slider
+           keeps its place and stays live - dragging it re-enters zoom on its
+           own - it just reads as inactive. Distinct from ms-zoom-idle, which
+           means zoom does not apply to this item at all. */
+        .ms-zoom-slider-wrap.ms-zoom-off {
+            opacity: 0.55;
+            transition: opacity 150ms var(--ms-ease);
+        }
+        .ms-zoom-slider-wrap.ms-zoom-off:hover,
+        .ms-zoom-slider-wrap.ms-zoom-off:focus-within {
+            opacity: 1;
         }
         .ms-zoom-value {
             display: inline-block;
@@ -3387,16 +3439,66 @@ export const OVERLAY_CSS = String.raw`
         .ms-zoom-slider:focus-visible {
             filter: drop-shadow(0 0 3px var(--ms-accent));
         }
-.ms-index-input{top:0!important;height:1em!important;display:inline-flex!important;align-items:center!important;}.ms-position-control>span{display:inline-flex;align-items:center;height:1em;line-height:1;}.ms-tags-overlay.active{z-index:20;}.ms-load-mark-layer{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:6;}.ms-load-mark{position:absolute;top:10px;width:14px;height:70px;display:flex;align-items:center;justify-content:center;color:var(--ms-accent);}.ms-load-mark::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:1px;background:var(--ms-accent);opacity:0.7;}.ms-load-mark svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;}.ms-settings-row.ms-settings-stack{flex-direction:column;align-items:stretch;gap:8px;}.ms-settings-textarea{width:100%;min-height:88px;resize:vertical;box-sizing:border-box;background:var(--ms-surface-3,#1b1d24);border:1px solid var(--ms-line,#333);border-radius:8px;color:var(--ms-text-2,#ddd);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:8px 10px;outline:none;}.ms-settings-textarea:focus{border-color:var(--ms-accent);}.ms-settings-hint{margin:0;font-size:11px;color:var(--ms-text-4,#888);}.ms-blacklist-pills{display:flex;flex-wrap:wrap;gap:6px;}.ms-blacklist-pill{border:1px solid var(--ms-line,#444);background:transparent;color:var(--ms-text-3,#ccc);border-radius:999px;padding:3px 9px;font-size:12px;cursor:pointer;}.ms-blacklist-pill[aria-pressed="true"]{background:hsla(0,72%,46%,0.18);border-color:hsla(0,72%,56%,0.55);color:#f2c0c0;}
+.ms-index-input{top:0!important;height:1em!important;display:inline-flex!important;align-items:center!important;}.ms-position-control>span{display:inline-flex;align-items:center;height:1em;line-height:1;}.ms-tags-overlay.active{z-index:20;}.ms-load-mark-layer{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:6;}.ms-load-mark{position:absolute;top:10px;width:14px;height:70px;display:flex;align-items:center;justify-content:center;color:var(--ms-accent);}.ms-load-mark::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:1px;background:var(--ms-accent);opacity:0.7;}.ms-load-mark svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;}.ms-settings-row.ms-settings-stack{flex-direction:column;align-items:stretch;gap:8px;}.ms-settings-textarea{width:100%;min-height:88px;resize:vertical;box-sizing:border-box;background:var(--ms-surface-3,#1b1d24);border:1px solid var(--ms-line,#333);border-radius:8px;color:var(--ms-text-2,#ddd);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:8px 10px;outline:none;}.ms-settings-textarea:focus{border-color:var(--ms-accent);}.ms-settings-hint{margin:0;font-size:11px;color:var(--ms-text-4,#888);}.ms-blacklist-pills{display:flex;flex-wrap:wrap;gap:6px;}.ms-blacklist-pill{border:0;background:var(--ms-control-rest);color:var(--ms-text-3);border-radius:8px;padding:4px 10px;font:500 12px/1.3 var(--ms-font-ui);cursor:pointer;transition:background-color 150ms var(--ms-ease),color 150ms var(--ms-ease);}.ms-blacklist-pill:hover{background:var(--ms-hover);color:var(--ms-text);}.ms-blacklist-pill[aria-pressed="true"]{background:var(--ms-accent-tint);color:var(--ms-accent);}
         .ms-info-source{display:flex;flex-direction:column;min-width:0;gap:2px;line-height:1.25}
         .ms-info-source>a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .ms-info-date{font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ms-text-3,#aaa)}
         .ms-tags-action-btn,.ms-tags-action-btn *{text-decoration:none!important}
-        .ms-settings-tabs{display:flex;gap:6px;padding:0 20px 12px;overflow-x:auto}
-        .ms-settings-tab{border:1px solid var(--ms-line);border-radius:8px;padding:8px 12px;background:transparent;color:var(--ms-text);font:600 12px/1.3 var(--ms-font-ui);cursor:pointer;white-space:nowrap;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out)}
-        .ms-settings-tab[aria-selected="true"]{background:var(--ms-accent-tint);border-color:var(--ms-accent-line);color:var(--ms-text);box-shadow:inset 0 -2px 0 var(--ms-accent)}
+        /* A tab row, not a row of pills. Route nav in this design is quiet text
+           with an active underline, and four outlined buttons floating between
+           the header hairline and the body read as four separate controls
+           rather than one switch. The seam the row sits on is the only border
+           in the region; the tabs themselves carry none. */
+        .ms-settings-tabs {
+            display: flex;
+            gap: 2px;
+            flex-shrink: 0;
+            padding: 4px 16px 0;
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--ms-hairline);
+            /* overflow-y has to be stated: left alone it computes to auto
+               next to overflow-x, and the active underline below then earns
+               the row a vertical scrollbar of its own. */
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-width: thin;
+            scrollbar-color: var(--ms-line-strong) transparent;
+        }
+        .ms-settings-tab {
+            position: relative;
+            flex-shrink: 0;
+            height: 36px;
+            padding: 0 12px;
+            border: 0;
+            border-radius: 8px 8px 0 0;
+            background: transparent;
+            color: var(--ms-text-3);
+            font: 500 13px/1 var(--ms-font-ui);
+            white-space: nowrap;
+            cursor: pointer;
+            transition: background-color 150ms var(--ms-ease), color 150ms var(--ms-ease);
+        }
+        .ms-settings-tab::after {
+            content: "";
+            position: absolute;
+            left: 8px;
+            right: 8px;
+            bottom: 0;
+            height: 2px;
+            border-radius: 1px 1px 0 0;
+            background: transparent;
+            transition: background-color 150ms var(--ms-ease);
+        }
+        .ms-settings-tab:hover { background: var(--ms-hover); color: var(--ms-text); }
+        .ms-settings-tab[aria-selected="true"] { color: var(--ms-accent); }
+        .ms-settings-tab[aria-selected="true"]::after { background: var(--ms-accent); }
+        .ms-settings-tab[aria-selected="true"]:hover { background: var(--ms-hover); }
+        /* The row is a scroll container, so an outward ring would be clipped. */
+        .ms-settings-tab:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: -2px; }
+        /* Switching from a long page to a short one must not resize the dialog. */
+        .ms-settings-page { min-height: 240px; }
         .ms-settings-page[hidden]{display:none!important}
-        .ms-r34-settings-modal button:not(:disabled):not([aria-selected="true"]):not(.is-success):not(.is-error):not(.ms-r34-save):not(:active):hover{background:var(--ms-hover)!important;border-color:var(--ms-line)!important;color:var(--ms-text)!important}
+        .ms-r34-settings-modal button:not(:disabled):not([aria-selected="true"]):not(.is-success):not(.is-error):not(.ms-r34-save):not(:active):hover{background:var(--ms-hover)!important;color:var(--ms-text)!important}
         .ms-r34-settings-modal button:focus-visible{outline:2px solid var(--ms-accent);outline-offset:2px}
         .ms-r34-settings-modal button:disabled{opacity:.45;cursor:default}
         .ms-settings-row>button{padding:8px 12px;min-height:34px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);font:600 12px/1.25 var(--ms-font-ui);cursor:pointer;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out),opacity 140ms var(--ms-ease-out)}
@@ -3583,7 +3685,98 @@ export const OVERLAY_CSS = String.raw`
                 transition-duration: 0.01ms !important;
             }
         }
-    `;
+    
+        /* ------------------------------------------------------------------
+           The host-page launcher cluster.
+
+           These used to be three independent position:fixed boxes at
+           right: 20px / 118px / 166px, so the gaps between them were not
+           declared anywhere - they were what was left after subtracting two
+           content-dependent widths from three hardcoded offsets. That made
+           Gallery-to-settings about 26px and content-dependent, while
+           settings-to-auxiliary was exactly 10px, which is the uneven spacing
+           the auxiliary button appeared to cause.
+
+           One flex container fixes both complaints at once: spacing is now
+           structural (a shared 1px seam drawn by the adjacent-sibling rule),
+           so it is identical with and without the auxiliary button, and the
+           settings button cannot drift away from Gallery again. Outer corners
+           are rounded by the container, inner corners are square, because
+           overflow: hidden clips the children to the container's radius.
+           ------------------------------------------------------------------ */
+        #ms-site-cluster {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            z-index: 9999;
+            display: inline-flex;
+            align-items: stretch;
+            isolation: isolate;
+            box-sizing: border-box;
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            border-radius: 10px;
+            background: #191b20;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+        }
+        #ms-site-cluster:empty { display: none; }
+        #ms-site-cluster > .ms-site-cluster-btn {
+            appearance: none !important;
+            box-sizing: border-box !important;
+            height: 36px !important;
+            min-height: 36px !important;
+            max-height: 36px !important;
+            margin: 0 !important;
+            padding: 0 14px !important;
+            position: static !important;
+            inset: auto !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 6px !important;
+            flex: 0 0 auto !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            color: #e7e8eb !important;
+            font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif !important;
+            letter-spacing: 0.5px;
+            text-transform: none !important;
+            text-shadow: none !important;
+            text-decoration: none !important;
+            white-space: nowrap !important;
+            cursor: pointer !important;
+            opacity: 1 !important;
+            filter: none !important;
+            backdrop-filter: none !important;
+            box-shadow: none !important;
+            transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* The seam. Written as an adjacent-sibling rule so N buttons always
+           produce N-1 identical divisions: removing a button (cum.st drops
+           Gallery) re-seams and re-rounds with no JS at all. */
+        #ms-site-cluster > .ms-site-cluster-btn + .ms-site-cluster-btn {
+            border-inline-start: 1px solid rgba(255, 255, 255, 0.24) !important;
+        }
+        #ms-site-cluster > .ms-site-cluster-btn:hover { background: rgba(255, 255, 255, 0.08) !important; }
+        #ms-site-cluster > .ms-site-cluster-btn:active { background: rgba(255, 255, 255, 0.12) !important; scale: 0.97; }
+        /* overflow: hidden on the container would clip an outward ring. */
+        #ms-site-cluster > .ms-site-cluster-btn:focus-visible {
+            outline: 2px solid hsl(223, 88%, 57%) !important;
+            outline-offset: -2px !important;
+        }
+        #ms-site-cluster > #ms-site-settings-btn { width: 36px !important; padding: 0 !important; }
+        #ms-site-cluster > #ms-site-settings-btn svg { display: block; width: 18px; height: 18px; }
+        #ms-site-cluster > #ms-site-settings-btn svg path,
+        #ms-site-cluster > #ms-site-settings-btn svg circle {
+            fill: none !important;
+            stroke: currentColor !important;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #ms-site-cluster > .ms-site-cluster-btn { transition-duration: 0.01ms !important; }
+            #ms-site-cluster > .ms-site-cluster-btn:active { scale: 1; }
+        }
+`;
 
 export function installOverlayStyles(addStyle) {
     if (typeof addStyle !== 'function') throw new TypeError('addStyle must be a function');
@@ -3632,45 +3825,85 @@ export const LAUNCHER_CSS = String.raw`
             background: var(--ms-surface-3);
             border-color: var(--ms-line-strong);
         }
+        /* Layout-neutral by construction. The old version was a fixed 28px
+           inline-flex, which as an atomic inline forces the line box to
+           contain its whole margin box - so on a host with a 21px line it
+           grew every line of prose it appeared in, and vertical-align: middle
+           hung it below the descent and made that worse. It is now sized in
+           em from the text beside it (1.3 x 0.82em = 1.07em against a typical
+           1.4 line-height), so it always fits inside the line it joins. */
         .ms-open-in-gallery {
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            gap: 6px !important;
-            height: 28px !important;
-            min-height: 28px !important;
+            gap: 0.4em !important;
             box-sizing: border-box !important;
-            padding: 0 10px !important;
-            margin-inline-start: 12px;
-            vertical-align: middle;
+            height: 1.3em !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            padding: 0 0.45em !important;
+            margin: 0 0 0 0.4em !important;
+            /* Sits inside the ascent/descent band rather than centred on the
+               x-height, which is what used to push it past the descent. */
+            vertical-align: -0.25em !important;
             background: var(--ms-surface-1) !important;
             color: var(--ms-text) !important;
             border: 1px solid var(--ms-line) !important;
-            border-radius: 8px !important;
+            border-radius: 999px !important;
             cursor: pointer !important;
             font-family: var(--ms-font-ui) !important;
-            font-size: 11px;
+            font-size: 0.82em;
             font-weight: 600;
-            letter-spacing: 0.5px;
+            letter-spacing: 0.02em;
             line-height: 1 !important;
-            text-transform: uppercase;
+            text-transform: none;
+            white-space: nowrap !important;
         }
         .ms-open-in-gallery svg {
-            width: 12px;
-            height: 12px;
-            flex-shrink: 0;
+            width: 1em;
+            height: 1em;
+            flex: 0 0 auto;
+            display: block;
+        }
+        /* In flow it is icon-only. The label was around 90px of inline width,
+           and that width is what wrapped prose and broke the two-up embed row
+           on simpcity - height was only half the problem. */
+        .ms-open-in-gallery:not(.ms-open-in-gallery--pinned):not(.ms-open-in-gallery--unfurl) {
+            padding: 0 !important;
+            width: 1.3em !important;
+            gap: 0 !important;
+        }
+        .ms-open-in-gallery:not(.ms-open-in-gallery--pinned):not(.ms-open-in-gallery--unfurl) .ms-btn-label {
+            display: none !important;
+        }
+        /* Out of flow, for block hosts. Takes no part in the host's layout at
+           all - including inside a flex or grid parent, where an absolutely
+           positioned child is not an item and so adds no track. */
+        .ms-open-in-gallery--pinned {
+            position: absolute !important;
+            top: auto !important;
+            left: auto !important;
+            right: 8px !important;
+            bottom: 8px !important;
+            margin: 0 !important;
+            vertical-align: baseline !important;
+            font-size: 11px !important;
+            height: 22px !important;
+            padding: 0 8px !important;
+            z-index: 4 !important;
+            box-shadow: var(--ms-shadow-md) !important;
         }
         .ms-open-in-gallery--embed {
             margin-inline-start: 0;
-            margin-block-start: 8px;
+            margin-block-start: 0;
         }
         .ms-open-in-gallery--unfurl {
-            margin-inline-start: 8px;
+            margin-inline-start: 0.4em;
             margin-block-start: 0;
-            height: 24px !important;
-            min-height: 24px !important;
-            padding: 0 8px;
-            font-size: 10px;
+            height: 1.5em !important;
+            min-height: 0 !important;
+            padding: 0 0.5em;
+            font-size: 0.78em;
             position: relative !important;
             z-index: 4 !important;
             pointer-events: auto !important;
@@ -3684,10 +3917,13 @@ export const LAUNCHER_CSS = String.raw`
         .ms-open-in-gallery:hover {
             background: var(--ms-surface-3) !important;
             color: var(--ms-text) !important;
-            border-color: var(--ms-line-strong) !important;
+            border-color: var(--ms-line) !important;
         }
         .ms-open-in-gallery:active {
-            transform: scale(0.97);
+            scale: 0.97;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .ms-open-in-gallery:active { scale: 1; }
         }
         .ms-open-in-gallery:focus-visible {
             outline: 2px solid var(--ms-accent);
@@ -3756,5 +3992,96 @@ export const LAUNCHER_CSS = String.raw`
             background: var(--ms-surface-3);
             border-color: var(--ms-line-strong);
         }
-    `;
+    
+        /* ------------------------------------------------------------------
+           The host-page launcher cluster.
+
+           These used to be three independent position:fixed boxes at
+           right: 20px / 118px / 166px, so the gaps between them were not
+           declared anywhere - they were what was left after subtracting two
+           content-dependent widths from three hardcoded offsets. That made
+           Gallery-to-settings about 26px and content-dependent, while
+           settings-to-auxiliary was exactly 10px, which is the uneven spacing
+           the auxiliary button appeared to cause.
+
+           One flex container fixes both complaints at once: spacing is now
+           structural (a shared 1px seam drawn by the adjacent-sibling rule),
+           so it is identical with and without the auxiliary button, and the
+           settings button cannot drift away from Gallery again. Outer corners
+           are rounded by the container, inner corners are square, because
+           overflow: hidden clips the children to the container's radius.
+           ------------------------------------------------------------------ */
+        #ms-site-cluster {
+            position: fixed;
+            top: 70px;
+            right: 20px;
+            z-index: 9999;
+            display: inline-flex;
+            align-items: stretch;
+            isolation: isolate;
+            box-sizing: border-box;
+            border: 1px solid rgba(255, 255, 255, 0.24);
+            border-radius: 10px;
+            background: #191b20;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+            overflow: hidden;
+        }
+        #ms-site-cluster:empty { display: none; }
+        #ms-site-cluster > .ms-site-cluster-btn {
+            appearance: none !important;
+            box-sizing: border-box !important;
+            height: 36px !important;
+            min-height: 36px !important;
+            max-height: 36px !important;
+            margin: 0 !important;
+            padding: 0 14px !important;
+            position: static !important;
+            inset: auto !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 6px !important;
+            flex: 0 0 auto !important;
+            border: 0 !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            color: #e7e8eb !important;
+            font: 600 12px/1 system-ui, -apple-system, "Segoe UI", sans-serif !important;
+            letter-spacing: 0.5px;
+            text-transform: none !important;
+            text-shadow: none !important;
+            text-decoration: none !important;
+            white-space: nowrap !important;
+            cursor: pointer !important;
+            opacity: 1 !important;
+            filter: none !important;
+            backdrop-filter: none !important;
+            box-shadow: none !important;
+            transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        /* The seam. Written as an adjacent-sibling rule so N buttons always
+           produce N-1 identical divisions: removing a button (cum.st drops
+           Gallery) re-seams and re-rounds with no JS at all. */
+        #ms-site-cluster > .ms-site-cluster-btn + .ms-site-cluster-btn {
+            border-inline-start: 1px solid rgba(255, 255, 255, 0.24) !important;
+        }
+        #ms-site-cluster > .ms-site-cluster-btn:hover { background: rgba(255, 255, 255, 0.08) !important; }
+        #ms-site-cluster > .ms-site-cluster-btn:active { background: rgba(255, 255, 255, 0.12) !important; scale: 0.97; }
+        /* overflow: hidden on the container would clip an outward ring. */
+        #ms-site-cluster > .ms-site-cluster-btn:focus-visible {
+            outline: 2px solid hsl(223, 88%, 57%) !important;
+            outline-offset: -2px !important;
+        }
+        #ms-site-cluster > #ms-site-settings-btn { width: 36px !important; padding: 0 !important; }
+        #ms-site-cluster > #ms-site-settings-btn svg { display: block; width: 18px; height: 18px; }
+        #ms-site-cluster > #ms-site-settings-btn svg path,
+        #ms-site-cluster > #ms-site-settings-btn svg circle {
+            fill: none !important;
+            stroke: currentColor !important;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #ms-site-cluster > .ms-site-cluster-btn { transition-duration: 0.01ms !important; }
+            #ms-site-cluster > .ms-site-cluster-btn:active { scale: 1; }
+        }
+`;
 export function installLauncherStyles(addStyle) { return addStyle(LAUNCHER_CSS); }

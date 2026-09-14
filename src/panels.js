@@ -255,6 +255,12 @@ export function createSettingsPanel(options) {
     host.style.cssText = 'all:initial!important;position:fixed!important;inset:0!important;z-index:2147483647!important;display:block!important;visibility:visible!important;pointer-events:auto!important;';
     const shadow = host.attachShadow({mode:'open'});
     const sheet = doc.createElement('style');
+    // Same reason as the gallery overlay's sheet (see view.js): Dark Reader
+    // rewrites stylesheets inside open shadow roots and turns our white-alpha
+    // hairlines dark, and its style manager skips any sheet carrying this
+    // class. Shadow sheets only - it removes .darkreader nodes from the light
+    // DOM when it is switched off, and does not search shadow roots.
+    sheet.className = 'darkreader';
     sheet.textContent = OVERLAY_CSS;
     shadow.append(sheet);
     const overlay = panelElement(doc, 'div', 'ms-r34-settings-overlay');
@@ -271,8 +277,11 @@ export function createSettingsPanel(options) {
     tabs.setAttribute('aria-label', 'Settings category');
     const names = [...new Set(options.sections.map(section => section.tab || 'General'))];
     const groups = new Map();
+    // The tab key is the caller's string, but a bare hostname is a poor label;
+    // www. adds nothing the user needs to read.
+    const tabLabel = (name) => String(name).replace(/^www\./i, '');
     names.forEach((name, index) => {
-        const tab = panelElement(doc, 'button', 'ms-settings-tab', name);
+        const tab = panelElement(doc, 'button', 'ms-settings-tab', tabLabel(name));
         tab.type = 'button'; tab.setAttribute('role', 'tab');
         tab.id = 'ms-settings-tab-' + index;
         tab.setAttribute('aria-controls', 'ms-settings-page-' + index);
