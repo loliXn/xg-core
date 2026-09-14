@@ -1535,15 +1535,15 @@ export const OVERLAY_CSS = String.raw`
         }
         /* Hide the host page while the overlay is open. Adapters may use a
            lighter variant that still allows layout. */
-        body.ms-host-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster),
-        body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster) {
+        body.ms-host-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster):not([data-ms-fly-ghost]),
+        body.ms-reddit-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster):not([data-ms-fly-ghost]) {
             visibility: hidden !important;
             pointer-events: none !important;
             contain: layout paint style;
             content-visibility: hidden;
         }
-        body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster),
-        body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster) {
+        body.ms-host-isolation-layout > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster):not([data-ms-fly-ghost]),
+        body.ms-bdsmlr-isolation > :not(.ms-gallery-overlay):not(.ms-gallery-root):not(#ms-settings-root):not(#ms-site-cluster):not([data-ms-fly-ghost]) {
             visibility: hidden !important;
             pointer-events: none !important;
         }

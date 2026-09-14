@@ -997,6 +997,31 @@ function cancelFlyGhost() {
         releaseFlyHidden();
     }
 
+    // What the ghost shows. A URL is not good enough: grid thumbnails are blob
+    // URLs that get revoked as soon as the cell has loaded them, so a ghost
+    // built from the cell's currentSrc failed to load and flew an empty box -
+    // the flight ran, it just had nothing in it. The element in hand is already
+    // decoded, so copy its pixels into a canvas instead: that cannot fail to
+    // load, and it is on screen on the very first frame. Capped in size, since
+    // the viewer's image can be many thousands of pixels wide.
+function snapshotGhostSource(el) {
+        if (!el) return null;
+        try {
+            const w = el.tagName === 'VIDEO' ? el.videoWidth : el.naturalWidth;
+            const h = el.tagName === 'VIDEO' ? el.videoHeight : el.naturalHeight;
+            if (!w || !h) return null;
+            if (el.tagName === 'IMG' && !el.complete) return null;
+            const scale = Math.min(1, 1024 / Math.max(w, h));
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.max(1, Math.round(w * scale));
+            canvas.height = Math.max(1, Math.round(h * scale));
+            canvas.getContext('2d').drawImage(el, 0, 0, canvas.width, canvas.height);
+            return canvas;
+        } catch (e) {
+            return null;
+        }
+    }
+
     // A FLIP between two on-screen rectangles. Animating the box itself rather
     // than a transform keeps an object-fit: cover ghost honest on every frame:
     // scaling one bitmap between a 3:2 stage and a 1:1 cell squashed it for the
@@ -1010,11 +1035,19 @@ function flyGhost(fromRect, toRect, src, options) {
         cancelFlyGhost();
         const fromRadius = typeof opts.fromRadius === 'number' ? opts.fromRadius : 6;
         const toRadius = typeof opts.toRadius === 'number' ? opts.toRadius : 4;
-        const ghost = document.createElement('img');
-        ghost.src = src;
+        let ghost;
+        if (src && src.tagName === 'CANVAS') {
+            ghost = src;
+        } else {
+            ghost = document.createElement('img');
+            ghost.src = String(src);
+        }
         ghost.setAttribute('aria-hidden', 'true');
+        // Marked so the host-isolation rules, which hide every other child of
+        // body while the gallery is open, leave the ghost visible.
+        ghost.setAttribute('data-ms-fly-ghost', '1');
         ghost.style.cssText = 'position:fixed; z-index:2147483647; pointer-events:none; margin:0;'
-            + ' object-fit:cover; background:#000;'
+            + ' object-fit:cover; visibility:visible;'
             + ' will-change:left, top, width, height, opacity;'
             + ' left:' + fromRect.left + 'px; top:' + fromRect.top + 'px;'
             + ' width:' + fromRect.width + 'px; height:' + fromRect.height + 'px;'
@@ -1136,8 +1169,10 @@ function setGridMode(on) {
                 const r = mediaEl.getBoundingClientRect();
                 if (r.width > 2 && r.height > 2) {
                     flyRect = { left: r.left, top: r.top, width: r.width, height: r.height };
-                    if (mediaEl.tagName === 'IMG') flySrc = mediaEl.currentSrc || mediaEl.src || '';
-                    else flySrc = mediaEl.getAttribute('poster') || '';
+                    // Snapshot now: the stage is emptied below, and a URL
+                    // would still have to decode before the ghost showed it.
+                    flySrc = snapshotGhostSource(mediaEl)
+                        || (mediaEl.tagName === 'IMG' ? (mediaEl.currentSrc || mediaEl.src || '') : (mediaEl.getAttribute('poster') || ''));
                 }
             }
             if (flyRect && !flySrc) {
@@ -1153,17 +1188,18 @@ function setGridMode(on) {
             // failure, and the return just happens without a flight.
             const grid = bridge.state.overlay.querySelector('.ms-grid');
             const cell = grid ? grid.querySelector('[data-grid-index="' + bridge.state.currentIndex + '"]') : null;
-            const cellImg = cell ? cell.querySelector('img') : null;
-            if (cell && cellImg && (cellImg.currentSrc || cellImg.src)) {
+            const cellImg = cell ? cell.querySelector('img, video') : null;
+            if (cell && cellImg) {
                 const r = cell.getBoundingClientRect();
                 if (r.width > 2 && r.height > 2) {
                     backRect = { left: r.left, top: r.top, width: r.width, height: r.height };
-                    backSrc = cellImg.currentSrc || cellImg.src;
+                    backSrc = snapshotGhostSource(cellImg);
                     // The cell is square and covers, so its own rect says
                     // nothing about the image's shape - the decoded thumbnail
                     // does.
-                    backAspect = (cellImg.naturalWidth && cellImg.naturalHeight)
-                        ? cellImg.naturalWidth / cellImg.naturalHeight : 0;
+                    const nw = cellImg.naturalWidth || cellImg.videoWidth || 0;
+                    const nh = cellImg.naturalHeight || cellImg.videoHeight || 0;
+                    backAspect = (nw && nh) ? nw / nh : 0;
                 }
             }
         }
@@ -3991,5 +4027,5 @@ async function openFavoriteFolders(item, anchor) {
             setFavoriteMenuStatus(menu, error && error.message ? error.message : 'Could not load favorite folders.', 'error');
         }
     }
-return { paintClusterSeams, mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
+return { snapshotGhostSource, paintClusterSeams, mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
 }
