@@ -3212,6 +3212,39 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-center > * {
             pointer-events: auto;
         }
+        /* Viewer-only controls keep their slot in grid mode and fade. Hiding
+           them with display re-centred the centre cluster and moved the
+           counter. Visibility is delayed on the way out so the fade can run,
+           and immediate on the way back in. */
+        .ms-gallery-overlay .ms-gallery-topbar .ms-mode-viewer {
+            transition: color 150ms var(--ms-ease), background-color 150ms var(--ms-ease),
+                opacity 150ms var(--ms-ease), visibility 0s linear 0s;
+        }
+        .ms-gallery-overlay.ms-grid-mode .ms-gallery-topbar .ms-mode-viewer {
+            opacity: 0 !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            transition: color 150ms var(--ms-ease), background-color 150ms var(--ms-ease),
+                opacity 150ms var(--ms-ease), visibility 0s linear 150ms;
+        }
+        /* Grid and Viewer share one box: both words are laid out at zero
+           height, so the wider one sizes the label and a mode switch never
+           changes the group's width. The empty alternative text keeps them
+           out of the accessible name; the first declaration is the fallback. */
+        .ms-gallery-overlay .ms-grid-btn .ms-btn-label {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .ms-gallery-overlay .ms-grid-btn .ms-btn-label::before,
+        .ms-gallery-overlay .ms-grid-btn .ms-btn-label::after {
+            display: block;
+            height: 0;
+            overflow: hidden;
+            visibility: hidden;
+        }
+        .ms-gallery-overlay .ms-grid-btn .ms-btn-label::before { content: "Grid"; content: "Grid" / ""; }
+        .ms-gallery-overlay .ms-grid-btn .ms-btn-label::after { content: "Viewer"; content: "Viewer" / ""; }
         .ms-icon-btn {
             display: inline-flex !important;
             align-items: center;
@@ -3321,7 +3354,7 @@ export const OVERLAY_CSS = String.raw`
            primary mode switch rather than a setting, so it keeps its label
            and its padding at any width - it is the one button in the bar that
            must look the same wherever the window is. */
-        .ms-gallery-topbar.ms-icons-only .ms-btn-pinned .ms-btn-label { display: inline !important; }
+        .ms-gallery-topbar.ms-icons-only .ms-btn-pinned .ms-btn-label { display: inline-flex !important; }
         .ms-gallery-topbar.ms-icons-only .ms-btn-pinned { padding: 0 10px; }
         .ms-gallery-topbar.ms-icons-only .ms-btn-pinned .ms-btn-icon { margin-right: 6px; }
         /* The centre cluster has to give ground too: .ms-icon-btn is a fixed

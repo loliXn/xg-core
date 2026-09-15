@@ -796,12 +796,10 @@ function updateButtons() {
         }
         if (triggerFit) {
             setBtnLabel(triggerFit, bridge.fitVertical ? 'Fit: Vert' : 'Fit: Std');
-            triggerFit.style.display = bridge.state.gridMode ? 'none' : '';
         }
         if (triggerThumbs) {
             const hidden = bridge.state.overlay.classList.contains('ms-thumbs-hidden');
             triggerThumbs.classList.toggle('active', !hidden);
-            triggerThumbs.style.display = bridge.state.gridMode ? 'none' : '';
         }
         const triggerView = bridge.state.overlay.querySelector('[data-act="view-toggle"]');
         if (triggerView) {
@@ -811,24 +809,21 @@ function updateButtons() {
         if (triggerPan) {
             const panActive = !!(bridge.state.pan && bridge.state.pan.active);
             triggerPan.classList.toggle('active', panActive);
-            triggerPan.style.display = bridge.state.gridMode ? 'none' : '';
         }
         const triggerFullscreen = bridge.state.overlay.querySelector('[data-act="fullscreen-toggle"]');
         if (triggerFullscreen) {
             triggerFullscreen.classList.toggle('active', !!bridge.state.stageFullscreen);
-            triggerFullscreen.style.display = bridge.state.gridMode ? 'none' : '';
         }
 
-        if (bridge.state.gridMode) {
-            const loopBtn = bridge.state.overlay.querySelector('[data-act="loop-toggle"]');
-            if (loopBtn) loopBtn.style.display = 'none';
-            const favBtn = bridge.state.overlay.querySelector('[data-act="fav-toggle"]');
-            if (favBtn) favBtn.style.display = 'none';
-            const tagsBtn = bridge.state.overlay.querySelector('[data-act="show-tags"]');
-            if (tagsBtn) tagsBtn.style.display = 'none';
-            updateHdButton('hidden');
-            toggleTagsPanel(false, true);
-        }
+        // Viewer-only controls keep their slots in grid mode and fade out, via
+        // .ms-grid-mode in CSS. Hiding them with display used to re-centre the
+        // centre column and move the counter, and often flipped the compaction
+        // tier as well - relabelling every button at once. display stays the
+        // tool for "this item or site does not have it", which is per item,
+        // not per mode. inert covers the fade and takes them out of tab order.
+        bridge.state.overlay.querySelectorAll('.ms-gallery-topbar .ms-mode-viewer')
+            .forEach((el) => { el.inert = !!bridge.state.gridMode; });
+        if (bridge.state.gridMode) toggleTagsPanel(false, true);
         updateDropdownActiveStates();
         updateTopbarCompact();
     }
