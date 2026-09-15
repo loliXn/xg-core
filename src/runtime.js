@@ -2310,7 +2310,12 @@ function thumbPreviewRevision(entry) {
             ? source.length + ':' + source.slice(0, 96) + ':' + source.slice(-48)
             : source;
         return token + '|' + String(item.type || '') + '|' + String(item.mediaMime || item.mimeType || '')
-            + '|' + Number(!!item.isGif) + '|' + Number(!!item.isVideo) + '|' + String(item.thumbnailFormat || '');
+            + '|' + Number(!!item.isGif) + '|' + Number(!!item.isVideo)
+            // Only an animated result changes what the cell should show (a frozen
+            // frame). Learning that a thumbnail is static used to bump the
+            // revision too, so the next repaint rebuilt a cell that was already
+            // showing the right picture - with a new, spinning image.
+            + '|' + (item.thumbnailAnimated ? String(item.thumbnailFormat || '') : '');
     }
 
 function takeThumbVisual(el) {
