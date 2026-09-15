@@ -79,17 +79,21 @@ export function renderPostPanel(options) {
     const body = panelElement(doc, 'div', 'ms-post-body');
     content.append(panel);
     panel.append(body);
+    // One link covers avatar and name, so both react together, both open the
+    // profile, and it is a single tab stop. A user without a profile URL gets
+    // no link at all and does not react.
     const user = (data, small = false) => {
         const row = panelElement(doc, small ? 'span' : 'div', 'ms-info-user' + (small ? ' ms-info-user-sm' : ''));
+        const target = data.profileUrl ? panelElement(doc, 'a', 'ms-info-user-link') : row;
+        if (data.profileUrl) { target.href = data.profileUrl; row.append(target); }
         if (data.avatarUrl) {
             const avatar = panelElement(doc, 'img', 'ms-info-desc-avatar');
             avatar.src = data.avatarUrl;
+            avatar.alt = '';
             avatar.referrerPolicy = 'no-referrer';
-            row.append(avatar);
+            target.append(avatar);
         }
-        const name = panelElement(doc, data.profileUrl ? 'a' : 'span', 'ms-info-desc-username', data.username || data.name || '\u00a0');
-        if (data.profileUrl) name.href = data.profileUrl;
-        row.append(name);
+        target.append(panelElement(doc, 'span', 'ms-info-desc-username', data.username || data.name || '\u00a0'));
         panelLinks(row);
         return row;
     };
@@ -234,6 +238,13 @@ export function renderPostPanel(options) {
         body.append(skeleton);
     } else if (!body.childNodes.length) {
         body.append(panelElement(doc, 'div', 'ms-info-empty', 'No description or tags available.'));
+    }
+    // Resolution and size of what is on screen. Filled in by the runtime once the
+    // media has decoded; the row keeps its height while empty so nothing moves.
+    if (model.mediaMeta) {
+        const meta = panelElement(doc, 'div', 'ms-info-meta ms-post-media-meta');
+        meta.append(panelElement(doc, 'span', 'ms-info-dims'), panelElement(doc, 'span', 'ms-info-bytes'));
+        body.append(meta);
     }
     // A different post, or the same post's details arriving: settle the body in.
     // The header and footer stay put so nothing around the text jumps.

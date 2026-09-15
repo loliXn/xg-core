@@ -166,12 +166,14 @@ function revealHost() {
 function showPostPanel(model, item) {
     const panel = bridge.state.overlay && bridge.state.overlay.querySelector('.ms-tags-overlay');
     if (!panel) return;
-    panel.querySelector('.ms-tags-header h3').textContent = model.title || 'Post';
+    panel.querySelector('.ms-tags-header h3').textContent = model.title || 'Info';
     const content = panel.querySelector('.ms-tags-content');
     const itemKey = String((bridge.mediaKey && bridge.mediaKey(item)) || item?.src || '');
     const preserveState = !!itemKey && content.dataset.msPostKey === itemKey;
-    renderPostPanel({content,model,preserveState,captionControls:target => appendCaptionModeControls(target,item)});
+    const mediaMeta = !!item && (item.type === 'img' || item.type === 'video');
+    renderPostPanel({content,model:{...model,mediaMeta},preserveState,captionControls:target => appendCaptionModeControls(target,item)});
     content.dataset.msPostKey = itemKey;
+    paintInfoMeta(item);
     updateMediaCaptionOverlay(item);
 }
 function setInfoPanelVisible(show) {
@@ -314,7 +316,7 @@ function ensureOverlay() {
             ],
             fontFamily: bridge.folderFavorites ? '"Space Grotesk", ui-sans-serif, system-ui, sans-serif' : '',
             showInfo: bridge.categorizedTags || bridge.reservedPostHeader || bridge.captionFeed || bridge.titleCard,
-            infoLabel: bridge.captionFeed ? 'Description' : (bridge.reservedPostHeader || bridge.titleCard ? 'Info' : 'Tags')
+            infoLabel: 'Info'
         });
 
         if (coreApi && typeof coreApi.bindFilterBar === 'function') {
@@ -2933,6 +2935,81 @@ function updateSingleThumb(index, entry) {
         fillThumbButton(btn, entry, index, thumbsGroupCounts());
     }
 
+const mediaByteSizes = new Map();
+let mediaByteProbeTimer = 0;
+
+function formatByteSize(bytes) {
+        let value = Number(bytes);
+        if (!(value > 0)) return '';
+        const units = ['B', 'KB', 'MB', 'GB'];
+        let unit = 0;
+        while (value >= 1024 && unit < units.length - 1) { value /= 1024; unit++; }
+        return (unit === 0 || value >= 100 ? Math.round(value) : value.toFixed(1)) + ' ' + units[unit];
+    }
+
+function isCurrentItem(item) {
+        const entry = bridge.state.items[bridge.state.currentIndex];
+        return !!entry && (entry.item || entry) === item;
+    }
+
+    // Date, resolution and size share one line in the topbar and a row in the
+    // Info panel. Painted from values cached on the item, so a revisited item
+    // shows them at once and a new one fills in when its media decodes - into
+    // space that is already reserved.
+function paintInfoMeta(item) {
+        const overlay = bridge.state.overlay;
+        if (!overlay || !item || !isCurrentItem(item)) return;
+        const text = {
+            'ms-info-date': (bridge.mediaPresentation(item) || {}).date || '',
+            'ms-info-dims': item._msNaturalWidth && item._msNaturalHeight ? item._msNaturalWidth + '\u00d7' + item._msNaturalHeight : '',
+            'ms-info-bytes': formatByteSize(Number(item.bytes) > 0 ? item.bytes : item._msBytes)
+        };
+        overlay.querySelectorAll('.ms-info-date, .ms-info-dims, .ms-info-bytes').forEach((el) => {
+            const value = text[el.classList[0]] || '';
+            if (el.textContent !== value) el.textContent = value;
+        });
+    }
+
+    // Size, cheapest source first: the adapter's own number, then the browser's
+    // resource timing (zero cross-origin without Timing-Allow-Origin, and partial
+    // for range-loaded video, so images only), then one HEAD request per URL,
+    // debounced so holding an arrow key does not fire a request per item.
+function requestMediaByteSize(item, url) {
+        if (!item || Number(item.bytes) > 0 || !url || /^(data|blob):/i.test(url)) return;
+        if (item._msBytesUrl !== url) { item._msBytesUrl = url; item._msBytes = 0; }
+        if (mediaByteSizes.has(url)) { item._msBytes = mediaByteSizes.get(url); paintInfoMeta(item); return; }
+        if (item.type !== 'video' && typeof performance !== 'undefined' && performance.getEntriesByName) {
+            const timing = performance.getEntriesByName(url, 'resource').pop();
+            if (timing && timing.encodedBodySize > 0) {
+                mediaByteSizes.set(url, timing.encodedBodySize);
+                item._msBytes = timing.encodedBodySize;
+                paintInfoMeta(item);
+                return;
+            }
+        }
+        if (typeof bridge.mediaContentLength !== 'function') return;
+        if (typeof bridge.canProbeMediaSize === 'function' && !bridge.canProbeMediaSize(url)) return;
+        clearTimeout(mediaByteProbeTimer);
+        mediaByteProbeTimer = setTimeout(() => {
+            if (!isCurrentItem(item) || mediaByteSizes.has(url)) return;
+            mediaByteSizes.set(url, 0);
+            Promise.resolve(bridge.mediaContentLength(url)).then((bytes) => {
+                if (!(bytes > 0)) return;
+                mediaByteSizes.set(url, bytes);
+                if (item._msBytesUrl === url) { item._msBytes = bytes; paintInfoMeta(item); }
+            }).catch(() => {});
+        }, 700);
+    }
+
+function noteMediaDimensions(item, el) {
+        if (!item || !el) return;
+        const width = el.videoWidth || el.naturalWidth || 0;
+        const height = el.videoHeight || el.naturalHeight || 0;
+        if (width && height) { item._msNaturalWidth = width; item._msNaturalHeight = height; }
+        paintInfoMeta(item);
+        requestMediaByteSize(item, el.currentSrc || el.src);
+    }
+
 function markItemMediaLoaded(item) {
         if (!item || !bridge.state.overlay) return;
         item._msMediaLoaded = true;
@@ -3247,11 +3324,20 @@ function renderCurrent() {
         const nextBtn = bridge.state.overlay.querySelector('.ms-nav.next');
         const thumbs = bridge.state.overlay.querySelectorAll('.ms-thumb');
         prepareMediaWrap(wrap, item);
+        // Every value here goes into innerHTML, and URLs and error text come from
+        // the page or a remote host - escape all of them, not only the byline.
+        const escInfo = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        // The date, resolution and size line. Reserved for any image or video
+        // so it does not appear late and push the link up.
+        const infoMeta = (date) => (date || (item && (item.type === 'img' || item.type === 'video')))
+            ? '<span class="ms-info-meta"><span class="ms-info-date"></span><span class="ms-info-dims"></span><span class="ms-info-bytes"></span></span>'
+            : '';
         const buildInfoHtml = () => {
             const hasSourceOverride = !!(item && Object.prototype.hasOwnProperty.call(item, 'sourceUrl'));
             const linkUrl = item ? String(hasSourceOverride ? (item.sourceUrl || '') : (item.resolveUrl || item.src || '')) : '';
             if (item && item.error) {
-                return `<span style="color: #f43f5e;"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer">Error: ${item.error} (${linkUrl})</a></span>`;
+                return `<span style="color: #f43f5e;"><a href="${escInfo(linkUrl)}" target="_blank" rel="noopener noreferrer">Error: ${escInfo(item.error)} (${escInfo(linkUrl)})</a></span>`;
             }
 
             const author = presentation.author;
@@ -3267,8 +3353,9 @@ function renderCurrent() {
                     : `<span class="ms-info-author" title="${esc(author.handle || author.name)}">${esc(author.name || author.handle)}</span>`;
                 const date = presentation.date || '';
                 const source = linkUrl ? `<a href="${esc(linkUrl)}" target="_blank" rel="noopener noreferrer">${esc(linkUrl)}</a>` : '';
-                const details = source || date
-                    ? `<span class="ms-info-sep">:</span><span class="ms-info-source">${source}${date ? `<span class="ms-info-date">${esc(date)}</span>` : ''}</span>`
+                const meta = infoMeta(date);
+                const details = source || meta
+                    ? `<span class="ms-info-sep">:</span><span class="ms-info-source">${source}${meta}</span>`
                     : '';
                 return `<span class="ms-info-byline">${avatar}${who}${details}</span>`;
             }
@@ -3277,11 +3364,11 @@ function renderCurrent() {
                 const escG = (v) => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
                     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 const galleryHref = item.galleryUrl || linkUrl;
-                return `<a class="ms-info-author" href="${escG(galleryHref)}" target="_blank" rel="noopener noreferrer" title="${escG(item.galleryName)}">${escG(item.galleryName)}</a>`;
+                return `<span class="ms-info-source"><a class="ms-info-author" href="${escG(galleryHref)}" target="_blank" rel="noopener noreferrer" title="${escG(item.galleryName)}">${escG(item.galleryName)}</a>${infoMeta(presentation.date)}</span>`;
             }
 
             return linkUrl
-                ? `<span style="color: var(--ms-text-2);"><a href="${linkUrl}" target="_blank" rel="noopener noreferrer">${linkUrl}</a></span>`
+                ? `<span class="ms-info-source" style="color: var(--ms-text-2);"><a href="${escInfo(linkUrl)}" target="_blank" rel="noopener noreferrer">${escInfo(linkUrl)}</a>${infoMeta(presentation.date)}</span>`
                 : '';
         };
 
@@ -3352,6 +3439,7 @@ function renderCurrent() {
                 domain = 'unknown';
             }
             info.innerHTML = buildInfoHtml();
+            paintInfoMeta(item);
             if (counter) {
                 const position = bridge.galleryPositionSnapshot();
                 counter.textContent = (position.currentIndex + 1) + ' / ' + position.length;
@@ -3436,6 +3524,7 @@ function renderCurrent() {
                             if (token !== bridge.state.renderToken || !img.parentNode) return;
                             img.addEventListener('load', () => {
                                 if (token !== bridge.state.renderToken) return;
+                                noteMediaDimensions(item, img);
 
                                 syncVerticalFitMediaBox(img);
                                 if (!bridge.state.pan || bridge.state.pan.img !== img) return;
@@ -3481,6 +3570,7 @@ function renderCurrent() {
                 });
                 syncVerticalFitMediaBox(img);
                 markItemMediaLoaded(item);
+                noteMediaDimensions(item, img);
                 if (item.error) {
                     appendErrorBanner(wrap, item.error);
                 }
@@ -3736,8 +3826,11 @@ function renderCurrent() {
                 bridge.savePreference('MS_BETTER_VIDEO_MUTED', bridge.globalMuted);
             });
             video.addEventListener('loadedmetadata', () => {
-                if (ownsVideoSession()) syncVerticalFitMediaBox(video);
+                if (!ownsVideoSession()) return;
+                syncVerticalFitMediaBox(video);
+                noteMediaDimensions(item, video);
             });
+            if (video.readyState >= 1) noteMediaDimensions(item, video);
             if (!video.isConnected || !video.closest('.ms-media-box')) ensureMediaBox(wrap).appendChild(video);
             const revealVideo = () => {
                 if (!ownsVideoSession()) return;
@@ -3816,11 +3909,7 @@ function renderCurrent() {
         }
 
         info.innerHTML = buildInfoHtml();
-        if (presentation.date && !info.querySelector('.ms-info-date')) {
-            const date = document.createElement('span');
-            date.className = 'ms-info-date'; date.textContent = presentation.date;
-            date.style.display = 'block'; info.append(date);
-        }
+        paintInfoMeta(item);
         const position = bridge.galleryPositionSnapshot();
         globalThis.XGalleryCore.renderPosition({
             counter: counter,
@@ -3841,12 +3930,7 @@ function renderCurrent() {
                 const current = bridge.state.items[bridge.state.currentIndex];
                 const currentItem = current ? (current.item || current) : null;
                 if (currentItem !== item) return;
-                const freshDate = bridge.mediaPresentation(item).date;
-                if (freshDate && info.isConnected) {
-                    let date = info.querySelector('.ms-info-date');
-                    if (!date) { date = document.createElement('span'); date.className='ms-info-date'; date.style.display='block'; info.append(date); }
-                    date.textContent = freshDate;
-                }
+                paintInfoMeta(item);
                 updateMediaCaptionOverlay(item);
                 const tagsOverlay = bridge.state.overlay && bridge.state.overlay.querySelector('.ms-tags-overlay');
                 if (tagsOverlay && tagsOverlay.classList.contains('active')) bridge.applyTagsPanel(true);

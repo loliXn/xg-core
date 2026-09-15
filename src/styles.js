@@ -2701,6 +2701,13 @@ export const OVERLAY_CSS = String.raw`
             width: 100%;
             min-height: 100%;
             padding: 0;
+            /* The body's entrance moves it a few pixels down. Without clipping,
+               that counted as scroll overflow: a scrollbar appeared for the
+               length of the fade, took its width from the text, and a caption
+               close to the edge wrapped onto a second line and back. clip does
+               not create a scroll container, so the sticky header and footer
+               still pin to the panel's scroller. */
+            overflow-y: clip;
             box-sizing: border-box;
             display: flex;
             flex-direction: column;
@@ -2716,6 +2723,15 @@ export const OVERLAY_CSS = String.raw`
             width: 100%;
             padding: 6px 18px 24px;
             box-sizing: border-box;
+        }
+        /* No post header above: the body sits directly under the panel title's
+           rule and needs the same breathing room the header would have given. */
+        .ms-post-panel > .ms-post-body:first-child { padding-top: 14px; }
+        .ms-info-empty {
+            margin: 0;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--ms-text-4);
         }
         .ms-post-section {
             width: 100%;
@@ -2801,7 +2817,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-info-description p:last-child {
             margin-bottom: 0;
         }
-        .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-desc-username) {
+        .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-user-link) {
             color: hsl(223, 90%, 72%) !important;
             font-weight: 500;
             text-decoration: underline !important;
@@ -2810,7 +2826,7 @@ export const OVERLAY_CSS = String.raw`
             text-underline-offset: 2px;
             transition: color 150ms var(--ms-ease), text-decoration-color 150ms var(--ms-ease);
         }
-        .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-desc-username):hover {
+        .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-user-link):hover {
             color: hsl(223, 95%, 82%) !important;
             text-decoration-color: currentColor !important;
         }
@@ -2832,6 +2848,7 @@ export const OVERLAY_CSS = String.raw`
             object-fit: cover;
             flex-shrink: 0;
             background: var(--ms-surface-3);
+            transition: box-shadow 150ms var(--ms-ease);
         }
         .ms-info-desc-username {
             font-weight: 650;
@@ -2840,15 +2857,28 @@ export const OVERLAY_CSS = String.raw`
             text-decoration: none;
             transition: color 150ms var(--ms-ease);
         }
-        /* Inline name links turn accent without drawing a box (guidelines,
-           interactive state table). A name without a profile URL renders as a
-           span and is not interactive, so it deliberately does not react. */
-        .ms-gallery-overlay a.ms-info-desc-username:hover,
-        .ms-gallery-overlay a.ms-info-desc-username:focus-visible {
+        /* Avatar and name are one link: they react together and are a single
+           tab stop. The name turns accent without drawing a box (guidelines,
+           interactive state table) and the avatar gets an accent ring. A user
+           without a profile URL renders no link, so nothing reacts. */
+        .ms-gallery-overlay a.ms-info-user-link {
+            display: flex;
+            align-items: center;
+            gap: inherit;
+            min-width: 0;
+            color: inherit;
+            text-decoration: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        .ms-info-user-sm > a.ms-info-user-link { display: inline-flex; }
+        .ms-gallery-overlay a.ms-info-user-link:hover .ms-info-desc-username,
+        .ms-gallery-overlay a.ms-info-user-link:focus-visible .ms-info-desc-username {
             text-decoration: none;
             color: var(--ms-accent);
         }
-        .ms-gallery-overlay .ms-info-user:has(> a.ms-info-desc-username:hover) > .ms-info-desc-avatar {
+        .ms-gallery-overlay a.ms-info-user-link:hover > .ms-info-desc-avatar,
+        .ms-gallery-overlay a.ms-info-user-link:focus-visible > .ms-info-desc-avatar {
             box-shadow: 0 0 0 2px var(--ms-accent-line);
         }
         .ms-info-description {
@@ -3502,7 +3532,10 @@ export const OVERLAY_CSS = String.raw`
 .ms-index-input{top:0!important;height:1em!important;display:inline-flex!important;align-items:center!important;}.ms-position-control>span{display:inline-flex;align-items:center;height:1em;line-height:1;}.ms-tags-overlay.active{z-index:20;}.ms-load-mark-layer{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:6;}.ms-load-mark{position:absolute;top:10px;width:14px;height:70px;display:flex;align-items:center;justify-content:center;color:var(--ms-accent);}.ms-load-mark::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:1px;background:var(--ms-accent);opacity:0.7;}.ms-load-mark svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;}.ms-settings-row.ms-settings-stack{flex-direction:column;align-items:stretch;gap:8px;}.ms-settings-textarea{width:100%;min-height:88px;resize:vertical;box-sizing:border-box;background:var(--ms-surface-3,#1b1d24);border:1px solid var(--ms-line,#333);border-radius:8px;color:var(--ms-text-2,#ddd);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:8px 10px;outline:none;}.ms-settings-textarea:focus{border-color:var(--ms-accent);}.ms-settings-hint{margin:0;font-size:11px;color:var(--ms-text-4,#888);}.ms-blacklist-pills{display:flex;flex-wrap:wrap;gap:6px;}.ms-blacklist-pill{border:0;background:var(--ms-control-rest);color:var(--ms-text-3);border-radius:8px;padding:4px 10px;font:500 12px/1.3 var(--ms-font-ui);cursor:pointer;transition:background-color 150ms var(--ms-ease),color 150ms var(--ms-ease);}.ms-blacklist-pill:hover{background:var(--ms-hover);color:var(--ms-text);}.ms-blacklist-pill[aria-pressed="true"]{background:var(--ms-accent-tint);color:var(--ms-accent);}
         .ms-info-source{display:flex;flex-direction:column;min-width:0;gap:2px;line-height:1.25}
         .ms-info-source>a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .ms-info-date{font:10px/1.3 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ms-text-3,#aaa)}
+        .ms-info-meta{display:block;font:10px/1.3 var(--ms-font-data);font-variant-numeric:tabular-nums;color:var(--ms-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .ms-info-meta>span:empty{display:none}
+        .ms-info-meta>span:not(:empty)~span:not(:empty)::before{content:"\00B7";margin:0 5px;color:var(--ms-text-4)}
+        .ms-post-media-meta{font-size:11px;line-height:18px;min-height:18px;color:var(--ms-text-4)}
         .ms-tags-action-btn,.ms-tags-action-btn *{text-decoration:none!important}
         /* A tab row, not a row of pills. Route nav in this design is quiet text
            with an active underline, and four outlined buttons floating between
