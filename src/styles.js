@@ -13,9 +13,26 @@ export const OVERLAY_CSS = String.raw`
             --ms-text-2: hsl(38, 14%, 80%);
             --ms-text-3: hsl(35, 10%, 62%);
             --ms-text-4: hsl(35, 7%, 46%);
-            --ms-accent: hsl(223, 88%, 57%);
-            --ms-accent-tint: hsla(223, 88%, 57%, 0.13);
-            --ms-accent-line: hsla(223, 88%, 57%, 0.72);
+            /* One accent, driven by three channels. Everything derived from it -
+               tint, line, hover, links, and the ink that sits on an accent fill -
+               is computed here, so the live accent setting only has to write
+               the --xg-accent-* inputs on :root, which inherit into the shadow
+               roots too. Default hsl(223, 78%, 65%): lighter and less saturated
+               than the old 57% blue, and it passes 4.5:1 as text on every dark
+               surface, which the old one did not (3.4-3.8:1). */
+            --ms-accent-h: var(--xg-accent-h, 223);
+            --ms-accent-s: var(--xg-accent-s, 78%);
+            --ms-accent-l: var(--xg-accent-l, 65%);
+            --ms-accent: hsl(var(--ms-accent-h), var(--ms-accent-s), var(--ms-accent-l));
+            --ms-accent-tint: hsla(var(--ms-accent-h), var(--ms-accent-s), var(--ms-accent-l), 0.13);
+            --ms-accent-tint-strong: hsla(var(--ms-accent-h), var(--ms-accent-s), var(--ms-accent-l), 0.22);
+            --ms-accent-line: hsla(var(--ms-accent-h), var(--ms-accent-s), var(--ms-accent-l), 0.72);
+            --ms-accent-hover: hsl(var(--ms-accent-h), var(--ms-accent-s), min(92%, calc(var(--ms-accent-l) + 5%)));
+            --ms-accent-link: hsl(var(--ms-accent-h), min(100%, calc(var(--ms-accent-s) + 4%)), min(90%, calc(var(--ms-accent-l) + 8%)));
+            --ms-accent-link-hover: hsl(var(--ms-accent-h), min(100%, calc(var(--ms-accent-s) + 8%)), min(94%, calc(var(--ms-accent-l) + 17%)));
+            /* White fails on any accent light enough to pass as text, so the ink
+               on an accent fill is dark unless applyAccent picks otherwise. */
+            --ms-on-accent: hsl(220, 8%, var(--xg-on-accent-l, 8%));
             --ms-hover: rgba(255, 255, 255, 0.08);
             --ms-pressed: rgba(255, 255, 255, 0.12);
             --ms-control-rest: rgba(255, 255, 255, 0.035);
@@ -264,7 +281,7 @@ export const OVERLAY_CSS = String.raw`
             color: var(--ms-text);
         }
         .ms-gallery-overlay .ms-btn:active { background: var(--ms-pressed); }
-        .ms-gallery-overlay .ms-btn.active:hover { background: hsla(223, 88%, 57%, 0.2); }
+        .ms-gallery-overlay .ms-btn.active:hover { background: var(--ms-accent-tint-strong); }
         .ms-gallery-overlay .ms-gallery-topbar .ms-btn,
         .ms-gallery-overlay .ms-gallery-topbar .ms-icon-btn {
             border: none;
@@ -415,7 +432,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-filter-submit {
             border-color: var(--ms-accent-line);
             background: var(--ms-accent);
-            color: #fff;
+            color: var(--ms-on-accent);
         }
         .ms-filter-copy:hover,
         .ms-filter-kind:hover,
@@ -441,7 +458,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-filter-kind.is-active {
             border-color: var(--ms-accent-line);
             background: var(--ms-accent);
-            color: #fff;
+            color: var(--ms-on-accent);
         }
         .ms-filter-extras {
             display: grid;
@@ -1738,12 +1755,12 @@ export const OVERLAY_CSS = String.raw`
         .ms-r34-settings-modal button.ms-r34-save {
             background: var(--ms-accent);
             border-color: var(--ms-accent);
-            color: #fff;
+            color: var(--ms-on-accent);
         }
         .ms-r34-settings-modal button.ms-r34-save:hover {
-            background: hsl(223, 88%, 50%);
-            border-color: hsl(223, 88%, 50%);
-            color: #fff;
+            background: var(--ms-accent-hover);
+            border-color: var(--ms-accent-hover);
+            color: var(--ms-on-accent);
         }
         .ms-r34-settings-modal .ms-r34-status {
             font-size: 11px;
@@ -2400,7 +2417,7 @@ export const OVERLAY_CSS = String.raw`
             cursor: default;
         }
         .ms-hd-btn.ms-hd-max:hover {
-            background: hsla(223, 88%, 57%, 0.22);
+            background: var(--ms-accent-tint-strong);
         }
         .ms-media-wrap img.ms-media.ms-ready:not(.ms-pannable) {
             cursor: zoom-in;
@@ -2818,7 +2835,7 @@ export const OVERLAY_CSS = String.raw`
             margin-bottom: 0;
         }
         .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-user-link) {
-            color: hsl(223, 90%, 72%) !important;
+            color: var(--ms-accent-link) !important;
             font-weight: 500;
             text-decoration: underline !important;
             text-decoration-color: var(--ms-accent-line) !important;
@@ -2827,7 +2844,7 @@ export const OVERLAY_CSS = String.raw`
             transition: color 150ms var(--ms-ease), text-decoration-color 150ms var(--ms-ease);
         }
         .ms-gallery-overlay .ms-info-description a[href]:not(.ms-info-user-link):hover {
-            color: hsl(223, 95%, 82%) !important;
+            color: var(--ms-accent-link-hover) !important;
             text-decoration-color: currentColor !important;
         }
         .ms-info-description .ms-desc-divider {
@@ -3038,7 +3055,7 @@ export const OVERLAY_CSS = String.raw`
             background: var(--ms-accent-tint);
         }
         .ms-filter-trigger.active {
-            color: hsl(223, 96%, 72%);
+            color: var(--ms-accent);
             background: var(--ms-accent-tint);
         }
         .ms-filter-trigger.is-open,
@@ -3055,7 +3072,7 @@ export const OVERLAY_CSS = String.raw`
             justify-content: center;
             border-radius: 5px;
             background: var(--ms-accent);
-            color: #fff;
+            color: var(--ms-on-accent);
             font: 650 10px/1 var(--ms-font-data);
             font-variant-numeric: tabular-nums;
             margin-left: 4px;
@@ -3529,7 +3546,13 @@ export const OVERLAY_CSS = String.raw`
         .ms-zoom-slider:focus-visible {
             filter: drop-shadow(0 0 3px var(--ms-accent));
         }
-.ms-index-input{top:0!important;height:1em!important;display:inline-flex!important;align-items:center!important;}.ms-position-control>span{display:inline-flex;align-items:center;height:1em;line-height:1;}.ms-tags-overlay.active{z-index:20;}.ms-load-mark-layer{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:6;}.ms-load-mark{position:absolute;top:10px;width:14px;height:70px;display:flex;align-items:center;justify-content:center;color:var(--ms-accent);}.ms-load-mark::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:1px;background:var(--ms-accent);opacity:0.7;}.ms-load-mark svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;}.ms-settings-row.ms-settings-stack{flex-direction:column;align-items:stretch;gap:8px;}.ms-settings-textarea{width:100%;min-height:88px;resize:vertical;box-sizing:border-box;background:var(--ms-surface-3,#1b1d24);border:1px solid var(--ms-line,#333);border-radius:8px;color:var(--ms-text-2,#ddd);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:8px 10px;outline:none;}.ms-settings-textarea:focus{border-color:var(--ms-accent);}.ms-settings-hint{margin:0;font-size:11px;color:var(--ms-text-4,#888);}.ms-blacklist-pills{display:flex;flex-wrap:wrap;gap:6px;}.ms-blacklist-pill{border:0;background:var(--ms-control-rest);color:var(--ms-text-3);border-radius:8px;padding:4px 10px;font:500 12px/1.3 var(--ms-font-ui);cursor:pointer;transition:background-color 150ms var(--ms-ease),color 150ms var(--ms-ease);}.ms-blacklist-pill:hover{background:var(--ms-hover);color:var(--ms-text);}.ms-blacklist-pill[aria-pressed="true"]{background:var(--ms-accent-tint);color:var(--ms-accent);}
+.ms-index-input{top:0!important;height:1em!important;display:inline-flex!important;align-items:center!important;}.ms-position-control>span{display:inline-flex;align-items:center;height:1em;line-height:1;}.ms-tags-overlay.active{z-index:20;}.ms-load-mark-layer{position:absolute;left:0;top:0;height:100%;pointer-events:none;z-index:6;}.ms-load-mark{position:absolute;top:10px;width:14px;height:70px;display:flex;align-items:center;justify-content:center;color:var(--ms-accent);}.ms-load-mark::before{content:"";position:absolute;left:50%;top:8px;bottom:8px;width:1px;background:var(--ms-accent);opacity:0.7;}.ms-load-mark svg{width:11px;height:11px;stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round;position:relative;z-index:1;}.ms-settings-row.ms-settings-stack{flex-direction:column;align-items:stretch;gap:8px;}.ms-settings-textarea{width:100%;min-height:88px;resize:vertical;box-sizing:border-box;background:var(--ms-surface-3,#1b1d24);border:1px solid var(--ms-line,#333);border-radius:8px;color:var(--ms-text-2,#ddd);font:12px/1.45 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;padding:8px 10px;outline:none;}.ms-settings-textarea:focus{border-color:var(--ms-accent);}.ms-settings-hint{margin:0;font-size:11px;color:var(--ms-text-4,#888);}.ms-blacklist-pills{display:flex;flex-wrap:wrap;gap:6px;}
+        .ms-accent-picker{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:6px}
+        .ms-accent-swatch{width:26px;height:26px;padding:0;border:0;border-radius:50%;background:transparent;display:grid;place-items:center;cursor:pointer;transition:box-shadow 150ms var(--ms-ease)}
+        .ms-accent-swatch-dot{width:16px;height:16px;border-radius:50%;box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);pointer-events:none}
+        .ms-accent-swatch[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ms-accent)}
+        .ms-accent-picker>input[type="color"]{width:30px;height:26px;padding:0 2px;border:1px solid var(--ms-line);border-radius:8px;background:transparent;cursor:pointer}
+        .ms-accent-picker>.ms-accent-reset{padding:4px 10px;min-height:26px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);font:600 12px/1.25 var(--ms-font-ui);cursor:pointer;transition:background-color 150ms var(--ms-ease)}.ms-blacklist-pill{border:0;background:var(--ms-control-rest);color:var(--ms-text-3);border-radius:8px;padding:4px 10px;font:500 12px/1.3 var(--ms-font-ui);cursor:pointer;transition:background-color 150ms var(--ms-ease),color 150ms var(--ms-ease);}.ms-blacklist-pill:hover{background:var(--ms-hover);color:var(--ms-text);}.ms-blacklist-pill[aria-pressed="true"]{background:var(--ms-accent-tint);color:var(--ms-accent);}
         .ms-info-source{display:flex;flex-direction:column;min-width:0;gap:2px;line-height:1.25}
         .ms-info-source>a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .ms-info-meta{display:block;font:10px/1.3 var(--ms-font-data);font-variant-numeric:tabular-nums;color:var(--ms-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -3738,7 +3761,7 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-r34-settings-overlay .ms-toggle:hover input:checked + .ms-toggle-track,
         .ms-gallery-overlay .ms-toggle:hover input:checked + .ms-toggle-track {
-            background: hsl(223, 88%, 62%);
+            background: var(--ms-accent-hover);
         }
         .ms-r34-settings-overlay .ms-toggle:active .ms-toggle-thumb,
         .ms-gallery-overlay .ms-toggle:active .ms-toggle-thumb {
@@ -3858,7 +3881,7 @@ export const OVERLAY_CSS = String.raw`
         #ms-site-cluster > .ms-site-cluster-btn:active { background: rgba(255, 255, 255, 0.12) !important; scale: 0.97; }
         /* overflow: hidden on the container would clip an outward ring. */
         #ms-site-cluster > .ms-site-cluster-btn:focus-visible {
-            outline: 2px solid hsl(223, 88%, 57%) !important;
+            outline: 2px solid var(--ms-accent) !important;
             outline-offset: -2px !important;
         }
         #ms-site-cluster > #ms-site-settings-btn { width: 36px !important; padding: 0 !important; }
@@ -3897,8 +3920,26 @@ export const LAUNCHER_CSS = String.raw`
             --ms-line: rgba(255, 255, 255, 0.16);
             --ms-line-strong: rgba(255, 255, 255, 0.26);
             --ms-text: hsl(40, 22%, 88%);
-            --ms-accent: hsl(223, 88%, 57%);
-            --ms-accent-line: hsla(223, 88%, 57%, 0.72);
+            /* One accent, driven by three channels. Everything derived from it -
+               tint, line, hover, links, and the ink that sits on an accent fill -
+               is computed here, so the live accent setting only has to write
+               the --xg-accent-* inputs on :root, which inherit into the shadow
+               roots too. Default hsl(223, 78%, 65%): lighter and less saturated
+               than the old 57% blue, and it passes 4.5:1 as text on every dark
+               surface, which the old one did not (3.4-3.8:1). */
+            --ms-accent-h: var(--xg-accent-h, 223);
+            --ms-accent-s: var(--xg-accent-s, 78%);
+            --ms-accent-l: var(--xg-accent-l, 65%);
+            --ms-accent: hsl(var(--ms-accent-h), var(--ms-accent-s), var(--ms-accent-l));
+            --ms-accent-tint: hsla(var(--ms-accent-h), var(--ms-accent-s), var(--ms-accent-l), 0.13);
+            --ms-accent-tint-strong: hsla(var(--ms-accent-h), var(--ms-accent-s), var(--ms-accent-l), 0.22);
+            --ms-accent-line: hsla(var(--ms-accent-h), var(--ms-accent-s), var(--ms-accent-l), 0.72);
+            --ms-accent-hover: hsl(var(--ms-accent-h), var(--ms-accent-s), min(92%, calc(var(--ms-accent-l) + 5%)));
+            --ms-accent-link: hsl(var(--ms-accent-h), min(100%, calc(var(--ms-accent-s) + 4%)), min(90%, calc(var(--ms-accent-l) + 8%)));
+            --ms-accent-link-hover: hsl(var(--ms-accent-h), min(100%, calc(var(--ms-accent-s) + 8%)), min(94%, calc(var(--ms-accent-l) + 17%)));
+            /* White fails on any accent light enough to pass as text, so the ink
+               on an accent fill is dark unless applyAccent picks otherwise. */
+            --ms-on-accent: hsl(220, 8%, var(--xg-on-accent-l, 8%));
             --ms-hover: rgba(255, 255, 255, 0.08);
             --ms-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
             --ms-font-ui: "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, sans-serif;
@@ -4178,7 +4219,7 @@ export const LAUNCHER_CSS = String.raw`
         #ms-site-cluster > .ms-site-cluster-btn:active { background: rgba(255, 255, 255, 0.12) !important; scale: 0.97; }
         /* overflow: hidden on the container would clip an outward ring. */
         #ms-site-cluster > .ms-site-cluster-btn:focus-visible {
-            outline: 2px solid hsl(223, 88%, 57%) !important;
+            outline: 2px solid var(--ms-accent) !important;
             outline-offset: -2px !important;
         }
         #ms-site-cluster > #ms-site-settings-btn { width: 36px !important; padding: 0 !important; }
@@ -4204,3 +4245,69 @@ export const LAUNCHER_CSS = String.raw`
         }
 `;
 export function installLauncherStyles(addStyle) { return addStyle(LAUNCHER_CSS); }
+
+// ---- accent colour -----------------------------------------------------------
+export const DEFAULT_ACCENT = '#6088eb';
+// No red: in this design red means liked or favourite.
+export const ACCENT_PRESETS = [
+    ['Blue', '#6088eb'], ['Sky', '#51b8ec'], ['Teal', '#3bbab6'],
+    ['Green', '#59c084'], ['Amber', '#efac39'], ['Violet', '#aa84eb']
+];
+
+function relativeLuminance(rgb) {
+    return rgb.map((c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); })
+        .reduce((sum, v, i) => sum + v * [0.2126, 0.7152, 0.0722][i], 0);
+}
+function contrastRatio(a, b) {
+    const x = relativeLuminance(a), y = relativeLuminance(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+}
+function hslToRgb(h, s, l) {
+    s /= 100; l /= 100;
+    const k = (n) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    return [0, 8, 4].map((n) => 255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1))));
+}
+
+// A picked colour becomes channel values. Lightness is raised until the accent
+// passes 4.5:1 as text on the lightest dark surface, so a navy pick still reads;
+// the ink on an accent fill is whichever of white or near-black contrasts more.
+export function accentTokens(hex) {
+    const m = /^#?([0-9a-f]{6})$/i.exec(String(hex || '').trim());
+    if (!m) return null;
+    const n = parseInt(m[1], 16);
+    const r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+    let h = 0, s = 0, l = (max + min) / 2;
+    if (d) {
+        s = d / (1 - Math.abs(2 * l - 1));
+        h = max === r ? ((g - b) / d) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+        h = (h * 60 + 360) % 360;
+    }
+    h = Math.round(h); s = Math.round(s * 100); l = Math.round(l * 100);
+    const surface = hslToRgb(220, 7, 13);
+    while (l < 90 && contrastRatio(hslToRgb(h, s, l), surface) < 4.5) l++;
+    const fill = hslToRgb(h, s, l);
+    const onAccentL = contrastRatio([255, 255, 255], fill) >= contrastRatio(hslToRgb(220, 8, 8), fill) ? 100 : 8;
+    return { h, s, l, onAccentL };
+}
+
+// Writes the accent inputs on :root through one owned style element. Custom
+// properties inherit through shadow hosts even under all: initial, so this one
+// rule recolours the overlay, the settings panel and the launcher alike. An
+// empty or invalid value removes it and the stylesheet default applies.
+export function applyAccent(color, doc) {
+    const d = doc || document;
+    let sheet = d.getElementById('xg-accent-vars');
+    const tokens = accentTokens(color);
+    if (!tokens) { if (sheet) sheet.remove(); return null; }
+    if (!sheet) {
+        sheet = d.createElement('style');
+        sheet.id = 'xg-accent-vars';
+        sheet.setAttribute('data-xg-own', '1');
+        (d.head || d.documentElement).append(sheet);
+    }
+    sheet.textContent = ':root{--xg-accent-h:' + tokens.h + ';--xg-accent-s:' + tokens.s + '%;--xg-accent-l:' + tokens.l
+        + '%;--xg-on-accent-l:' + tokens.onAccentL + '%}';
+    return tokens;
+}

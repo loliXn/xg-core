@@ -366,6 +366,37 @@ export function createSettingsPanel(options) {
                 input = doc.createElement('input'); input.type = 'checkbox'; input.checked = !!field.value;
                 const track = panelElement(doc, 'span', 'ms-toggle-track'); track.append(panelElement(doc, 'span', 'ms-toggle-thumb'));
                 toggle.append(input, track); row.append(toggle);
+            } else if (field.type === 'color') {
+                // Preset swatches, a custom colour and Reset. onInput previews
+                // live while the dialog is open; the value is saved like any field.
+                const picker = panelElement(doc, 'div', 'ms-accent-picker');
+                picker.setAttribute('role', 'group');
+                picker.setAttribute('aria-label', field.label);
+                input = doc.createElement('input');
+                input.type = 'color';
+                input.value = field.value || field.defaultValue || '#000000';
+                const swatches = (field.presets || []).map(([name, value]) => {
+                    const swatch = panelElement(doc, 'button', 'ms-accent-swatch');
+                    swatch.type = 'button';
+                    swatch.title = name;
+                    swatch.setAttribute('aria-label', name);
+                    swatch.dataset.value = String(value).toLowerCase();
+                    const dot = panelElement(doc, 'span', 'ms-accent-swatch-dot');
+                    dot.style.background = value;
+                    swatch.append(dot);
+                    return swatch;
+                });
+                const paintSwatches = () => swatches.forEach((swatch) =>
+                    swatch.setAttribute('aria-pressed', String(swatch.dataset.value === input.value.toLowerCase())));
+                const emit = () => { paintSwatches(); if (field.onInput) field.onInput(input.value); };
+                swatches.forEach((swatch) => swatch.addEventListener('click', () => { input.value = swatch.dataset.value; emit(); }));
+                input.addEventListener('input', emit);
+                const reset = panelElement(doc, 'button', 'ms-accent-reset', 'Reset');
+                reset.type = 'button';
+                reset.addEventListener('click', () => { input.value = field.defaultValue || input.value; emit(); });
+                picker.append(...swatches, input, reset);
+                row.append(picker);
+                paintSwatches();
             } else {
                 input = doc.createElement(field.type === 'textarea' ? 'textarea' : 'input');
                 if (field.type === 'textarea') input.className = 'ms-settings-textarea';
@@ -374,7 +405,7 @@ export function createSettingsPanel(options) {
                 for (const key of ['min', 'max', 'step', 'placeholder']) if (field[key] != null) input[key] = field[key];
             }
             input.id = field.id; label.htmlFor = field.id;
-            if (field.type !== 'checkbox') row.append(input);
+            if (field.type !== 'checkbox' && field.type !== 'color') row.append(input);
             if (field.onChange) input.addEventListener('change', () => field.onChange(field.type === 'checkbox' ? input.checked : input.value));
             controls.set(field.id, { input, field });
             if (field.suggestions) {
