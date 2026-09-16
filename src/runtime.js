@@ -3584,8 +3584,14 @@ function renderCurrent() {
                     watch.href = item.watchUrl;
                     watch.target = '_blank';
                     watch.rel = 'noopener noreferrer';
-                    watch.innerHTML = '<svg style="width:14px;height:14px;vertical-align:middle;margin-right:6px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>Watch video on X';
-                    watch.style.cssText = 'position:absolute; bottom:24px; left:50%; transform:translateX(-50%); z-index:12; background:#1d9bf0; color:#fff; text-decoration:none; font-size:14px; font-weight:700; padding:10px 22px; border-radius:22px; box-shadow:0 4px 16px rgba(0,0,0,0.4); font-family:system-ui,-apple-system,Segoe UI,sans-serif;';
+                    // The label and colour are per-source: this used to be
+                    // hardcoded "Watch video on X" in X's own blue, which read as
+                    // wrong once other adapters (Bluesky's HLS videos, which no
+                    // player here can decode) started reusing the same fallback.
+                    const watchLabel = item.watchLabel || 'Watch video on X';
+                    const watchColor = item.watchBrandColor || '#1d9bf0';
+                    watch.innerHTML = '<svg style="width:14px;height:14px;vertical-align:middle;margin-right:6px;" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="5 3 19 12 5 21 5 3"/></svg>' + watchLabel;
+                    watch.style.cssText = 'position:absolute; bottom:24px; left:50%; transform:translateX(-50%); z-index:12; background:' + watchColor + '; color:#fff; text-decoration:none; font-size:14px; font-weight:700; padding:10px 22px; border-radius:22px; box-shadow:0 4px 16px rgba(0,0,0,0.4); font-family:system-ui,-apple-system,Segoe UI,sans-serif;';
                     watch.addEventListener('click', (e) => e.stopPropagation());
                     wrap.appendChild(watch);
                 }
