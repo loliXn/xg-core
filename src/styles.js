@@ -178,6 +178,9 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-info {
             grid-column: 1;
             min-width: 0;
+            width: fit-content;
+            max-width: 100%;
+            justify-self: start;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -3553,8 +3556,8 @@ export const OVERLAY_CSS = String.raw`
         .ms-accent-swatch[aria-pressed="true"]{box-shadow:0 0 0 2px var(--ms-accent)}
         .ms-accent-picker>input[type="color"]{width:30px;height:26px;padding:0 2px;border:1px solid var(--ms-line);border-radius:8px;background:transparent;cursor:pointer}
         .ms-accent-picker>.ms-accent-reset{padding:4px 10px;min-height:26px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);font:600 12px/1.25 var(--ms-font-ui);cursor:pointer;transition:background-color 150ms var(--ms-ease)}.ms-blacklist-pill{border:0;background:var(--ms-control-rest);color:var(--ms-text-3);border-radius:8px;padding:4px 10px;font:500 12px/1.3 var(--ms-font-ui);cursor:pointer;transition:background-color 150ms var(--ms-ease),color 150ms var(--ms-ease);}.ms-blacklist-pill:hover{background:var(--ms-hover);color:var(--ms-text);}.ms-blacklist-pill[aria-pressed="true"]{background:var(--ms-accent-tint);color:var(--ms-accent);}
-        .ms-info-source{display:flex;flex-direction:column;min-width:0;gap:2px;line-height:1.25}
-        .ms-info-source>a{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .ms-info-source{display:flex;flex-direction:column;align-items:flex-start;width:fit-content;max-width:100%;min-width:0;gap:2px;line-height:1.25}
+        .ms-info-source>a{align-self:flex-start;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .ms-info-meta{display:block;font:10px/1.3 var(--ms-font-data);font-variant-numeric:tabular-nums;color:var(--ms-text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .ms-info-meta>span:empty{display:none}
         .ms-info-meta>span:not(:empty)~span:not(:empty)::before{content:"\00B7";margin:0 5px;color:var(--ms-text-4)}
