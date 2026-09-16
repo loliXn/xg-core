@@ -1,4 +1,5 @@
 import { renderPostPanel, revealOnNextFrame } from './panels.js';
+import { XGALLERY_CORE_VERSION } from './contract.js';
 // Shared viewer behavior. Host operations and persisted preferences enter through the bridge.
 export function createViewerRuntime(bridge) {
 function protectHostControl(button, compact) {
@@ -3983,6 +3984,45 @@ function paintPostActions(data) {
             bookmarkBtn.title = bookmarkBtn.disabled ? 'Bookmark unavailable for this post' : (data.bookmarked ? 'Remove bookmark' : 'Bookmark post');
         }
     }
+// Hovering the gear slides out which adapter and core are running, so a bug
+// report can name them without opening settings. The cluster is anchored on
+// its right edge, so the label grows the gear leftwards.
+function versionLabelText() {
+        let name = '';
+        let version = '';
+        try { name = String(bridge.adapterName || '').trim(); version = String(bridge.adapterVersion || '').trim(); } catch (e) { }
+        const adapter = name ? name + (version ? ' ' + version : '') : '';
+        return (adapter ? adapter + ' · ' : '') + 'XG-core ' + XGALLERY_CORE_VERSION;
+    }
+
+function mountVersionLabel(gear) {
+        const label = document.createElement('span');
+        label.className = 'ms-site-version-label';
+        label.textContent = versionLabelText();
+        const icon = gear.querySelector('svg');
+        const values = {display:'block',overflow:'hidden','white-space':'nowrap','max-width':'0',opacity:'0',
+            padding:'0',margin:'0',color:'#b9bcc3',font:'500 11px/36px ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace',
+            'letter-spacing':'0','text-transform':'none','pointer-events':'none',
+            transition:'max-width 260ms cubic-bezier(0.23, 1, 0.32, 1), opacity 180ms ease, padding 260ms cubic-bezier(0.23, 1, 0.32, 1)'};
+        for (const [key,value] of Object.entries(values)) label.style.setProperty(key,value,'important');
+        if (icon) {
+            icon.style.setProperty('flex','0 0 36px','important');
+            icon.style.setProperty('transition','transform 180ms cubic-bezier(0.23, 1, 0.32, 1)','important');
+        }
+        gear.insertBefore(label, gear.firstChild);
+        const open = (show) => {
+            if (show) label.textContent = versionLabelText();
+            label.style.setProperty('max-width', show ? '320px' : '0', 'important');
+            label.style.setProperty('opacity', show ? '1' : '0', 'important');
+            label.style.setProperty('padding', show ? '0 2px 0 12px' : '0', 'important');
+            if (icon) icon.style.setProperty('transform', show ? 'rotate(45deg)' : 'none', 'important');
+        };
+        gear.addEventListener('pointerenter', () => open(true));
+        gear.addEventListener('pointerleave', () => open(false));
+        gear.addEventListener('focus', () => { let visible = false; try { visible = gear.matches(':focus-visible'); } catch (e) { } if (visible) open(true); });
+        gear.addEventListener('blur', () => open(false));
+    }
+
 function addSettingsGearButton() {
         const cluster = ensureLauncherCluster();
         const existingGear = document.getElementById('ms-site-settings-btn');
@@ -3993,6 +4033,7 @@ function addSettingsGearButton() {
             return;
         }
         const gear = document.createElement('button');
+        gear.type = 'button';
         gear.id = 'ms-site-settings-btn';
         gear.className = 'ms-site-cluster-btn ms-site-settings-btn';
         gear.innerHTML = '<svg style="width:18px;height:18px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3" fill="none"/><path fill="none" d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
@@ -4007,8 +4048,11 @@ function addSettingsGearButton() {
             e.stopPropagation();
         });
         protectClusterButton(gear);
-        gear.style.setProperty('width','36px','important');
+        gear.style.setProperty('width','auto','important');
+        gear.style.setProperty('min-width','36px','important');
         gear.style.setProperty('padding','0','important');
+        gear.style.setProperty('gap','0','important');
+        mountVersionLabel(gear);
         placeInCluster(cluster, gear, 'settings');
     }
 
