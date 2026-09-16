@@ -100,17 +100,25 @@ const bundle = [
     "})(typeof globalThis !== 'undefined' ? globalThis : this);",
     ''
 ].join('\n').replace(/[ \t]+$/gm, '');
+// Source files can carry CRLF line endings (Windows checkouts with
+// core.autocrlf=true), which moduleBody() copies through verbatim. Git's own
+// clean filter normalizes CRLF -> LF the moment the built file is committed,
+// so a hash taken here beforehand does not match what the committed blob -
+// and so jsDelivr - actually serves. Normalize once, up front, so the hash
+// printed below is the one that ships.
+const bundleNormalized = bundle.replace(/\r\n/g, '\n');
+
 
 fs.mkdirSync(dist, { recursive: true });
 if (dev) {
-    fs.writeFileSync(path.join(dist, 'xgallery-core.dev.iife.js'), bundle, 'utf8');
+    fs.writeFileSync(path.join(dist, 'xgallery-core.dev.iife.js'), bundleNormalized, 'utf8');
     console.log('built dist/xgallery-core.dev.iife.js (local, not a release)');
     process.exit(0);
 }
-const sha256 = crypto.createHash('sha256').update(bundle).digest('hex');
+const sha256 = crypto.createHash('sha256').update(bundleNormalized).digest('hex');
 const versionedName = 'xgallery-core-' + version + '.iife.js';
-fs.writeFileSync(path.join(dist, 'xgallery-core.iife.js'), bundle, 'utf8');
-fs.writeFileSync(path.join(dist, versionedName), bundle, 'utf8');
+fs.writeFileSync(path.join(dist, 'xgallery-core.iife.js'), bundleNormalized, 'utf8');
+fs.writeFileSync(path.join(dist, versionedName), bundleNormalized, 'utf8');
 const manifest = {
     version: version,
     url: 'https://cdn.jsdelivr.net/gh/loliXn/xg-core@v' + version + '/dist/xgallery-core.iife.js',
