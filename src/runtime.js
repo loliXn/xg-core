@@ -1712,10 +1712,14 @@ function syncCaptionBounds() {
         caption.style.left = Math.max(0, left - outer.left) + 'px';
         caption.style.right = 'auto';
         caption.style.width = Math.max(0, right - left) + 'px';
-        caption.style.maxHeight = Math.max(0, (bottom - top) * .38) + 'px';
+        const videoControlsInset = caption.classList.contains('ms-caption-video')
+            && bridge.captionEdge !== 'top' ? 48 : 0;
+        caption.style.maxHeight = Math.max(0, (bottom - top - videoControlsInset) * .38) + 'px';
         if (!caption.classList.contains('ms-caption-snapchat')) {
             caption.style.top = bridge.captionEdge === 'top' ? Math.max(0, top - outer.top) + 'px' : 'auto';
-            caption.style.bottom = bridge.captionEdge === 'top' ? 'auto' : Math.max(0, outer.bottom - bottom) + 'px';
+            caption.style.bottom = bridge.captionEdge === 'top'
+                ? 'auto'
+                : Math.max(0, outer.bottom - bottom + videoControlsInset) + 'px';
         }
     }
 function updateMediaCaptionOverlay(item) {
@@ -1734,7 +1738,9 @@ function updateMediaCaptionOverlay(item) {
         const host = wrap;
         const overlay = document.createElement('div');
         const edge = bridge.captionEdge === 'top' ? 'top' : 'bottom';
-        overlay.className = 'ms-caption-overlay ms-caption-' + edge + (mode === 'snapchat' ? ' ms-caption-snapchat' : '');
+        overlay.className = 'ms-caption-overlay ms-caption-' + edge
+            + (item.type === 'video' ? ' ms-caption-video' : '')
+            + (mode === 'snapchat' ? ' ms-caption-snapchat' : '');
         overlay.innerHTML = html;
         overlay.querySelectorAll('a').forEach((a) => {
             a.target = '_blank';
