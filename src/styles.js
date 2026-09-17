@@ -140,6 +140,29 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay.ms-thumbs-hidden {
             --ms-thumbs-h: 0px;
         }
+        .ms-gallery-overlay.ms-thumbs-hidden .ms-thumbs-wrap {
+            transform: translateY(110%);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .ms-gallery-overlay .ms-tags-overlay.active {
+            height: var(--ms-info-height, 100%);
+            max-height: 100%;
+            align-self: flex-start;
+        }
+        .ms-tags-header { cursor: grab; touch-action: none; }
+        .ms-tags-header:active { cursor: grabbing; }
+        .ms-info-height-grip { position:absolute;bottom:0;left:16px;right:16px;height:10px;cursor:ns-resize;touch-action:none;z-index:30; }
+        .ms-info-height-grip::after { content:'';position:absolute;left:calc(50% - 22px);bottom:3px;width:44px;height:3px;border-radius:3px;background:var(--ms-line-strong); }
+        .ms-info-height-grip:hover::after { background:var(--ms-text-3); }
+        .ms-gallery-overlay[data-info-layout$="right"] .ms-tags-resizer { right:auto;left:0; }
+        .ms-gallery-overlay[data-info-layout="right"] .ms-tags-overlay.active,
+        .ms-gallery-overlay[data-info-layout="edge-right"] .ms-tags-overlay.active { order:2;margin-left:16px;margin-right:0; }
+        .ms-gallery-overlay[data-info-layout="edge-left"] .ms-gallery-stage:has(.ms-tags-overlay.active) { padding-left:calc(var(--ms-tags-w) + 32px); }
+        .ms-gallery-overlay[data-info-layout="edge-right"] .ms-gallery-stage:has(.ms-tags-overlay.active) { padding-right:calc(var(--ms-tags-w) + 32px); }
+        .ms-gallery-overlay[data-info-layout="edge-left"] .ms-tags-overlay.active { position:absolute;left:16px;top:calc(var(--ms-topbar-h) + var(--ms-filter-h) + 16px); }
+        .ms-gallery-overlay[data-info-layout="edge-right"] .ms-tags-overlay.active { position:absolute;right:16px;top:calc(var(--ms-topbar-h) + var(--ms-filter-h) + 16px); }
+        .ms-gallery-overlay[data-info-layout^="edge-"] .ms-tags-overlay.active { max-height:calc(100% - var(--ms-topbar-h) - var(--ms-filter-h) - var(--ms-thumbs-h) - 30px); }
         /* Closing: the overlay stays up, fully opaque and emptied, while the
            page underneath is scrolled back to the post being viewed. Hides the
            virtual list's re-render/re-anchor thrash instead of letting the user
@@ -853,7 +876,7 @@ export const OVERLAY_CSS = String.raw`
             left: 0;
             right: 0;
             bottom: 0;
-            height: var(--ms-thumbs-h);
+            height: 90px;
             background: hsla(220, 7%, 9%, 0.92);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);

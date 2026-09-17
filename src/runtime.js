@@ -961,8 +961,9 @@ function toggleThumbs(forceHide) {
 
         const btn = bridge.state.overlay.querySelector('[data-act="thumbs-trigger"], [data-act="thumbs-toggle"]');
         if (!el) return;
-        const hide = typeof forceHide === 'boolean' ? forceHide : el.style.display !== 'none';
-        el.style.display = hide ? 'none' : 'block';
+        const hide = typeof forceHide === 'boolean' ? forceHide : !bridge.state.overlay.classList.contains('ms-thumbs-hidden');
+        el.style.display = 'block';
+        el.inert = hide;
         bridge.state.overlay.classList.toggle('ms-thumbs-hidden', hide);
         if (btn) btn.classList.toggle('active', !hide);
         updateDropdownActiveStates();
@@ -1507,9 +1508,10 @@ function bindTagsPanelResizer() {
         };
         const onMove = (e) => {
             if (!dragging) return;
-            const left = overlayEl.getBoundingClientRect().left;
-            const maxW = Math.max(MIN_W, window.innerWidth - left - 220);
-            const next = Math.round(Math.min(maxW, Math.max(MIN_W, e.clientX - left)));
+            const rect = overlayEl.getBoundingClientRect();
+            const right = /right$/.test(bridge.state.overlay.dataset.infoLayout || '');
+            const maxW = Math.max(MIN_W, window.innerWidth - 240);
+            const next = Math.round(Math.min(maxW, Math.max(MIN_W, right ? rect.right - e.clientX : e.clientX - rect.left)));
             bridge.state.overlay.style.setProperty('--ms-tags-w', next + 'px');
             e.preventDefault();
         };
@@ -1531,6 +1533,62 @@ function bindTagsPanelResizer() {
 
         if (typeof bridge.tagsPanelWidth === 'number' && bridge.tagsPanelWidth >= MIN_W) {
             bridge.state.overlay.style.setProperty('--ms-tags-w', bridge.tagsPanelWidth + 'px');
+        }
+        const shell = bridge.state.overlay;
+        const layouts = ['left', 'right', 'edge-left', 'edge-right'];
+        shell.dataset.infoLayout = layouts.includes(bridge.infoPanelLayout) ? bridge.infoPanelLayout : 'left';
+        const setHeight = (height) => {
+            const bounded = Math.max(160, Math.min(height, overlayEl.parentElement.clientHeight));
+            shell.style.setProperty('--ms-info-height', bounded + 'px');
+        };
+        if (bridge.infoPanelHeight > 0) setHeight(bridge.infoPanelHeight);
+        const bottom = document.createElement('div');
+        bottom.className = 'ms-info-height-grip';
+        bottom.title = 'Drag to resize height';
+        overlayEl.appendChild(bottom);
+        let heightDrag = null;
+        bottom.addEventListener('pointerdown', (event) => {
+            if (event.button !== 0) return;
+            heightDrag = { y: event.clientY, height: overlayEl.getBoundingClientRect().height };
+            bottom.setPointerCapture(event.pointerId);
+            event.preventDefault(); event.stopPropagation();
+        });
+        bottom.addEventListener('pointermove', (event) => {
+            if (heightDrag) setHeight(heightDrag.height + event.clientY - heightDrag.y);
+        });
+        const finishHeight = () => {
+            if (!heightDrag) return;
+            heightDrag = null;
+            bridge.savePreference('MS_INFO_HEIGHT', overlayEl.getBoundingClientRect().height);
+            syncVerticalFitMediaBox();
+        };
+        bottom.addEventListener('pointerup', finishHeight);
+        bottom.addEventListener('pointercancel', finishHeight);
+        bottom.addEventListener('click', (event) => event.stopPropagation());
+        const header = overlayEl.querySelector('.ms-tags-header');
+        if (header) {
+            header.title = 'Drag to dock left, right, or near either screen edge';
+            let moving = false;
+            header.addEventListener('pointerdown', (event) => {
+                if (event.button !== 0 || event.target.closest('button, a, input')) return;
+                moving = true;
+                header.setPointerCapture(event.pointerId);
+                event.preventDefault(); event.stopPropagation();
+            });
+            header.addEventListener('pointermove', (event) => {
+                if (!moving) return;
+                const x = event.clientX / window.innerWidth;
+                shell.dataset.infoLayout = x < .2 ? 'edge-left' : x > .8 ? 'edge-right' : x < .5 ? 'left' : 'right';
+            });
+            const finishMove = () => {
+                if (!moving) return;
+                moving = false;
+                bridge.savePreference('MS_INFO_LAYOUT', shell.dataset.infoLayout);
+                syncVerticalFitMediaBox();
+            };
+            header.addEventListener('pointerup', finishMove);
+            header.addEventListener('pointercancel', finishMove);
+            header.addEventListener('click', (event) => event.stopPropagation());
         }
     }
 
@@ -3008,7 +3066,7 @@ function noteMediaDimensions(item, el) {
         const height = el.videoHeight || el.naturalHeight || 0;
         if (width && height) { item._msNaturalWidth = width; item._msNaturalHeight = height; }
         paintInfoMeta(item);
-        requestMediaByteSize(item, el.currentSrc || el.src);
+        requestMediaByteSize(item, /^(?:blob|data):/i.test(el.currentSrc || el.src || '') ? item.src : (el.currentSrc || el.src || item.src));
     }
 
 function markItemMediaLoaded(item) {
