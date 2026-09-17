@@ -946,6 +946,7 @@ function syncVerticalFitMediaBox(media) {
         box.style.height = Math.max(1, Math.round(naturalHeight * scale)) + 'px';
         target.style.removeProperty('width');
         target.style.removeProperty('height');
+        syncCaptionBounds();
     }
 
 function applyFitClass() {
@@ -970,7 +971,7 @@ function toggleThumbs(forceHide) {
     }
 
 function prefersReducedMotion() {
-        return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+        return !!bridge.minimalMotion || !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
     }
 
     // The flight ghost is the one piece of our UI that lives in the light DOM:
@@ -1698,7 +1699,27 @@ function bindCaptionSnapDrag(overlay) {
         overlay.addEventListener('click', (e) => e.stopPropagation());
     }
 
+let captionBoundsObserver = null;
+function syncCaptionBounds() {
+        const wrap = bridge.state.overlay && bridge.state.overlay.querySelector('.ms-media-wrap');
+        const caption = wrap && wrap.querySelector(':scope > .ms-caption-overlay');
+        const media = wrap && wrap.querySelector('img.ms-media:not(.ms-loading-thumb), video.ms-media');
+        if (!caption || !media) return;
+        const outer = wrap.getBoundingClientRect();
+        const rect = media.getBoundingClientRect();
+        const left = Math.max(outer.left, rect.left), right = Math.min(outer.right, rect.right);
+        const top = Math.max(outer.top, rect.top), bottom = Math.min(outer.bottom, rect.bottom);
+        caption.style.left = Math.max(0, left - outer.left) + 'px';
+        caption.style.right = 'auto';
+        caption.style.width = Math.max(0, right - left) + 'px';
+        caption.style.maxHeight = Math.max(0, (bottom - top) * .38) + 'px';
+        if (!caption.classList.contains('ms-caption-snapchat')) {
+            caption.style.top = bridge.captionEdge === 'top' ? Math.max(0, top - outer.top) + 'px' : 'auto';
+            caption.style.bottom = bridge.captionEdge === 'top' ? 'auto' : Math.max(0, outer.bottom - bottom) + 'px';
+        }
+    }
 function updateMediaCaptionOverlay(item) {
+        if (captionBoundsObserver) { captionBoundsObserver.disconnect(); captionBoundsObserver = null; }
         if (!bridge.state.overlay) return;
         const wrap = bridge.state.overlay.querySelector('.ms-media-wrap');
         if (!wrap) return;
@@ -1710,7 +1731,7 @@ function updateMediaCaptionOverlay(item) {
             if (slot) slot.hidden = false;
             return;
         }
-        const host = wrap.querySelector('.ms-media-box') || wrap;
+        const host = wrap;
         const overlay = document.createElement('div');
         const edge = bridge.captionEdge === 'top' ? 'top' : 'bottom';
         overlay.className = 'ms-caption-overlay ms-caption-' + edge + (mode === 'snapchat' ? ' ms-caption-snapchat' : '');
@@ -1721,6 +1742,11 @@ function updateMediaCaptionOverlay(item) {
             a.addEventListener('click', (e) => e.stopPropagation());
         });
         host.appendChild(overlay);
+        captionBoundsObserver = new ResizeObserver(syncCaptionBounds);
+        captionBoundsObserver.observe(wrap);
+        const media = wrap.querySelector('img.ms-media, video.ms-media');
+        if (media) captionBoundsObserver.observe(media);
+        syncCaptionBounds();
         if (mode === 'snapchat' && !captionFitsSnapchat(overlay)) {
             overlay.remove();
             mode = 'popup';
@@ -1839,6 +1865,7 @@ function enablePanForImage(wrap, img, opts) {
             else y = Math.min(0, Math.max(wrapH - dispH, y));
             const s = img.naturalWidth ? dispW / img.naturalWidth : 1;
             img.style.transform = 'translate(' + x + 'px, ' + y + 'px) scale(' + s + ')';
+            syncCaptionBounds();
         };
 
         const scheduleClampAndApply = () => {
@@ -2285,7 +2312,7 @@ function animateThumbTrackTo(track, target) {
         stopThumbTrackAnimation();
         const start = track.scrollLeft;
         const distance = target - start;
-        const reducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        const reducedMotion = prefersReducedMotion();
         if (reducedMotion || Math.abs(distance) < 1) {
             track.scrollLeft = target;
             return;
@@ -3630,6 +3657,7 @@ function renderCurrent() {
                 syncVerticalFitMediaBox(img);
                 markItemMediaLoaded(item);
                 noteMediaDimensions(item, img);
+                updateMediaCaptionOverlay(item);
                 if (item.error) {
                     appendErrorBanner(wrap, item.error);
                 }

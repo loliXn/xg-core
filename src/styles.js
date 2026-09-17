@@ -624,6 +624,20 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay.ms-has-tags-panel:not(.ms-grid-mode) .ms-media-wrap {
             max-width: min(1000px, calc(100vw - var(--ms-tags-w) - 80px));
         }
+        .ms-gallery-overlay.ms-has-tags-panel[data-info-layout^="edge-"]:not(.ms-grid-mode) .ms-media-wrap {
+            max-width: 100%;
+            flex: 1 1 auto;
+            min-width: 0;
+        }
+        :host-context(html[data-xg-minimal-motion="1"]) *,
+        :host-context(html[data-xg-minimal-motion="1"]) *::before,
+        :host-context(html[data-xg-minimal-motion="1"]) *::after {
+            animation-duration: 0.001ms !important;
+            animation-delay: 0ms !important;
+            transition-duration: 0ms !important;
+            transition-delay: 0ms !important;
+            scroll-behavior: auto !important;
+        }
         /* The stage centres the [panel, image] pair as one unit, so the image
            always sits (panel width + gap) / 2 right of true centre. Reclaiming
            the stage's left padding while the panel is open pulls the whole
@@ -689,17 +703,22 @@ export const OVERLAY_CSS = String.raw`
             font-size: var(--ms-tags-font, 15px);
             line-height: 1.45;
             pointer-events: none;
+            box-sizing: border-box;
+            overflow-wrap: anywhere;
+            text-shadow: 0 1px 3px rgba(0,0,0,.85);
         }
+        .ms-caption-overlay p { margin: 0 0 .45em; }
+        .ms-caption-overlay p:last-child { margin-bottom: 0; }
         .ms-caption-overlay.ms-caption-bottom {
             top: auto;
             bottom: 0;
-            padding: 32px 14px 54px;
+            padding: 24px 18px 14px;
             background: linear-gradient(transparent, rgba(0, 0, 0, 0.78));
         }
         .ms-caption-overlay.ms-caption-top {
             top: 0;
             bottom: auto;
-            padding: 54px 14px 28px;
+            padding: 14px 18px 24px;
             background: linear-gradient(rgba(0, 0, 0, 0.78), transparent);
         }
         .ms-caption-overlay a {
