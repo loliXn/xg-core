@@ -3452,11 +3452,16 @@ function renderCurrent() {
                 return `<span class="ms-info-byline">${avatar}${who}${details}</span>`;
             }
 
-            if (item && item.galleryName) {
+            if (item && (item.galleryName || item.filename)) {
                 const escG = (v) => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
                     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
                 const galleryHref = item.galleryUrl || linkUrl;
-                return `<span class="ms-info-source"><a class="ms-info-author" href="${escG(galleryHref)}" target="_blank" rel="noopener noreferrer" title="${escG(item.galleryName)}">${escG(item.galleryName)}</a>${infoMeta(presentation.date)}</span>`;
+                // A file host (Gofile, Drive) names the file; the folder it
+                // came from goes in the tooltip.
+                const label = item.filename || item.galleryName;
+                const tip = item.filename && item.galleryName && item.galleryName !== item.filename
+                    ? item.galleryName + ' / ' + item.filename : label;
+                return `<span class="ms-info-source"><a class="ms-info-author" href="${escG(galleryHref)}" target="_blank" rel="noopener noreferrer" title="${escG(tip)}">${escG(label)}</a>${infoMeta(presentation.date)}</span>`;
             }
 
             return linkUrl
