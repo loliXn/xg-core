@@ -1218,6 +1218,19 @@ export const OVERLAY_CSS = String.raw`
             box-sizing: border-box;
             background: rgba(255, 255, 255, 0.03);
         }
+        /* One level up: a block of several posts (item.superGroupId). Thin,
+           dashed and translucent so the solid post outline stays dominant;
+           1px outside it on the sides, 3px above and below inside the 90px
+           strip (thumbs 10..80, post box 6..84, this box 3..87). */
+        .ms-thumb-supergroup-box {
+            position: absolute;
+            top: 3px;
+            height: 84px;
+            border: 1px dashed;
+            border-radius: 12px;
+            box-sizing: border-box;
+            background: none;
+        }
         .ms-thumb.ms-thumb-abs {
             position: absolute;
             top: 10px;

@@ -2116,13 +2116,14 @@ function createPlaceholderIcon(isVideo) {
         return globalThis.XGalleryCore.createPlaceholderIcon(document, isVideo);
     }
 
-function getPastelColorForGroupId(groupId) {
+function getPastelColorForGroupId(groupId, alpha) {
         if (!groupId) return 'rgba(255, 255, 255, 0.25)';
         let hash = 0;
         for (let i = 0; i < groupId.length; i++) {
             hash = groupId.charCodeAt(i) + ((hash << 5) - hash);
         }
         const hue = Math.abs(hash % 360);
+        if (typeof alpha === 'number' && alpha >= 0 && alpha < 1) return `hsla(${hue}, 35%, 85%, ${alpha})`;
         return `hsl(${hue}, 35%, 85%)`;
     }
 
@@ -2398,13 +2399,17 @@ function thumbPreviewRevision(entry) {
         const token = source.length > 180
             ? source.length + ':' + source.slice(0, 96) + ':' + source.slice(-48)
             : source;
-        return token + '|' + String(item.type || '') + '|' + String(item.mediaMime || item.mimeType || '')
-            + '|' + Number(!!item.isGif) + '|' + Number(!!item.isVideo)
-            // Only an animated result changes what the cell should show (a frozen
-            // frame). Learning that a thumbnail is static used to bump the
-            // revision too, so the next repaint rebuilt a cell that was already
-            // showing the right picture - with a new, spinning image.
-            + '|' + (item.thumbnailAnimated ? String(item.thumbnailFormat || '') : '');
+        // Only an animated result changes what the cell should show (a frozen
+        // frame). Learning that a thumbnail is static used to bump the
+        // revision too, so the next repaint rebuilt a cell that was already
+        // showing the right picture - with a new, spinning image. The MIME
+        // learned from the bytes was still in here: on hosts where the
+        // thumbnail is the original, a JPEG is classified from its first bytes
+        // long before it finishes loading, and the refill restarted that
+        // download from zero.
+        const animated = (bridge.isFreezableAnimatedThumb && bridge.isFreezableAnimatedThumb(item)) || !!item.thumbnailAnimated;
+        return token + '|' + String(item.type || '') + '|' + Number(!!item.isVideo)
+            + '|' + Number(animated) + '|' + (animated ? String(item.thumbnailFormat || item.detectedFormat || '') : '');
     }
 
 function takeThumbVisual(el) {
@@ -2518,7 +2523,7 @@ function onWindowedGridClick(e) {
         setGridMode(false);
     }
 
-function fillThumbButton(btn, entry, index, groupCounts) {
+function fillThumbButton(btn, entry, index, groupCounts, visible) {
         const key = thumbItemKey(entry);
         const revision = thumbPreviewRevision(entry);
         const oldVisual = btn.dataset.msKey === key && btn.dataset.msThumbRevision !== revision
@@ -2548,6 +2553,7 @@ function fillThumbButton(btn, entry, index, groupCounts) {
             sourceClass: thumbSourceClass(item),
             cacheClass: cacheClass,
             active: index === bridge.state.currentIndex,
+            visible: visible !== false,
             hdSrc: hdSrc,
             isVideo: isVideo,
             isAnimated: animated,
@@ -2557,6 +2563,7 @@ function fillThumbButton(btn, entry, index, groupCounts) {
             sourceUrl: item.src,
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-placeholder'),
             loadImage: (img) => {
+                img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
                 if (animated) {
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
@@ -2594,7 +2601,27 @@ function thumbGroupData() {
             if (gid && (counts.get(gid) || 0) > 1) runs.push({ gid: gid, start: start, end: end });
             start = end;
         }
-        bridge.state.thumbGroupData = { items: bridge.state.items, length: bridge.state.items.length, counts: counts, runs: runs };
+        // Super groups: a block of several posts (site-agnostic; a BDSMLR
+        // activity block, say). One level above groupId, drawn as an outer
+        // outline around the post outlines.
+        const superRuns = [];
+        start = 0;
+        while (start < bridge.state.items.length) {
+            const first = bridge.state.items[start].item || bridge.state.items[start];
+            const sid = first.superGroupId ? String(first.superGroupId) : '';
+            let end = start + 1;
+            while (end < bridge.state.items.length) {
+                const it = bridge.state.items[end].item || bridge.state.items[end];
+                if ((it.superGroupId ? String(it.superGroupId) : '') !== sid) break;
+                end++;
+            }
+            // Singletons and blocks that coincide with exactly one post
+            // outline are skipped: a second ring around the same thumbs is noise.
+            const sameAsPost = runs.some((run) => run.start === start && run.end === end);
+            if (sid && end - start > 1 && !sameAsPost) superRuns.push({ gid: sid, start: start, end: end });
+            start = end;
+        }
+        bridge.state.thumbGroupData = { items: bridge.state.items, length: bridge.state.items.length, counts: counts, runs: runs, superRuns: superRuns };
         return bridge.state.thumbGroupData;
     }
 
@@ -2653,6 +2680,9 @@ function paintThumbsWindow(track, groupData) {
         const vis = Math.ceil(Math.max(track.clientWidth, 1) / bridge.MS_THUMB_STRIDE) + pad * 2;
         const end = Math.min(n, start + vis);
         const want = Math.max(0, end - start);
+        // The pad cells are off screen: their thumbnails load at low priority.
+        const visStart = start + (start > 0 ? pad : 0);
+        const visEnd = end - (end < n ? pad : 0);
         if (!bridge.state.thumbsPool) bridge.state.thumbsPool = [];
         const pool = bridge.state.thumbsPool;
         const used = new Set();
@@ -2676,11 +2706,11 @@ function paintThumbsWindow(track, groupData) {
                 btn.setAttribute('data-index', String(index));
                 btn.classList.toggle('active', index === bridge.state.currentIndex);
                 if (btn.dataset.msThumbRevision !== thumbPreviewRevision(entry)) {
-                    fillThumbButton(btn, entry, index, groupCounts);
+                    fillThumbButton(btn, entry, index, groupCounts, index >= visStart && index < visEnd);
                 }
                 continue;
             }
-            fillThumbButton(btn, entry, index, groupCounts);
+            fillThumbButton(btn, entry, index, groupCounts, index >= visStart && index < visEnd);
         }
         for (let i = 0; i < pool.length; i++) {
             if (used.has(pool[i])) continue;
@@ -2746,32 +2776,50 @@ function paintThumbGroupOutlines(track, groupData, visibleStart, visibleEnd) {
             track.appendChild(layer);
         }
         const data = groupData || thumbGroupData();
-        const runs = data.runs;
         const start = Math.max(0, Number.isFinite(visibleStart) ? visibleStart : 0);
         const end = Math.min(bridge.state.items.length, Number.isFinite(visibleEnd) ? visibleEnd : bridge.state.items.length);
-        let low = 0;
-        let high = runs.length;
-        while (low < high) {
-            const mid = (low + high) >> 1;
-            if (runs[mid].end <= start) low = mid + 1;
-            else high = mid;
-        }
-        const visibleRuns = [];
-        for (let r = low; r < runs.length && runs[r].start < end; r++) {
-            visibleRuns.push(runs[r]);
-        }
+        // Runs are sorted and disjoint. A run only partly inside the window is
+        // painted whole at absolute track coordinates, so its far edge sits
+        // correctly beside thumbs that are not mounted yet.
+        const visibleRunsOf = (runs) => {
+            let low = 0;
+            let high = runs.length;
+            while (low < high) {
+                const mid = (low + high) >> 1;
+                if (runs[mid].end <= start) low = mid + 1;
+                else high = mid;
+            }
+            const out = [];
+            for (let r = low; r < runs.length && runs[r].start < end; r++) out.push(runs[r]);
+            return out;
+        };
+        const visibleRuns = visibleRunsOf(data.runs);
+        const visibleSuperRuns = visibleRunsOf(data.superRuns || []);
+        const describe = (run) => run.gid + ':' + run.start + ':' + run.end;
         const signature = bridge.state.items.length + '|' + start + '|' + end + '|'
-            + visibleRuns.map((run) => run.gid + ':' + run.start + ':' + run.end).join(',');
+            + visibleRuns.map(describe).join(',') + '#' + visibleSuperRuns.map(describe).join(',');
         if (layer.dataset.msPaintSignature === signature) return;
         layer.dataset.msPaintSignature = signature;
         layer.innerHTML = '';
+        const stride = bridge.MS_THUMB_STRIDE;
+        // Outer level first so the post outline paints on top of it.
+        for (let r = 0; r < visibleSuperRuns.length; r++) {
+            const run = visibleSuperRuns[r];
+            const box = document.createElement('div');
+            box.className = 'ms-thumb-supergroup-box';
+            // 1px outside the post box on each side; adjacent blocks abut.
+            box.style.left = (run.start * stride - 3) + 'px';
+            box.style.width = ((run.end - run.start) * stride) + 'px';
+            box.style.borderColor = getPastelColorForGroupId(run.gid, 0.55);
+            layer.appendChild(box);
+        }
         for (let r = 0; r < visibleRuns.length; r++) {
             const run = visibleRuns[r];
             const box = document.createElement('div');
             box.className = 'ms-thumb-group-box';
 
-            box.style.left = (run.start * bridge.MS_THUMB_STRIDE - 2) + 'px';
-            box.style.width = ((run.end - run.start) * bridge.MS_THUMB_STRIDE - 2) + 'px';
+            box.style.left = (run.start * stride - 2) + 'px';
+            box.style.width = ((run.end - run.start) * stride - 2) + 'px';
             box.style.borderColor = getPastelColorForGroupId(run.gid);
             layer.appendChild(box);
         }
@@ -2943,6 +2991,7 @@ function fillGridCell(cell, entry, index) {
             sourceUrl: item.src,
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-grid-placeholder'),
             loadImage: (img) => {
+                img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
                 if (animated) {
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {

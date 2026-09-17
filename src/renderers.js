@@ -121,7 +121,9 @@ export function renderThumbnailCell(options) {
         const img = doc.createElement('img');
         img.loading = 'eager';
         img.decoding = 'async';
-        img.fetchPriority = options.active ? 'high' : 'low';
+        // Off-screen pad cells yield to everything else; cells the user can
+        // see should not queue behind the full-size preloads of neighbours.
+        img.fetchPriority = options.active ? 'high' : (options.visible === false ? 'low' : 'auto');
         img.referrerPolicy = 'no-referrer';
         img.onload = () => img.classList.add('ms-loaded');
         img.onerror = () => {
