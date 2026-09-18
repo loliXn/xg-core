@@ -2808,6 +2808,46 @@ export const OVERLAY_CSS = String.raw`
             line-height: 1.5;
             color: var(--ms-text-4);
         }
+        .ms-att-list { display: flex; flex-direction: column; gap: 4px; width: 100%; }
+        .ms-att-row {
+            display: flex; align-items: stretch; width: 100%; box-sizing: border-box;
+            border: 1px solid var(--ms-hairline); border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03); overflow: hidden;
+        }
+        .ms-att-main {
+            display: flex; align-items: center; gap: 10px; flex: 1 1 auto; min-width: 0;
+            padding: 7px 10px;
+            color: var(--ms-text-2); text-decoration: none; font-weight: 400;
+            transition: background 150ms var(--ms-ease), color 150ms var(--ms-ease);
+        }
+        .ms-att-main:hover { background: var(--ms-hover); color: var(--ms-text); }
+        .ms-att-main:hover .ms-att-name { text-decoration: underline; }
+        .ms-att-icon {
+            flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+            width: 20px; height: 20px; color: var(--ms-text-4);
+            transition: color 150ms var(--ms-ease);
+        }
+        .ms-att-icon svg { width: 20px; height: 20px; display: block; }
+        .ms-att-main:hover .ms-att-icon { color: var(--ms-accent); }
+        .ms-att-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+        /* Both lines clip rather than wrap, so every row keeps the same height
+           however narrow the panel is dragged. */
+        .ms-att-name {
+            font-size: 13px; line-height: 1.35;
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .ms-att-meta {
+            font-size: 11px; line-height: 1.3; color: var(--ms-text-4);
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .ms-att-dl {
+            flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+            width: 34px; color: var(--ms-text-4); text-decoration: none;
+            border-left: 1px solid var(--ms-hairline);
+            transition: background 150ms var(--ms-ease), color 150ms var(--ms-ease);
+        }
+        .ms-att-dl svg { width: 16px; height: 16px; display: block; }
+        .ms-att-dl:hover { background: var(--ms-hover); color: var(--ms-text); }
         .ms-post-section {
             width: 100%;
         }

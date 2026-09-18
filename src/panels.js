@@ -64,6 +64,20 @@ function panelHtml(doc, html, className) {
     return node;
 }
 
+// No class attributes inside these: panelHtml rewrites element.className,
+// which is read-only on SVG nodes.
+const ATTACHMENT_ICONS = {
+    image: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.5"/><path d="m4 17 5-5 4 4 2-2 5 5"/></svg>',
+    video: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="13" height="14" rx="2"/><path d="m16 10 5-3v10l-5-3z"/></svg>',
+    audio: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18V5l10-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="16" cy="16" r="3"/></svg>',
+    archive: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M3 3h18v4H3z"/><path d="M11 11h2v3h-2z"/></svg>',
+    document: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg>',
+    design: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a9 9 0 0 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-1 .8-1.7 1.8-1.7H16a5 5 0 0 0 5-5c0-4-4-7.3-9-7.3z"/><circle cx="7.5" cy="11.5" r="1.1"/><circle cx="11" cy="7.5" r="1.1"/><circle cx="15.5" cy="9.5" r="1.1"/></svg>',
+    link: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1-1"/></svg>',
+    file: '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>'
+};
+const ATTACHMENT_DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7.5 11 4.5 4.5 4.5-4.5"/><path d="M5 19h14"/></svg>';
+
 export function renderPostPanel(options) {
     const { content, model } = options;
     const doc = content.ownerDocument;
@@ -128,6 +142,57 @@ export function renderPostPanel(options) {
         caption.append(card);
     });
     if (caption.childNodes.length) body.append(caption);
+    // A post's attachments, read the way an email lists them: a row each, with
+    // a type icon, the name, and a second line naming the type (and size, when
+    // the site says). An adapter passes data; the markup lives here so every
+    // adapter gets the same strip.
+    //   { name, href, meta?, kind?, downloadHref?, downloadLabel?, title? }
+    if (Array.isArray(model.attachments) && model.attachments.length) {
+        const section = panelElement(doc, 'section', 'ms-post-section ms-post-attachments');
+        const count = model.attachments.length;
+        section.append(panelElement(doc, 'div', 'ms-info-tags-label',
+            count === 1 ? '1 attachment' : count + ' attachments'));
+        const list = panelElement(doc, 'div', 'ms-att-list');
+        model.attachments.forEach(attachment => {
+            if (!attachment || !attachment.href) return;
+            const row = panelElement(doc, 'div', 'ms-att-row');
+            const main = panelElement(doc, 'a', 'ms-att-main');
+            main.href = attachment.href;
+            main.target = '_blank';
+            main.rel = 'noopener noreferrer';
+            if (attachment.title) main.title = attachment.title;
+            const icon = panelElement(doc, 'span', 'ms-att-icon');
+            icon.innerHTML = ATTACHMENT_ICONS[attachment.kind] || ATTACHMENT_ICONS.file;
+            const text = panelElement(doc, 'span', 'ms-att-text');
+            text.append(panelElement(doc, 'span', 'ms-att-name', attachment.name || attachment.href));
+            if (attachment.meta) text.append(panelElement(doc, 'span', 'ms-att-meta', attachment.meta));
+            main.append(icon, text);
+            main.addEventListener('click', event => {
+                event.stopPropagation();
+                if (attachment.onOpen) { event.preventDefault(); attachment.onOpen(); }
+            });
+            row.append(main);
+            // An attachment opened in an editor still needs a plain way down to
+            // the file itself.
+            if (attachment.downloadHref) {
+                const download = panelElement(doc, 'a', 'ms-att-dl');
+                download.href = attachment.downloadHref;
+                download.target = '_blank';
+                download.rel = 'noopener noreferrer';
+                const label = attachment.downloadLabel || ('Download ' + (attachment.name || 'file'));
+                download.title = label;
+                download.setAttribute('aria-label', label);
+                download.innerHTML = ATTACHMENT_DOWNLOAD_ICON;
+                download.addEventListener('click', event => event.stopPropagation());
+                row.append(download);
+            }
+            list.append(row);
+        });
+        if (list.childNodes.length) {
+            section.append(list);
+            body.append(section);
+        }
+    }
     const appendTags = (label, tags, profileUrl = '') => {
         if (!tags || !tags.length) return;
         const tagsSection = panelElement(doc, 'section', 'ms-post-section ms-post-tags');
