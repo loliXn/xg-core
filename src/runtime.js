@@ -162,92 +162,124 @@ function clearViewerMedia() {
 // The same editor, in a window of its own - the normal way to open one.
 //
 // The editor only talks to the page that embeds it, so the window cannot be
-// the editor itself: it is a blank window we own (and can therefore script),
-// holding the editor in a frame the same way the in-gallery version does. To
-// the reader it is simply the editor in its own window.
-function openEditorWindow(options) {
-    if (!options || !options.url) return null;
-    const child = window.open('', '_blank');
-    // Blocked by a popup blocker, or opened with no opener to script.
-    if (!child || !child.document) return null;
-    const title = String(options.title || 'Editor');
-    const escape = (value) => String(value).replace(/[&<>"]/g, (c) => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    child.document.write(
-        '<!doctype html><html><head><meta charset="utf-8"><title>' + escape(title) + '</title>'
-        + '<style>html,body{margin:0;height:100%;background:#14161a;color:#e7e8eb;'
-        + 'font:13px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}'
-        + '.bar{display:flex;align-items:center;gap:12px;padding:8px 12px;'
-        + 'border-bottom:1px solid rgba(255,255,255,.08);background:#191b20}'
-        + '.name{max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}'
-        + '.status{color:#9a9ca3;font-size:12px}'
-        + 'a{color:#6088eb;font-size:12px}'
-        + 'iframe{display:block;width:100%;height:calc(100% - 38px);border:0;background:#1e1e1e}'
-        + '</style></head><body><div class="bar"><div class="name">' + escape(title) + '</div>'
-        + '<div class="status" id="s"></div><span id="f"></span></div>'
-        + '<iframe id="e" src="' + escape(options.url) + '"></iframe></body></html>');
-    child.document.close();
-
-    const frame = child.document.getElementById('e');
-    const statusEl = child.document.getElementById('s');
-    let ready = false;
-    let closed = false;
-    let pending = null;
-    const closeHandlers = [];
-    const setStatus = (text) => { try { statusEl.textContent = text || ''; } catch (e) { } };
-    const post = (buffer) => {
-        try { frame.contentWindow.postMessage(buffer, '*'); }
-        catch (e) { fail('The editor did not accept the file.'); }
-    };
-    const fail = (message) => {
-        setStatus(message || 'The file could not be opened.');
-        if (!options.fallbackHref) return;
-        try {
-            const slot = child.document.getElementById('f');
+// the editor itself: it is a page of ours holding the editor in a frame. That
+// page is a blob: URL rather than a written-into about:blank, so the window
+// has a real address - reloading it rebuilds the page and asks for the file
+// again instead of leaving a blank window behind.
+//
+// The blob page asks its opener for the file (they share an origin), so the
+// bytes are never in the URL and a reload can always get them again while the
+// gallery's tab is alive.
+const EDITOR_WINDOW_PAGE = (title, url) => `<!doctype html>
+<html><head><meta charset="utf-8"><title>${title}</title><style>
+html,body{margin:0;height:100%;background:#14161a;color:#e7e8eb;
+font:13px/1.3 system-ui,-apple-system,"Segoe UI",sans-serif}
+.bar{display:flex;align-items:center;gap:12px;padding:8px 12px;
+border-bottom:1px solid rgba(255,255,255,.08);background:#191b20}
+.name{max-width:50%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status{color:#9a9ca3;font-size:12px}
+a{color:#6088eb;font-size:12px}
+iframe{display:block;width:100%;height:calc(100% - 38px);border:0;background:#1e1e1e}
+</style></head><body>
+<div class="bar"><div class="name">${title}</div><div class="status" id="s"></div><span id="f"></span></div>
+<iframe id="e" src="${url}"></iframe>
+<script>
+(function () {
+    var frame = document.getElementById('e');
+    var status = document.getElementById('s');
+    var ready = false, pending = null;
+    var say = function (text) { status.textContent = text || ''; };
+    var post = function (buffer) { try { frame.contentWindow.postMessage(buffer, '*'); } catch (e) { say('The editor did not accept the file.'); } };
+    window.addEventListener('message', function (event) {
+        if (event.source === frame.contentWindow) {
+            if (String(event.data) !== 'done') return;
+            if (!ready) { ready = true; if (pending) { post(pending); pending = null; } }
+            else say('');
+            return;
+        }
+        // The opener answers with the file, or with a word about it.
+        if (!event.data || typeof event.data !== 'object') return;
+        if (event.data.xgStatus !== undefined) { say(String(event.data.xgStatus)); return; }
+        if (event.data.xgFile) {
+            if (ready) post(event.data.xgFile); else pending = event.data.xgFile;
+        }
+        if (event.data.xgFallback) {
+            var slot = document.getElementById('f');
             if (slot && !slot.childNodes.length) {
-                const link = child.document.createElement('a');
-                link.href = options.fallbackHref;
+                var link = document.createElement('a');
+                link.href = event.data.xgFallback;
                 link.target = '_blank';
                 link.rel = 'noopener noreferrer';
-                link.textContent = options.fallbackLabel || 'Download the file instead';
+                link.textContent = event.data.xgFallbackLabel || 'Download the file instead';
                 slot.appendChild(link);
             }
-        } catch (e) { }
+        }
+    });
+    // On first load and on every reload: ask whoever opened this window.
+    var ask = function () {
+        if (!window.opener || window.opener.closed) { say('The gallery tab is gone, so the file cannot be fetched again.'); return; }
+        try { window.opener.postMessage({ xgEditorReady: true }, '*'); } catch (e) { }
     };
-    // The editor answers the window that holds the frame, which is the child.
+    ask();
+    window.setTimeout(function () { if (!ready) ask(); }, 1500);
+}());
+</script></body></html>`;
+
+function openEditorWindow(options) {
+    if (!options || !options.url) return null;
+    const title = String(options.title || 'Editor').replace(/[&<>"]/g, (c) => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    let pageUrl = '';
+    try {
+        pageUrl = URL.createObjectURL(new Blob([EDITOR_WINDOW_PAGE(title, options.url)], { type: 'text/html' }));
+    } catch (e) {
+        return null;
+    }
+    const child = window.open(pageUrl, '_blank');
+    // Blocked by a popup blocker: the caller falls back to the in-gallery frame.
+    if (!child) {
+        try { URL.revokeObjectURL(pageUrl); } catch (e) { }
+        return null;
+    }
+
+    let closed = false;
+    let file = null;
+    let status = '';
+    const closeHandlers = [];
+    const tell = (message) => {
+        try { child.postMessage(message, '*'); } catch (e) { }
+    };
     const onMessage = (event) => {
-        if (event.source !== frame.contentWindow) return;
-        if (String(event.data) !== 'done') return;
-        if (!ready) {
-            ready = true;
-            if (pending) { post(pending); pending = null; }
-        } else setStatus('');
+        if (event.source !== child) return;
+        if (!event.data || !event.data.xgEditorReady) return;
+        // The window is up (or was reloaded): hand it what we have.
+        if (status) tell({ xgStatus: status });
+        if (options.fallbackHref) tell({ xgFallback: options.fallbackHref, xgFallbackLabel: options.fallbackLabel });
+        if (file) tell({ xgFile: file });
     };
-    child.addEventListener('message', onMessage);
-    const readyTimer = child.setTimeout(() => {
-        if (!ready && !closed) fail('The editor did not respond.');
-    }, options.readyTimeout || 40000);
+    window.addEventListener('message', onMessage);
+
     const finish = () => {
         if (closed) return;
         closed = true;
-        try { child.clearTimeout(readyTimer); } catch (e) { }
+        window.removeEventListener('message', onMessage);
+        window.clearInterval(watch);
+        try { URL.revokeObjectURL(pageUrl); } catch (e) { }
         closeHandlers.forEach(fn => { try { fn(); } catch (e) { } });
     };
     // A download still in flight is pointless once the window is gone.
-    child.addEventListener('beforeunload', finish);
-    const watch = window.setInterval(() => {
-        if (child.closed) { window.clearInterval(watch); finish(); }
-    }, 1000);
+    const watch = window.setInterval(() => { if (child.closed) finish(); }, 1000);
 
     return {
         window: child,
-        setStatus: setStatus,
-        fail: fail,
-        send: (buffer) => {
-            // The buffer belongs to this window; hand the child its own copy so
-            // neither side is left with a detached one.
-            if (ready) post(buffer); else pending = buffer;
+        setStatus: (text) => { status = text || ''; tell({ xgStatus: status }); },
+        fail: (message) => {
+            status = message || 'The file could not be opened.';
+            tell({ xgStatus: status });
+            if (options.fallbackHref) tell({ xgFallback: options.fallbackHref, xgFallbackLabel: options.fallbackLabel });
         },
+        // Kept, so a reload of that window can be answered with it again.
+        send: (buffer) => { file = buffer; tell({ xgFile: buffer }); },
         close: () => { finish(); try { child.close(); } catch (e) { } },
         onClose: (fn) => { if (typeof fn === 'function') closeHandlers.push(fn); }
     };
