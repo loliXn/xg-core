@@ -2811,10 +2811,28 @@ function fillThumbButton(btn, entry, index, groupCounts, visible) {
                 }
             }
         });
+        paintThumbAttachmentBadge(btn, item);
         if (oldVisual && !isPlaceholder) armThumbHandoff(btn, oldVisual, revision);
         if (bridge.state.thumbEnteringKeys && bridge.state.thumbEnteringKeys.has(btn.dataset.msKey)) {
             btn.classList.add('ms-thumb-entering');
         }
+    }
+
+// A post can carry files the gallery cannot show (a layered file, an archive,
+// a folder of them). The thumbnail says so with a small count on its corner,
+// so they are findable without opening every post's Info panel.
+function paintThumbAttachmentBadge(host, item) {
+        const existing = host.querySelector('.ms-thumb-att-badge');
+        const count = Math.max(0, Math.floor(Number(item && item.attachmentCount) || 0));
+        if (!count) {
+            if (existing) existing.remove();
+            return;
+        }
+        const badge = existing || document.createElement('span');
+        badge.className = 'ms-thumb-att-badge';
+        badge.textContent = count > 99 ? '99+' : String(count);
+        badge.title = count === 1 ? '1 attachment' : count + ' attachments';
+        if (!existing) host.appendChild(badge);
     }
 
 function invalidateThumbGroupData() {

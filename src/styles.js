@@ -2833,6 +2833,27 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-editor-close:hover { background: var(--ms-hover); color: var(--ms-text); }
         .ms-editor-frame { flex: 1 1 auto; width: 100%; border: 0; display: block; background: #1e1e1e; }
+        /* How many files a post carries, on the corner of its thumbnail. */
+        .ms-thumb-att-badge {
+            position: absolute;
+            top: 3px;
+            right: 3px;
+            min-width: 17px;
+            height: 17px;
+            padding: 0 4px;
+            box-sizing: border-box;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 9px;
+            background: var(--ms-accent);
+            color: var(--ms-on-accent, #0d0f12);
+            font: 600 10px/1 var(--ms-font-ui);
+            letter-spacing: 0;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+            pointer-events: none;
+            z-index: 3;
+        }
         .ms-att-list { display: flex; flex-direction: column; gap: 4px; width: 100%; }
         .ms-att-row {
             display: flex; align-items: stretch; width: 100%; box-sizing: border-box;
@@ -2846,7 +2867,7 @@ export const OVERLAY_CSS = String.raw`
             transition: background 150ms var(--ms-ease), color 150ms var(--ms-ease);
         }
         .ms-att-main:hover { background: var(--ms-hover); color: var(--ms-text); }
-        .ms-att-main:hover .ms-att-name { text-decoration: underline; }
+
         .ms-att-icon {
             flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
             width: 20px; height: 20px; color: var(--ms-text-4);

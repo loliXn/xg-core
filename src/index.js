@@ -11,6 +11,15 @@ export {
 } from './update.js';
 export { GalleryController } from './controller.js';
 export { inspectImageFormat } from './media-format.js';
+export {
+    GOOGLE_DRIVE_FOLDER_MIME,
+    googleDriveFolderId,
+    googleDriveFileId,
+    googleDriveListingUrl,
+    googleDriveFileUrls,
+    parseGoogleDriveFolderListing,
+    readGoogleDriveFolder
+} from './gdrive.js';
 export { createViewerRuntime } from './runtime.js';
 export { renderPostPanel, createSettingsPanel } from './panels.js';
 export { OVERLAY_CSS, LAUNCHER_CSS, installOverlayStyles, installLauncherStyles, DEFAULT_ACCENT, ACCENT_PRESETS, accentTokens, applyAccent } from './styles.js';
