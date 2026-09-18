@@ -3929,7 +3929,7 @@ function renderCurrent() {
                     return;
                 }
                 if (retryIndex >= retrySources.length) {
-                    if (item.imageFallbackSrc && !item._imageFallbackTried) {
+                    if (presentation.allowImageFallback !== false && item.imageFallbackSrc && !item._imageFallbackTried) {
                         item._imageFallbackTried = true;
                         item.src = item.imageFallbackSrc;
                         item.type = 'img';
