@@ -2808,6 +2808,31 @@ export const OVERLAY_CSS = String.raw`
             line-height: 1.5;
             color: var(--ms-text-4);
         }
+        /* An editor (Photopea) over the gallery, with its own title bar. */
+        .ms-editor-frame-wrap {
+            position: fixed; inset: 0; z-index: 2147483647;
+            display: flex; flex-direction: column;
+            background: var(--ms-surface-0, #0e0f12);
+        }
+        .ms-editor-bar {
+            display: flex; align-items: center; gap: 12px;
+            padding: 8px 12px; flex: 0 0 auto;
+            border-bottom: 1px solid var(--ms-hairline);
+            background: var(--ms-surface-1);
+            font: 500 13px/1.3 var(--ms-font-ui, system-ui, sans-serif);
+            color: var(--ms-text);
+        }
+        .ms-editor-title { max-width: 48%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ms-editor-status { color: var(--ms-text-4); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ms-editor-fallback { color: var(--ms-accent); font-size: 12px; text-decoration: underline; }
+        .ms-editor-spacer { flex: 1 1 auto; }
+        .ms-editor-close {
+            appearance: none; border: 0; background: transparent; cursor: pointer;
+            color: var(--ms-text-2); font-size: 20px; line-height: 1;
+            width: 32px; height: 28px; border-radius: 6px;
+        }
+        .ms-editor-close:hover { background: var(--ms-hover); color: var(--ms-text); }
+        .ms-editor-frame { flex: 1 1 auto; width: 100%; border: 0; display: block; background: #1e1e1e; }
         .ms-att-list { display: flex; flex-direction: column; gap: 4px; width: 100%; }
         .ms-att-row {
             display: flex; align-items: stretch; width: 100%; box-sizing: border-box;

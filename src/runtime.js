@@ -159,6 +159,152 @@ function clearViewerMedia() {
         wrap.querySelectorAll('iframe').forEach(frame=>frame.src='about:blank');wrap.replaceChildren();
     }
 }
+// An external editor (Photopea) in a frame over the gallery, fed the file's
+// bytes rather than a URL. The editor only talks to the page that embeds it,
+// which is why this is a frame and not a new tab: it announces itself with
+// "done", takes the file as an ArrayBuffer, and says "done" again once the
+// document is open. Returns a small session the caller drives; null when the
+// overlay is not up.
+function openEditorFrame(options) {
+    const overlay = bridge.state.overlay;
+    if (!overlay || !options || !options.url) return null;
+    // Inside the overlay, not beside it: as a sibling it sat under the
+    // gallery, which owns the top of the stacking order in this root.
+    const root = overlay;
+    const existing = root.querySelector('.ms-editor-frame-wrap');
+    if (existing) existing.remove();
+
+    const wrap = document.createElement('div');
+    wrap.className = 'ms-editor-frame-wrap';
+    const bar = document.createElement('div');
+    bar.className = 'ms-editor-bar';
+    const title = document.createElement('div');
+    title.className = 'ms-editor-title';
+    title.textContent = options.title || 'Editor';
+    const status = document.createElement('div');
+    status.className = 'ms-editor-status';
+    const spacer = document.createElement('div');
+    spacer.className = 'ms-editor-spacer';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'ms-editor-close';
+    close.textContent = '\u00d7';
+    close.title = 'Close the editor';
+    close.setAttribute('aria-label', 'Close the editor');
+    bar.append(title, status, spacer, close);
+    const frame = document.createElement('iframe');
+    frame.className = 'ms-editor-frame';
+    frame.setAttribute('allow', 'clipboard-read; clipboard-write');
+    frame.src = options.url;
+    wrap.append(bar, frame);
+    root.appendChild(wrap);
+
+    let ready = false;
+    let closed = false;
+    const closeHandlers = [];
+    const onMessage = (event) => {
+        if (event.source !== frame.contentWindow) return;
+        if (String(event.data) !== 'done') return;
+        if (!ready) {
+            ready = true;
+            if (pending) { post(pending); pending = null; }
+        } else {
+            setStatus('');
+        }
+    };
+    window.addEventListener('message', onMessage);
+
+    const destroy = () => {
+        if (closed) return;
+        closed = true;
+        window.removeEventListener('message', onMessage);
+        clearTimeout(readyTimer);
+        wrap.remove();
+        closeHandlers.forEach(fn => { try { fn(); } catch (e) { } });
+    };
+    close.addEventListener('click', destroy);
+
+    const setStatus = (text) => { status.textContent = text || ''; };
+    const fail = (message) => {
+        setStatus(message || 'The file could not be opened.');
+        if (options.fallbackHref && !bar.querySelector('.ms-editor-fallback')) {
+            const link = document.createElement('a');
+            link.className = 'ms-editor-fallback';
+            link.href = options.fallbackHref;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = options.fallbackLabel || 'Download the file instead';
+            bar.insertBefore(link, spacer);
+        }
+    };
+    let pending = null;
+    const post = (buffer) => {
+        try { frame.contentWindow.postMessage(buffer, '*'); }
+        catch (e) { fail('The editor did not accept the file.'); }
+    };
+    // If the editor never announces itself, say so rather than spin.
+    const readyTimer = setTimeout(() => {
+        if (!ready && !closed) fail('The editor did not respond.');
+    }, options.readyTimeout || 40000);
+
+    return {
+        frame: frame,
+        setStatus: setStatus,
+        fail: fail,
+        send: (buffer) => { if (ready) post(buffer); else pending = buffer; },
+        close: destroy,
+        onClose: (fn) => { if (typeof fn === 'function') closeHandlers.push(fn); }
+    };
+}
+
+// Closing the gallery scrolls the page back to the item you were on. On a
+// grid of near-identical thumbnails that still leaves you hunting, so the
+// element is outlined for a moment. The outline is our own element laid over
+// the target rather than a class on the host's node: a class can collide with
+// the site's own styles and its scripts can strip it.
+function flashHostElement(el, options) {
+    if (!el || !el.isConnected || typeof el.getBoundingClientRect !== 'function') return null;
+    const rect = el.getBoundingClientRect();
+    if (!rect.width || !rect.height) return null;
+    const doc = el.ownerDocument || document;
+    const view = doc.defaultView || window;
+    const previous = doc.querySelector('[data-ms-highlight]');
+    if (previous) previous.remove();
+    const mark = doc.createElement('div');
+    mark.setAttribute('data-ms-highlight', '1');
+    mark.setAttribute('aria-hidden', 'true');
+    const pad = 3;
+    const values = {
+        position: 'absolute',
+        left: (rect.left + (view.scrollX || 0) - pad) + 'px',
+        top: (rect.top + (view.scrollY || 0) - pad) + 'px',
+        width: (rect.width + pad * 2) + 'px',
+        height: (rect.height + pad * 2) + 'px',
+        'box-sizing': 'border-box',
+        border: '2px solid ' + ((options && options.color) || 'var(--ms-accent, hsl(223, 78%, 65%))'),
+        'border-radius': ((options && options.radius) || '10px'),
+        'box-shadow': '0 0 0 4px rgba(96, 136, 235, 0.18)',
+        'pointer-events': 'none',
+        'z-index': '2147483646',
+        opacity: '1',
+        margin: '0',
+        padding: '0',
+        background: 'transparent',
+        transition: prefersReducedMotion() ? 'none' : 'opacity 420ms ease'
+    };
+    for (const [key, value] of Object.entries(values)) mark.style.setProperty(key, value, 'important');
+    (doc.body || doc.documentElement).appendChild(mark);
+    const hold = (options && options.hold) || 900;
+    const done = () => { if (mark.parentNode) mark.remove(); };
+    view.setTimeout(() => {
+        if (!mark.parentNode) return;
+        if (prefersReducedMotion()) { done(); return; }
+        mark.style.setProperty('opacity', '0', 'important');
+        view.setTimeout(done, 480);
+    }, hold);
+    return mark;
+}
+
 function revealHost() {
     const overlay=bridge.state.overlay;if(!overlay)return;
     overlay.classList.remove('ms-closing');
@@ -4307,5 +4453,5 @@ async function openFavoriteFolders(item, anchor) {
             setFavoriteMenuStatus(menu, error && error.message ? error.message : 'Could not load favorite folders.', 'error');
         }
     }
-return { snapshotGhostSource, paintClusterSeams, mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
+return { openEditorFrame, flashHostElement, snapshotGhostSource, paintClusterSeams, mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
 }
