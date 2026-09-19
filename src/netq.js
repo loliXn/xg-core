@@ -34,13 +34,13 @@ export const MEDIA_LANES = Object.freeze({
 const LANE_NAMES = ['stage', 'visible', 'prefetch', 'background'];
 
 // How much else may run while the stage is still waiting for its first
-// bytes. Two concurrent fetches never delayed the stage in the measurements;
-// six starved it. So the barrier is a narrowing, not a stop: the stage can be
+// bytes. Up to five concurrent fetches never delayed the stage in the
+// measurements; six starved it. Four leaves a margin. So the barrier is a narrowing, not a stop: the stage can be
 // slow for honest reasons - a big file on a slow host - and a strip that
 // froze for as long as a video took to start would be its own bug. The
 // first version did exactly that, then let one request through at a time,
 // and on a slow host that was a minute of nothing followed by everything.
-const BARRIER_WIDTH = 2;
+const BARRIER_WIDTH = 4;
 
 function hostOf(url) {
     const value = String(url || '');
