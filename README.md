@@ -11,6 +11,22 @@ rendering lifecycle.
 It must not contain site detection, source-page selectors, authenticated site
 actions, Tampermonkey APIs, or live host DOM nodes.
 
+## One budget for every request
+
+`netq.js` holds the gate that every fetch in a gallery asks for a slot first -
+thumbnails, first-frame extraction, probes, prefetch, and the media on screen.
+It enforces a per-host ceiling below the browser's own, orders work by lane
+(`stage`, `visible`, `prefetch`, `background`), and raises a barrier while the
+stage is waiting for its first bytes: past the per-host ceiling a fresh video
+element does not get slower, it never starts. Adapters keep their own
+transports and call `sharedMediaGate()`; a host that answers 408, 429 or 5xx is
+reported once through `slot.report()` and every lane backs off.
+
+`thumbs.js` holds the other half: `planVideoThumb()` decides what a video's
+thumbnail is, and the answer is always one still frame - a cached frame, a
+poster, a frozen animated poster, an extracted first frame, or a placeholder. A
+`<video>` element in a cell is opt-in per adapter and nothing opts in.
+
 ## Boundary
 
 Handlers pass serializable media items into `GalleryController`. Every item has

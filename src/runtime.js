@@ -141,14 +141,27 @@ function clearViewerMedia() {
     ++bridge.state.renderToken;
     clearFullscreenIdleTimer();stopThumbTrackAnimation();cancelFlyGhost();
     if(bridge.state.mediaFitObserver){bridge.state.mediaFitObserver.disconnect();bridge.state.mediaFitObserver=null;}
+    setStageFetching(false);
+    const gateOnClose=mediaGate();if(gateOnClose)gateOnClose.abort();
     for(const key of ['thumbsWindowRaf','gridWindowRaf'])if(bridge.state[key]){cancelAnimationFrame(bridge.state[key]);bridge.state[key]=null;}
     if(bridge.state.thumbEnteringTimer){clearTimeout(bridge.state.thumbEnteringTimer);bridge.state.thumbEnteringTimer=null;}
     bridge.state.thumbKnownKeys=null;bridge.state.thumbEnteringKeys=null;
     bridge.state.gridKnownKeys=null;bridge.state.gridEnteringKeys=null;
     if(bridge.state.gridEnteringTimer){clearTimeout(bridge.state.gridEnteringTimer);bridge.state.gridEnteringTimer=null;}
     overlay.classList.remove('ms-grid-mode','ms-stage-fullscreen');
+    // Both pools are torn down cell by cell before the containers are
+    // emptied: dropping a node whose <img> or <video> still has a src leaves
+    // the request running with nothing left to cancel it.
+    (bridge.state.gridPool||[]).forEach(cell=>resetMediaThumbEl(cell));
     const grid=overlay.querySelector('.ms-grid');if(grid)grid.replaceChildren();
     bridge.state.gridPool=[];bridge.state.gridSizer=null;
+    (bridge.state.thumbsPool||[]).forEach(cell=>resetMediaThumbEl(cell));
+    const track=overlay.querySelector('.ms-thumbs-track');if(track)track.replaceChildren();
+    bridge.state.thumbsPool=[];
+    // The observers outlived every session, holding on to the cells they were
+    // watching and the items behind them.
+    if(bridge.lazyThumbObserver){bridge.lazyThumbObserver.disconnect();bridge.lazyThumbObserver=null;}
+    if(bridge.state.gridResizeObs){bridge.state.gridResizeObs.disconnect();bridge.state.gridResizeObs=null;}
     const wrap=overlay.querySelector('.ms-media-wrap');
     if(wrap){
         delete wrap.dataset.msVerticalFitBound;
@@ -932,7 +945,14 @@ function measureRowContentWidth(row) {
             shown++;
         }
         if (shown > 1) {
-            const gap = parseFloat(bridge.getComputedStyle(row).columnGap) || 0;
+            // Called with an explicit window: the adapter hands over the
+            // page's own getComputedStyle unbound, and a native method invoked
+            // off a plain object is an illegal invocation. Tampermonkey's
+            // sandbox happens to hand over a bound one, which is why this only
+            // ever bit outside it - the same trap as building a MouseEvent
+            // with the sandbox's stand-in window.
+            const styleOf = bridge.getComputedStyle || globalThis.getComputedStyle;
+            const gap = parseFloat(styleOf.call(globalThis, row).columnGap) || 0;
             total += gap * (shown - 1);
         }
         return total;
@@ -1445,86 +1465,6 @@ function setGridMode(on) {
             if (bridge.state.tagsPanelWanted) bridge.applyTagsPanel(true);
         }
         updateButtons();
-    }
-
-function buildGridCell(entry, index) {
-        const item = entry.item || entry;
-        const cell = document.createElement('button');
-        cell.type = 'button';
-        const hdSrc = bridge.getHdSrc(item);
-        if (hdSrc) cell.setAttribute('data-hd-src', hdSrc);
-        const cacheClass = (hdSrc && !bridge.state.cachedImageUrls.has(hdSrc) && !item._msMediaLoaded) ? ' ms-uncached' : '';
-        cell.className = 'ms-grid-cell' + cacheClass + (index === bridge.state.currentIndex ? ' active' : '');
-        cell.setAttribute('data-grid-index', index);
-
-        const thumbSrc = item.thumbSrc || item.src;
-        const isVideo = item.type === 'video' || item.type === 'iframe' || item.expectedVideo || item.xUnplayable;
-        const hasPoster = !!(item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc));
-
-        if (thumbMediaIsPlaceholder(item, thumbSrc)) {
-            cell.classList.add('ms-grid-placeholder');
-            cell.appendChild(createPlaceholderIcon(isVideo));
-            let domain = 'unknown';
-            try {
-                if (item.src) domain = new URL(item.src).hostname.replace('www.', '');
-            } catch (err) { domain = 'error'; }
-            const domainSpan = document.createElement('div');
-            domainSpan.className = 'ms-domain';
-            domainSpan.textContent = domain;
-            cell.appendChild(domainSpan);
-        } else {
-
-            const isVideoThumb = isVideo;
-            if (isVideoThumb) {
-                appendVideoThumbMedia(cell, item, thumbSrc, isVideo, 'ms-grid-placeholder');
-            } else {
-                const img = document.createElement('img');
-                img.loading = 'lazy';
-                img.referrerPolicy = 'no-referrer';
-                img.onload = function () { img.classList.add('ms-loaded'); };
-                if (bridge.isFreezableAnimatedThumb(item)) {
-                    bridge.freezeAnimatedThumbnail(img, item);
-                } else {
-                    bridge.setCachedImgSrc(img, thumbSrc, item);
-                }
-                img.onerror = function () {
-                    if (img.parentNode === cell && !cell.classList.contains('ms-grid-placeholder')) {
-                        cell.classList.add('ms-grid-placeholder');
-                        cell.innerHTML = '';
-                        cell.appendChild(createPlaceholderIcon(isVideo));
-                    }
-                };
-                cell.appendChild(img);
-            }
-        }
-
-        if (isVideo && !bridge.isFreezableAnimatedThumb(item)) {
-            const videoBadge = document.createElement('div');
-            videoBadge.className = 'ms-thumb-video-icon';
-            videoBadge.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="#fff"/></svg>';
-            cell.appendChild(videoBadge);
-        } else if (bridge.isFreezableAnimatedThumb(item)) {
-            const gifBadge = document.createElement('div');
-            gifBadge.className = 'ms-thumb-gif-icon';
-            gifBadge.textContent = bridge.animatedThumbLabel(item);
-            cell.appendChild(gifBadge);
-        }
-
-        const idxBadge = document.createElement('div');
-        idxBadge.className = 'ms-grid-idx';
-        idxBadge.textContent = index + 1;
-        cell.appendChild(idxBadge);
-
-        cell.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            bridge.rememberNavigationDirection(bridge.state.currentIndex, index, bridge.state.items.length);
-            bridge.state.currentIndex = index;
-            bridge.state.activeNode = bridge.state.items[index] ? bridge.state.items[index].node : null;
-            setGridMode(false);
-        });
-
-        return cell;
     }
 
 function renderGrid(options) {
@@ -2336,7 +2276,10 @@ function getSourceClass(item) {
 
 function promoteLazyThumbVideo(vid) {
         const url = vid && vid.dataset ? vid.dataset.msLazySrc : '';
-        if (!url || vid.src) return;
+        // The observer fires a frame late; by then the cell may already have
+        // been refilled with something else, and starting a fetch for a node
+        // nobody will show is pure waste.
+        if (!url || vid.src || !vid.isConnected) return;
         delete vid.dataset.msLazySrc;
         vid.preload = 'metadata';
         vid.src = url;
@@ -2430,86 +2373,83 @@ function appendStaticVideoThumb(host, url, onError) {
         host.appendChild(img);
     }
 
-function hasPlayableVideoThumb(item, thumbSrc) {
-        const url = String((item && item.src) || thumbSrc || '');
-        if (!url) return false;
-        if (typeof bridge.isPlaceholderUrl === 'function' && bridge.isPlaceholderUrl(url)) return false;
-        if (typeof bridge.isMp4ThumbUrl === 'function' && bridge.isMp4ThumbUrl(url)) return true;
-        if (typeof bridge.isVideoThumbSource === 'function' && bridge.isVideoThumbSource(url)) return true;
-        return /\.(mp4|webm|ogg|m4v|mov)(?:\?|#|$)/i.test(url);
+function thumbPlanInput(item, thumbSrc) {
+        return {
+            frozen: item && item._frozenThumb,
+            thumbSrc: thumbSrc,
+            itemThumbSrc: item && item.thumbSrc,
+            src: item && item.src,
+            isPlaceholderUrl: (url) => typeof bridge.isPlaceholderUrl === 'function' && bridge.isPlaceholderUrl(url),
+            isImageUrl: isStaticVideoThumbUrl,
+            mayAnimate: mayBeAnimatedImageUrl,
+            canExtract: () => !!(bridge.canExtractMp4Poster && bridge.canExtractMp4Poster(item, (item && item.src) || thumbSrc)),
+            // A <video> in a cell is opt-in and nothing opts in: see thumbs.js.
+            allowVideoElement: bridge.allowThumbVideoElements === true
+        };
+    }
+
+function planThumbFor(item, thumbSrc) {
+        return globalThis.XGalleryCore.planVideoThumb(thumbPlanInput(item, thumbSrc));
     }
 
 function thumbMediaIsPlaceholder(item, thumbSrc) {
-        const hasPoster = isStaticVideoThumbUrl(thumbSrc) || isStaticVideoThumbUrl(item && item.thumbSrc)
-            || !!(item && item.thumbSrc && item.thumbSrc !== item.src && !(bridge.isPlaceholderUrl && bridge.isPlaceholderUrl(item.thumbSrc)));
-        if (hasPoster) return false;
-        if (hasPlayableVideoThumb(item, thumbSrc)) return false;
-        if (bridge.canExtractMp4Poster && bridge.canExtractMp4Poster(item, thumbSrc)) return false;
-        return true;
+        return planThumbFor(item, thumbSrc).kind === 'placeholder';
     }
 
 function appendVideoThumbMedia(host, item, thumbSrc, isVideo, placeholderClass) {
-        const extractPoster = (failedImage) => {
-            if (failedImage && failedImage.parentNode !== host) return;
-            if (!bridge.canExtractMp4Poster || !bridge.canExtractMp4Poster(item, item.src)) {
-                if (failedImage) fail(failedImage);
-                return false;
-            }
-            if (failedImage) failedImage.remove();
-            const img = createLazyMp4PosterImg(item, function () { fail(img); });
-            host.appendChild(img);
-            return true;
-        };
         const fail = function (el) {
-            if (el.parentNode === host && !host.classList.contains(placeholderClass)) {
+            if (el && el.parentNode !== host) return;
+            if (!host.classList.contains(placeholderClass)) {
                 host.classList.add(placeholderClass);
                 host.innerHTML = '';
                 host.appendChild(createPlaceholderIcon(isVideo));
             }
         };
-        if (item._frozenThumb) {
-            appendStaticVideoThumb(host, item._frozenThumb);
-            return;
-        }
-        if (isStaticVideoThumbUrl(thumbSrc) || isStaticVideoThumbUrl(item.thumbSrc)) {
-            const posterUrl = isStaticVideoThumbUrl(thumbSrc) ? thumbSrc : item.thumbSrc;
-            // "Static" here only means "an image URL". When a video stands in
-            // for an animated GIF/WebP, its poster is often that animated file,
-            // and a plain <img> would play it in the strip. Route those through
-            // the same inspect-and-freeze path image thumbnails use.
-            if (mayBeAnimatedImageUrl(posterUrl) && typeof bridge.setCachedImgSrc === 'function') {
-                appendFrozenVideoThumb(host, posterUrl, item, extractPoster);
+        // A poster that 404s is not the end of the road: the file itself still
+        // has a first frame in it.
+        const fallBackToExtract = (failedImage) => {
+            if (failedImage && failedImage.parentNode !== host) return;
+            if (!bridge.canExtractMp4Poster || !bridge.canExtractMp4Poster(item, item && item.src)) {
+                fail(failedImage);
                 return;
             }
-            appendStaticVideoThumb(host, posterUrl, extractPoster);
+            if (failedImage) failedImage.remove();
+            const img = createLazyMp4PosterImg(item, function () { fail(img); });
+            host.appendChild(img);
+        };
+        const plan = planThumbFor(item, thumbSrc);
+        if (plan.kind === 'frozen') {
+            appendStaticVideoThumb(host, plan.url);
             return;
         }
-        const videoUrl = item.src || thumbSrc || '';
-        // Still extraction is queued and bounded by the adapter. It does not
-        // leave one native player mounted for every visible thumbnail.
-        if (bridge.reservedPostHeader && extractPoster(null)) return;
-        // Feed adapters with expensive native players must not allocate a
-        // decoder for every thumbnail as well as the active stage video.
-        if (bridge.reservedPostHeader) {
-            host.classList.add(placeholderClass);
-            host.appendChild(createPlaceholderIcon(true));
+        if (plan.kind === 'still') {
+            appendStaticVideoThumb(host, plan.url, fallBackToExtract);
             return;
         }
-        if (hasPlayableVideoThumb(item, thumbSrc)) {
-            if (!bridge.reservedPostHeader && bridge.isMp4ThumbUrl(videoUrl) && bridge.msMp4Box()) {
-                const img = createLazyMp4PosterImg(item, function () { fail(img); });
-                host.appendChild(img);
+        if (plan.kind === 'freeze') {
+            // The poster is a GIF or a WebP - the very thing that used to end
+            // up playing in the strip. It goes through the inspect-and-freeze
+            // path, which paints one frame and never the moving original.
+            if (typeof bridge.setCachedImgSrc === 'function') {
+                appendFrozenVideoThumb(host, plan.url, item, fallBackToExtract);
                 return;
             }
-            const playUrl = thumbSrc || videoUrl;
-            const vid = createLazyThumbVideo(
-                playUrl.includes('#t=') ? playUrl : (playUrl + '#t=0.1'),
-                function () { fail(vid); });
+            fallBackToExtract(null);
+            return;
+        }
+        if (plan.kind === 'extract') {
+            const img = createLazyMp4PosterImg(item, function () { fail(img); });
+            host.appendChild(img);
+            return;
+        }
+        if (plan.kind === 'video') {
+            const playUrl = plan.url.includes('#t=') ? plan.url : (plan.url + '#t=0.1');
+            const vid = createLazyThumbVideo(playUrl, function () { fail(vid); });
             host.appendChild(vid);
             return;
         }
         host.classList.add(placeholderClass);
-        host.appendChild(createPlaceholderIcon(true));
+        host.appendChild(createPlaceholderIcon(isVideo));
     }
 
 function stopThumbTrackAnimation() {
@@ -2667,9 +2607,18 @@ function armThumbHandoff(el, oldVisual, revision) {
 
 function resetMediaThumbEl(el) {
         if (!el) return;
+        const gate = mediaGate();
         el.querySelectorAll('img').forEach(img => {
             if (img._msCancelThumb) img._msCancelThumb();
+            // Whatever this cell asked the gate for is no longer wanted: a
+            // queued job must not start and a running one has to give its
+            // connection back, or scrolling leaves a wake of fetches for
+            // thumbnails nobody is looking at any more.
+            if (gate && img._msGateTag) gate.abort({ tag: img._msGateTag });
             img.removeAttribute('src');
+            // The cell is going back in the pool but the img may outlive it in
+            // a handoff animation; without this it keeps the whole item alive.
+            if (img._msPosterItem) img._msPosterItem = null;
         });
         if (el._msThumbHandoffTimer) {
             clearTimeout(el._msThumbHandoffTimer);
@@ -2686,6 +2635,7 @@ function resetMediaThumbEl(el) {
             if (typeof bridge.lazyThumbObserver !== 'undefined' && bridge.lazyThumbObserver) {
                 try { bridge.lazyThumbObserver.unobserve(vid); } catch (e) { }
             }
+            if (gate && vid._msGateTag) gate.abort({ tag: vid._msGateTag });
         }
         el.innerHTML = '';
         el.classList.remove('ms-thumb-entering');
@@ -3175,7 +3125,20 @@ function paintGridWindow() {
             if (used.has(pool[i])) continue;
             pool[i].style.display = 'none';
             pool[i].removeAttribute('data-grid-index');
-            if (pool[i].querySelector('video, [data-ms-lazy-mp4]')) resetMediaThumbEl(pool[i]);
+            // Hiding a cell does not stop its image downloading: an <img> with
+            // a src off the window keeps its request, and its slot, against
+            // the same host the stage needs. Everything scrolled out is torn
+            // down, media element or not.
+            resetMediaThumbEl(pool[i]);
+        }
+        // The pool only ever grew. A tall window, or a column count that
+        // changed, left hundreds of cells parked in the DOM for the session.
+        const keep = used.size + m.cols * 2;
+        for (let i = pool.length - 1; i >= keep; i--) {
+            if (used.has(pool[i])) continue;
+            resetMediaThumbEl(pool[i]);
+            pool[i].remove();
+            pool.splice(i, 1);
         }
     }
 
@@ -3471,6 +3434,98 @@ function appendErrorBanner(container, errMsg) {
         });
     }
 
+// Every fetch the gallery makes asks this gate for a slot first. Core holds
+// the stage's end of it: while the media on screen is still waiting for its
+// first bytes, thumbnail work is held back. Past the browser's per-host
+// ceiling a fresh video is not slow, it never starts at all, so the one
+// request that matters has to be able to take the whole budget.
+function mediaGate() {
+    const core = globalThis.XGalleryCore;
+    return core && typeof core.sharedMediaGate === 'function' ? core.sharedMediaGate() : null;
+}
+
+function setStageFetching(busy) {
+    const gate = mediaGate();
+    if (gate) gate.setStageBusy(!!busy);
+}
+
+// The stage is starving: take the network off everything decorative. Queued
+// work never starts and running work is aborted, which is the only thing that
+// frees a connection already held.
+function yieldNetworkToStage() {
+    const gate = mediaGate();
+    const lanes = globalThis.XGalleryCore && globalThis.XGalleryCore.MEDIA_LANES;
+    if (gate && lanes) gate.abort({ laneAtLeast: lanes.VISIBLE });
+}
+
+// A host that refused or timed out is reported once and every lane backs off.
+function noteStageFailure(url, detail) {
+    const gate = mediaGate();
+    if (gate) gate.noteResult(url, detail || { timeout: true, status: 0 });
+}
+
+const STAGE_STALL_NOTICE_MS = 8000;
+const STAGE_STALL_RETRY_MS = 20000;
+const STAGE_STALL_MAX_RETRIES = 2;
+
+/**
+ * The stage could not tell slow from broken. A media element that is starved
+ * rather than refused fires no error at all - it sits at readyState 0 with its
+ * poster up, forever, saying nothing. This watches for that: first a notice so
+ * the gallery stops pretending everything is fine, then the network taken back
+ * off the thumbnails, then a restart on a fresh element, which is measurably
+ * what makes a starved video load.
+ */
+function watchStageMedia(options) {
+    const element = options.element;
+    const wrap = options.wrap;
+    const isCurrent = options.isCurrent;
+    const isReady = options.isReady || (() => element.readyState >= 2);
+    let lastProgressAt = Date.now();
+    let noticed = false;
+    let retries = 0;
+    let stopped = false;
+    let timer = null;
+
+    const stop = (settled) => {
+        if (stopped) return;
+        stopped = true;
+        if (timer) clearInterval(timer);
+        timer = null;
+        if (noticed) hideStageNotice(wrap);
+        if (settled !== false) setStageFetching(false);
+    };
+    const progress = () => { lastProgressAt = Date.now(); };
+    ['progress', 'loadedmetadata', 'loadeddata', 'canplay', 'playing', 'timeupdate']
+        .forEach((type) => element.addEventListener(type, progress));
+
+    timer = setInterval(() => {
+        if (!isCurrent()) { stop(false); return; }
+        if (isReady()) { stop(true); return; }
+        const idle = Date.now() - lastProgressAt;
+        if (!noticed && idle >= STAGE_STALL_NOTICE_MS) {
+            noticed = true;
+            showStageNotice(wrap, 'Still loading\u2026');
+            yieldNetworkToStage();
+        }
+        if (idle >= STAGE_STALL_RETRY_MS) {
+            lastProgressAt = Date.now();
+            if (retries >= STAGE_STALL_MAX_RETRIES) {
+                stop(true);
+                if (typeof options.onGiveUp === 'function') options.onGiveUp();
+                return;
+            }
+            retries += 1;
+            noteStageFailure(options.url, { timeout: true, status: 0, attempt: retries });
+            yieldNetworkToStage();
+            showStageNotice(wrap, 'Still loading - trying again\u2026');
+            if (typeof options.onRestart === 'function') options.onRestart(retries);
+        }
+    }, 1000);
+
+    return { stop: stop, noteProgress: progress };
+}
+
 function renderErrorStage(container, errMsg, url, item) {
         if (item && /(?:\b404\b|\b410\b|not found|gone|terminal)/i.test(String(errMsg || ''))) {
             item._msUnavailable = true;
@@ -3480,6 +3535,12 @@ function renderErrorStage(container, errMsg, url, item) {
                 if (probe && (probe.status === 404 || probe.status === 410)) item._msUnavailable = true;
             }).catch(() => { });
         }
+        // The failing element is about to be dropped from the DOM; a video
+        // detached with its src intact keeps downloading against the same host
+        // budget as whatever the user looks at next.
+        container.querySelectorAll('video, audio').forEach((element) => {
+            try { element.pause(); element.removeAttribute('src'); element.load(); } catch (e) { }
+        });
         globalThis.XGalleryCore.renderErrorStage({
             document: document,
             container: container,
@@ -3669,6 +3730,11 @@ function renderCurrent() {
         bridge.state.hdUpgradeRun = null;
         updateHdButton('hidden');
         const token = ++bridge.state.renderToken;
+        // Every render starts with the barrier down; the branch that actually
+        // fetches something raises it again. Without this an item that fetches
+        // nothing - an embed, an album cover - would leave the previous item's
+        // barrier standing until its grace period ran out.
+        setStageFetching(false);
         let entry = bridge.state.items[bridge.state.currentIndex];
         if (!entry) return;
 
@@ -3980,6 +4046,7 @@ function renderCurrent() {
                     bridge.loadImageFully(candidate, 10000)
                         .then((img) => {
                             bridge.noteHostSuccess(candidate);
+                            setStageFetching(false);
                             showLoadedImage(img, candidate);
                         })
                         .catch((err) => {
@@ -4002,6 +4069,8 @@ function renderCurrent() {
                                 } else {
                                     hideStageNotice(wrap);
                                     setTopbarLoading(false);
+                                    setStageFetching(false);
+                                    noteStageFailure(candidate, { status: probe.status, timeout: timedOut });
                                     renderErrorStage(wrap, (item.error || 'Failed to load media') + ' (' + lastFailure + ')', item.src, item);
                                 }
                             });
@@ -4021,6 +4090,7 @@ function renderCurrent() {
                 }
             };
             setTopbarLoading(true);
+            setStageFetching(true);
             tryCandidate(0, 0);
         } else if (item.type === 'video') {
             const predictedVideo = bridge.takePredictedVideo(item);
@@ -4050,7 +4120,25 @@ function renderCurrent() {
             let lastPlayTime = 0;
             let lastSeekAt = 0;
             let seekRecoveries = 0;
+            let stageRetried = false;
+            let stallWatch = null;
             const ownsVideoSession = () => token === bridge.state.renderToken && video.isConnected && wrap.contains(video);
+            // Starting over on the same element. A starved element recovers on
+            // its own once the pressure is off, but clearing the src and asking
+            // again is what stepping back and returning does by hand, and it is
+            // the sequence measured to work.
+            const restartStageVideo = () => {
+                if (!ownsVideoSession()) return;
+                video._msRecovering = true;
+                try { video.pause(); } catch (e) { }
+                video.removeAttribute('src');
+                try { video.load(); } catch (e) { }
+                video.src = primaryVideoSrc;
+                try { video.load(); } catch (e) { }
+                const resumed = video.play();
+                if (resumed && typeof resumed.catch === 'function') resumed.catch(() => { });
+                setTimeout(() => { video._msRecovering = false; }, 250);
+            };
             video.addEventListener('timeupdate', () => {
                 if (video.currentTime > 0) lastPlayTime = video.currentTime;
             });
@@ -4074,6 +4162,10 @@ function renderCurrent() {
             else video.addEventListener('loadeddata', () => {
                 if (!ownsVideoSession()) return;
                 markItemMediaLoaded(item);
+            }, { once: true });
+            video.addEventListener('loadeddata', () => {
+                if (stallWatch) stallWatch.stop(true);
+                bridge.noteHostSuccess(item.src);
             }, { once: true });
 
             const retrySources = [];
@@ -4172,6 +4264,25 @@ function renderCurrent() {
                         renderCurrent();
                         return;
                     }
+                    // A host that is refusing the overflow (408, 429, a
+                    // dropped connection) looks exactly like a broken file
+                    // from here. Try once more, with the decorative fetches
+                    // called off, before telling the user it cannot be loaded.
+                    if (!stageRetried && resumeAt < 0.25) {
+                        stageRetried = true;
+                        noteStageFailure(item.src, { status: 0, timeout: true });
+                        yieldNetworkToStage();
+                        showStageNotice(wrap, 'Retrying\u2026');
+                        setTimeout(() => {
+                            if (!ownsVideoSession()) return;
+                            hideStageNotice(wrap);
+                            retryIndex = 0;
+                            restartStageVideo();
+                        }, 1200);
+                        return;
+                    }
+                    if (stallWatch) stallWatch.stop(true);
+                    setStageFetching(false);
                     renderErrorStage(wrap, item.error || 'Failed to load video resource.', item.src, item);
                     return;
                 }
@@ -4229,6 +4340,20 @@ function renderCurrent() {
             };
             video.addEventListener('pointerdown', activateVideo, { once: true });
             if ((usedPredicted || bufferedVideo) && !video.getAttribute('src')) video.src = primaryVideoSrc;
+            if (video.readyState < 2) {
+                setStageFetching(true);
+                stallWatch = watchStageMedia({
+                    element: video,
+                    wrap: wrap,
+                    url: item.src,
+                    isCurrent: ownsVideoSession,
+                    onRestart: restartStageVideo,
+                    onGiveUp: () => {
+                        if (!ownsVideoSession()) return;
+                        renderErrorStage(wrap, 'The video never started - the host did not answer.', item.src, item);
+                    }
+                });
+            }
             // Two frames let navigation and the poster reach the screen before
             // stream initialization. Superseded items never start a decoder.
             requestAnimationFrame(() => requestAnimationFrame(activateVideo));
@@ -4528,5 +4653,5 @@ async function openFavoriteFolders(item, anchor) {
             setFavoriteMenuStatus(menu, error && error.message ? error.message : 'Could not load favorite folders.', 'error');
         }
     }
-return { openEditorWindow, openEditorFrame, flashHostElement, snapshotGhostSource, paintClusterSeams, mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, buildGridCell, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
+return { openEditorWindow, openEditorFrame, flashHostElement, snapshotGhostSource, paintClusterSeams, mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
 }
