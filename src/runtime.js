@@ -2607,14 +2607,13 @@ function armThumbHandoff(el, oldVisual, revision) {
 
 function resetMediaThumbEl(el) {
         if (!el) return;
-        const gate = mediaGate();
         el.querySelectorAll('img').forEach(img => {
+            // The adapter's cancel is deferred a tick on purpose: a repaint
+            // resets a cell and re-queues the very same thumbnail in the same
+            // pass, and cancelling on the spot would throw the in-flight bytes
+            // away every time the strip scrolls. It releases the gate slot
+            // too, so nothing here may abort the gate directly.
             if (img._msCancelThumb) img._msCancelThumb();
-            // Whatever this cell asked the gate for is no longer wanted: a
-            // queued job must not start and a running one has to give its
-            // connection back, or scrolling leaves a wake of fetches for
-            // thumbnails nobody is looking at any more.
-            if (gate && img._msGateTag) gate.abort({ tag: img._msGateTag });
             img.removeAttribute('src');
             // The cell is going back in the pool but the img may outlive it in
             // a handoff animation; without this it keeps the whole item alive.
@@ -2635,7 +2634,6 @@ function resetMediaThumbEl(el) {
             if (typeof bridge.lazyThumbObserver !== 'undefined' && bridge.lazyThumbObserver) {
                 try { bridge.lazyThumbObserver.unobserve(vid); } catch (e) { }
             }
-            if (gate && vid._msGateTag) gate.abort({ tag: vid._msGateTag });
         }
         el.innerHTML = '';
         el.classList.remove('ms-thumb-entering');
@@ -3465,7 +3463,10 @@ function noteStageFailure(url, detail) {
 }
 
 const STAGE_STALL_NOTICE_MS = 8000;
-const STAGE_STALL_RETRY_MS = 20000;
+// Long enough that a host which is merely slow to send its first byte is not
+// interrupted: restarting resets the download, and a restart loop on a slow
+// host would be a video that never arrives at all.
+const STAGE_STALL_RETRY_MS = 45000;
 const STAGE_STALL_MAX_RETRIES = 2;
 
 /**
@@ -3492,9 +3493,11 @@ function watchStageMedia(options) {
         stopped = true;
         if (timer) clearInterval(timer);
         timer = null;
-        if (noticed) hideStageNotice(wrap);
+        if (noticed && isReady()) hideStageNotice(wrap);
         if (settled !== false) setStageFetching(false);
     };
+    // Data arriving after the watchdog gave up still clears the notice.
+    element.addEventListener('loadeddata', () => { if (noticed) hideStageNotice(wrap); }, { once: true });
     const progress = () => { lastProgressAt = Date.now(); };
     ['progress', 'loadedmetadata', 'loadeddata', 'canplay', 'playing', 'timeupdate']
         .forEach((type) => element.addEventListener(type, progress));
@@ -3503,16 +3506,21 @@ function watchStageMedia(options) {
         if (!isCurrent()) { stop(false); return; }
         if (isReady()) { stop(true); return; }
         const idle = Date.now() - lastProgressAt;
+        // The notice alone: the gate has already narrowed everything else to
+        // a width the stage tolerates, and cancelling the thumbnails in flight
+        // here only made them start over.
         if (!noticed && idle >= STAGE_STALL_NOTICE_MS) {
             noticed = true;
             showStageNotice(wrap, 'Still loading\u2026');
-            yieldNetworkToStage();
         }
         if (idle >= STAGE_STALL_RETRY_MS) {
             lastProgressAt = Date.now();
+            // Out of restarts: leave the element to keep waiting. The host may
+            // still answer, and an error stage for a file that is merely slow
+            // would be wrong; a real failure fires the element's own error.
             if (retries >= STAGE_STALL_MAX_RETRIES) {
+                showStageNotice(wrap, 'Still loading - the host is slow to answer…');
                 stop(true);
-                if (typeof options.onGiveUp === 'function') options.onGiveUp();
                 return;
             }
             retries += 1;
@@ -4347,11 +4355,7 @@ function renderCurrent() {
                     wrap: wrap,
                     url: item.src,
                     isCurrent: ownsVideoSession,
-                    onRestart: restartStageVideo,
-                    onGiveUp: () => {
-                        if (!ownsVideoSession()) return;
-                        renderErrorStage(wrap, 'The video never started - the host did not answer.', item.src, item);
-                    }
+                    onRestart: restartStageVideo
                 });
             }
             // Two frames let navigation and the poster reach the screen before

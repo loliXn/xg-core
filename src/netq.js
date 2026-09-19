@@ -33,11 +33,14 @@ export const MEDIA_LANES = Object.freeze({
 
 const LANE_NAMES = ['stage', 'visible', 'prefetch', 'background'];
 
-// The stage can be slow for honest reasons - a big file on a slow host - and
-// holding every thumbnail hostage for a minute would trade one visible fault
-// for another. After this long the lower lanes get a trickle (one at a time),
-// which the measurements show a stage video can live with.
-const BARRIER_GRACE_MS = 10000;
+// How much else may run while the stage is still waiting for its first
+// bytes. Two concurrent fetches never delayed the stage in the measurements;
+// six starved it. So the barrier is a narrowing, not a stop: the stage can be
+// slow for honest reasons - a big file on a slow host - and a strip that
+// froze for as long as a video took to start would be its own bug. The
+// first version did exactly that, then let one request through at a time,
+// and on a slow host that was a minute of nothing followed by everything.
+const BARRIER_WIDTH = 2;
 
 function hostOf(url) {
     const value = String(url || '');
@@ -54,7 +57,6 @@ function hostOf(url) {
  * @param {object} [options]
  * @param {number} [options.hostLimit] concurrent requests per host (default 4).
  * @param {number} [options.totalLimit] concurrent requests overall (default 10).
- * @param {number} [options.barrierGraceMs]
  * @param {function} [options.now]
  * @param {function} [options.setTimeout]
  */
@@ -62,7 +64,6 @@ export function createMediaGate(options) {
     const config = options || {};
     const hostLimit = Math.max(1, Number(config.hostLimit) || 4);
     const totalLimit = Math.max(1, Number(config.totalLimit) || 10);
-    const barrierGraceMs = Number.isFinite(config.barrierGraceMs) ? config.barrierGraceMs : BARRIER_GRACE_MS;
     const now = typeof config.now === 'function' ? config.now : () => Date.now();
     const later = typeof config.setTimeout === 'function' ? config.setTimeout : ((fn, ms) => setTimeout(fn, ms));
 
@@ -75,10 +76,10 @@ export function createMediaGate(options) {
     let sequence = 0;
     let pumping = false;
 
-    const barrierIsUp = () => stageBusySince > 0 && now() - stageBusySince < barrierGraceMs;
-    // Once the grace period is over the stage is probably not coming; let the
-    // rest through one at a time rather than stalling the gallery entirely.
-    const barrierIsTrickling = () => stageBusySince > 0 && !barrierIsUp();
+    const barrierIsUp = () => stageBusySince > 0;
+    // The stage's own slots are exempt from every limit, so they must not be
+    // counted against the barrier either, or a big video would block it.
+    const liveBelowStage = () => { let n = 0; live.forEach((t) => { if (t.lane !== MEDIA_LANES.STAGE) n += 1; }); return n; };
 
     function hostCount(host) {
         return liveByHost.get(host) || 0;
@@ -94,8 +95,10 @@ export function createMediaGate(options) {
 
     function canStart(ticket) {
         if (ticket.lane === MEDIA_LANES.STAGE) return true;
-        if (barrierIsUp()) return false;
-        if (barrierIsTrickling() && liveTotal >= 1) return false;
+        // While the stage is fetching its first bytes everything else shares a
+        // narrow lane, most useful first: thumbnails the user can see, then
+        // prefetch, then background work.
+        if (barrierIsUp() && liveBelowStage() >= BARRIER_WIDTH) return false;
         if (liveTotal >= totalLimit) return false;
         if (hostCount(ticket.host) >= hostLimit) return false;
         if (coolingDown(ticket.host)) return false;
@@ -139,6 +142,13 @@ export function createMediaGate(options) {
         scheduleCooldownWake();
     }
 
+    let pumpScheduled = false;
+    function schedulePump() {
+        if (pumpScheduled) return;
+        pumpScheduled = true;
+        Promise.resolve().then(() => { pumpScheduled = false; pump(); });
+    }
+
     let cooldownTimer = null;
     function scheduleCooldownWake() {
         if (cooldownTimer || !waiting.length) return;
@@ -147,11 +157,6 @@ export function createMediaGate(options) {
             const left = coolingDown(ticket.host);
             if (left && (!soonest || left < soonest)) soonest = left;
         });
-        // The barrier also expires on a clock, so wake for that too.
-        if (barrierIsUp()) {
-            const left = barrierGraceMs - (now() - stageBusySince);
-            if (left > 0 && (!soonest || left < soonest)) soonest = left;
-        }
         if (!soonest) return;
         cooldownTimer = later(() => { cooldownTimer = null; pump(); }, Math.max(50, soonest + 10));
     }
@@ -223,7 +228,10 @@ export function createMediaGate(options) {
         };
         const promise = new Promise((resolve) => { ticket.resolve = resolve; });
         waiting.push(ticket);
-        pump();
+        // A burst of requests arrives in one tick - a strip filling in asks
+        // for thirty at once - and the pump must see the whole burst before it
+        // picks, or whichever was submitted first wins regardless of lane.
+        schedulePump();
         return promise;
     }
 
@@ -280,7 +288,11 @@ export function createMediaGate(options) {
         const host = hostOf(url);
         if (!host || !result) return;
         const status = Number(result.status);
-        const transient = result.timeout === true || status === 0 || status === 408 || status === 429 || status >= 500;
+        // Status 0 is not the host talking: it is a cancelled request, a
+        // blocked one, or a network blip on this end, and one dead thumbnail
+        // must not pause every request to the site. Only what the host
+        // actually answered, or a timeout, backs it off.
+        const transient = result.timeout === true || status === 408 || status === 429 || status >= 500;
         if (!transient) {
             if (status >= 200 && status < 400) cooldowns.delete(host);
             return;
@@ -302,7 +314,7 @@ export function createMediaGate(options) {
             waitingByLane: lanes,
             hosts: Array.from(liveByHost.entries()).map(([host, count]) => ({ host, count })),
             cooling: Array.from(cooldowns.keys()),
-            barrier: barrierIsUp() ? 'up' : (barrierIsTrickling() ? 'trickle' : 'down')
+            barrier: barrierIsUp() ? 'up' : 'down'
         };
     }
 
