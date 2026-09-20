@@ -163,6 +163,9 @@ function clearViewerMedia() {
     if(bridge.lazyThumbObserver){bridge.lazyThumbObserver.disconnect();bridge.lazyThumbObserver=null;}
     if(bridge.state.gridResizeObs){bridge.state.gridResizeObs.disconnect();bridge.state.gridResizeObs=null;}
     const wrap=overlay.querySelector('.ms-media-wrap');
+    // The stage videos outlive the session, parked and empty: the next gallery
+    // opened on this page reuses them rather than introducing new ones.
+    stageVideoPool().forEach(video=>parkStageVideo(video));
     if(wrap){
         delete wrap.dataset.msVerticalFitBound;
         wrap.querySelectorAll('video,audio').forEach(media=>{
@@ -3482,6 +3485,8 @@ function watchStageMedia(options) {
     const wrap = options.wrap;
     const isCurrent = options.isCurrent;
     const isReady = options.isReady || (() => element.readyState >= 2);
+    // Dropped with the rest of this render's listeners when the element is reused.
+    const listen = options.signal ? { signal: options.signal } : undefined;
     let lastProgressAt = Date.now();
     let noticed = false;
     let retries = 0;
@@ -3497,10 +3502,10 @@ function watchStageMedia(options) {
         if (settled !== false) setStageFetching(false);
     };
     // Data arriving after the watchdog gave up still clears the notice.
-    element.addEventListener('loadeddata', () => { if (noticed) hideStageNotice(wrap); }, { once: true });
+    element.addEventListener('loadeddata', () => { if (noticed) hideStageNotice(wrap); }, Object.assign({ once: true }, listen || {}));
     const progress = () => { lastProgressAt = Date.now(); };
     ['progress', 'loadedmetadata', 'loadeddata', 'canplay', 'playing', 'timeupdate']
-        .forEach((type) => element.addEventListener(type, progress));
+        .forEach((type) => element.addEventListener(type, progress, listen));
 
     timer = setInterval(() => {
         if (!isCurrent()) { stop(false); return; }
@@ -3547,6 +3552,7 @@ function renderErrorStage(container, errMsg, url, item) {
         // detached with its src intact keeps downloading against the same host
         // budget as whatever the user looks at next.
         container.querySelectorAll('video, audio').forEach((element) => {
+            if (element._msPooled) { parkStageVideo(element); return; }
             try { element.pause(); element.removeAttribute('src'); element.load(); } catch (e) { }
         });
         globalThis.XGalleryCore.renderErrorStage({
@@ -3573,8 +3579,116 @@ function prepareMediaWrap(wrap, item) {
         return globalThis.XGalleryCore.prepareMediaSlot({
             document: document,
             wrap: wrap,
-            item: item
+            item: item,
+            retireVideo: (element) => {
+                if (!element._msPooled) return false;
+                parkStageVideo(element);
+                return true;
+            }
         });
+    }
+
+// --- the stage's video elements -----------------------------------------------
+// Two <video> elements, made once and kept for as long as the page lives: one
+// on stage, one prefetching the neighbour, trading places as the user moves.
+//
+// The gallery used to make a new element for every item, and to the gallery
+// that is free. It is not free to everything else on the page. A player
+// userscript initialises every <video> it has not seen before - a toolbar of
+// custom elements, each with a shadow root of its own - and a dark-mode
+// extension then restyles every one of those new shadow roots. In a trace taken
+// on a 550,000-node thread that came to 350 ms of main-thread work per
+// navigation, of which the gallery's own share was under 30; photos never
+// showed it because photos never made a <video>. An element those scripts have
+// already met costs nothing, so the gallery stops introducing new ones.
+const STAGE_VIDEO_POOL_SIZE = 2;
+
+function stageVideoPark() {
+        const overlay = bridge.state.overlay;
+        if (!overlay) return null;
+        let park = overlay.querySelector(':scope > .ms-video-park');
+        if (!park) {
+            park = document.createElement('div');
+            park.className = 'ms-video-park';
+            park.hidden = true;
+            park.style.display = 'none';
+            overlay.appendChild(park);
+        }
+        return park;
+    }
+
+// moveBefore keeps a node's state and fires no disconnect/connect steps, which
+// is exactly the quiet this pool is after; older browsers fall back to a plain
+// insert, which still reuses the element.
+function placeNode(parent, node) {
+        if (!parent || node.parentNode === parent) return;
+        if (typeof parent.moveBefore === 'function' && node.isConnected && parent.isConnected) {
+            try { parent.moveBefore(node, null); return; } catch (e) { }
+        }
+        parent.appendChild(node);
+    }
+
+function resetStageVideo(video) {
+        if (video._msRenderAbort) { video._msRenderAbort.abort(); video._msRenderAbort = null; }
+        if (video._msEndRecoveryTimer) { clearTimeout(video._msEndRecoveryTimer); video._msEndRecoveryTimer = null; }
+        video._msRecovering = false;
+        try {
+            video.pause();
+            video.removeAttribute('src');
+            video.removeAttribute('poster');
+            video.load();
+        } catch (e) { }
+        video.classList.remove('ms-ready');
+        video.style.opacity = '0';
+    }
+
+function parkStageVideo(video) {
+        resetStageVideo(video);
+        const park = stageVideoPark();
+        if (park) placeNode(park, video);
+    }
+
+function stageVideoPool() {
+        // An element something else tore out of the document is forgotten:
+        // the pool heals rather than handing back a node nobody can see.
+        const pool = (bridge.state.stageVideoPool || []).filter((video) => video.isConnected);
+        bridge.state.stageVideoPool = pool;
+        return pool;
+    }
+
+// An element that is not on stage right now, made if the pool is not full yet.
+// One of the two may be out on loan to the adapter's prefetch, and the adapter
+// goes on believing it owns that element until it hands it back: it will point
+// it at the neighbour's file when its turn at the gate comes, and clear it
+// when the prediction changes. So the stage never takes the lent one - it
+// takes the other, and with two elements and one loan there always is one.
+function idleStageVideo(forLoan) {
+        const pool = stageVideoPool();
+        const idle = pool.filter((candidate) => !candidate.closest('.ms-media-wrap'));
+        let video = idle.find((candidate) => !!candidate._msLent === !!forLoan) || null;
+        if (!video && pool.length < STAGE_VIDEO_POOL_SIZE) {
+            video = document.createElement('video');
+            video._msPooled = true;
+            pool.push(video);
+            const park = stageVideoPark();
+            if (park) park.appendChild(video);
+        }
+        if (!video && forLoan) video = idle[0] || null;
+        return video;
+    }
+
+// For the adapter's neighbour prefetch: the element it loads into is one the
+// stage will later show, so the handoff introduces nothing new to the page.
+function preloadStageVideo(preloadMode) {
+        const video = idleStageVideo(true);
+        if (!video) return null;
+        resetStageVideo(video);
+        video._msLent = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.referrerPolicy = 'no-referrer';
+        video.preload = preloadMode || 'metadata';
+        return video;
     }
 
 function bindGlobalGalleryHandlers() {
@@ -4005,6 +4119,7 @@ function renderCurrent() {
                 }
 
                 const box = ensureMediaBox(wrap);
+                box.querySelectorAll('video').forEach((element) => { if (element._msPooled) parkStageVideo(element); });
                 box.replaceChildren(img);
                 Array.from(wrap.children).forEach((el) => {
                     if (el !== box && !el.classList.contains('ms-caption-overlay')) el.remove();
@@ -4102,8 +4217,25 @@ function renderCurrent() {
             tryCandidate(0, 0);
         } else if (item.type === 'video') {
             const predictedVideo = bridge.takePredictedVideo(item);
-            let video = bridge.takeStageVideo(wrap, predictedVideo);
-            const usedPredicted = video === predictedVideo;
+            let video;
+            if (predictedVideo && !predictedVideo._msPooled) {
+                // An adapter that still prefetches into an element of its own.
+                video = bridge.takeStageVideo(wrap, predictedVideo);
+            } else if (predictedVideo) {
+                // Handed back by the adapter: the loan is over.
+                video = predictedVideo;
+                video._msLent = false;
+            } else {
+                video = idleStageVideo();
+                if (video) resetStageVideo(video);
+            }
+            const usedPredicted = !!video && video === predictedVideo;
+            // Everything this render listens for is dropped in one go when the
+            // element is next reused, or the listeners of every item it ever
+            // showed would all still be answering.
+            if (video && video._msRenderAbort) video._msRenderAbort.abort();
+            const renderAbort = new AbortController();
+            const on = (type, fn, opts) => video.addEventListener(type, fn, Object.assign({ signal: renderAbort.signal }, opts || {}));
             if (usedPredicted && video.error) {
                 video.removeAttribute('src');
                 try { video.load(); } catch (e) { }
@@ -4124,6 +4256,7 @@ function renderCurrent() {
                 loop: bridge.globalLoop || !!item.imageFallbackSrc,
                 preload: usedPredicted ? '' : (bufferedVideo ? 'auto' : 'metadata')
             });
+            video._msRenderAbort = renderAbort;
 
             let lastPlayTime = 0;
             let lastSeekAt = 0;
@@ -4147,11 +4280,11 @@ function renderCurrent() {
                 if (resumed && typeof resumed.catch === 'function') resumed.catch(() => { });
                 setTimeout(() => { video._msRecovering = false; }, 250);
             };
-            video.addEventListener('timeupdate', () => {
+            on('timeupdate', () => {
                 if (video.currentTime > 0) lastPlayTime = video.currentTime;
             });
-            video.addEventListener('seeking', () => { lastSeekAt = Date.now(); });
-            video.addEventListener('seeked', () => { lastSeekAt = Date.now(); });
+            on('seeking', () => { lastSeekAt = Date.now(); });
+            on('seeked', () => { lastSeekAt = Date.now(); });
 
             if (bridge.state.lastPlayTime && bridge.state.lastPlayTime > 0) {
                 const seekToTime = bridge.state.lastPlayTime;
@@ -4162,16 +4295,16 @@ function renderCurrent() {
                     video.removeEventListener('loadedmetadata', onCanPlay);
                     video.removeEventListener('canplay', onCanPlay);
                 };
-                video.addEventListener('loadedmetadata', onCanPlay);
-                video.addEventListener('canplay', onCanPlay);
+                on('loadedmetadata', onCanPlay);
+                on('canplay', onCanPlay);
             }
 
             if (video.readyState >= 2) markItemMediaLoaded(item);
-            else video.addEventListener('loadeddata', () => {
+            else on('loadeddata', () => {
                 if (!ownsVideoSession()) return;
                 markItemMediaLoaded(item);
             }, { once: true });
-            video.addEventListener('loadeddata', () => {
+            on('loadeddata', () => {
                 if (stallWatch) stallWatch.stop(true);
                 bridge.noteHostSuccess(item.src);
             }, { once: true });
@@ -4185,7 +4318,7 @@ function renderCurrent() {
             if (item.fallbackSrc && item.fallbackSrc !== item.src) retrySources.push(bridge.wrapMediaUrl(item.fallbackSrc));
 
             let retryIndex = 0;
-            video.addEventListener('error', () => {
+            on('error', () => {
                 if (!ownsVideoSession() || video._msRecovering) return;
                 const errCode = video.error ? video.error.code : 0;
                 const resumeAt = Math.max(video.currentTime || 0, lastPlayTime || 0);
@@ -4209,7 +4342,7 @@ function renderCurrent() {
                             try { video.pause(); } catch (e) { }
                         }
                     };
-                    video.addEventListener('loadedmetadata', resetForReplay, { once: true });
+                    on('loadedmetadata', resetForReplay, { once: true });
                     video._msEndRecoveryTimer = setTimeout(() => { video._msRecovering = false; }, 4000);
                     try {
                         if (src && video.getAttribute('src') !== src) video.src = src;
@@ -4232,7 +4365,7 @@ function renderCurrent() {
                     try {
                         if (src && video.getAttribute('src') !== src) video.src = src;
                         else video.load();
-                        video.addEventListener('loadedmetadata', resume, { once: true });
+                        on('loadedmetadata', resume, { once: true });
                     } catch (e) { video._msRecovering = false; }
                     return;
                 }
@@ -4304,27 +4437,27 @@ function renderCurrent() {
                         video.removeEventListener('loadedmetadata', onCanPlay);
                         video.removeEventListener('canplay', onCanPlay);
                     };
-                    video.addEventListener('loadedmetadata', onCanPlay);
-                    video.addEventListener('canplay', onCanPlay);
+                    on('loadedmetadata', onCanPlay);
+                    on('canplay', onCanPlay);
                 }
                 const retry = video.play();
                 if (retry && typeof retry.catch === 'function') retry.catch(() => { });
             });
 
-            video.addEventListener('volumechange', () => {
+            on('volumechange', () => {
                 if (!ownsVideoSession()) return;
                 bridge.globalVolume = video.volume;
                 bridge.globalMuted = video.muted;
                 bridge.savePreference('MS_BETTER_VIDEO_VOLUME', bridge.globalVolume);
                 bridge.savePreference('MS_BETTER_VIDEO_MUTED', bridge.globalMuted);
             });
-            video.addEventListener('loadedmetadata', () => {
+            on('loadedmetadata', () => {
                 if (!ownsVideoSession()) return;
                 syncVerticalFitMediaBox(video);
                 noteMediaDimensions(item, video);
             });
             if (video.readyState >= 1) noteMediaDimensions(item, video);
-            if (!video.isConnected || !video.closest('.ms-media-box')) ensureMediaBox(wrap).appendChild(video);
+            if (!video.isConnected || !video.closest('.ms-media-box')) placeNode(ensureMediaBox(wrap), video);
             const revealVideo = () => {
                 if (!ownsVideoSession()) return;
                 video.classList.add('ms-ready');
@@ -4336,7 +4469,7 @@ function renderCurrent() {
             video.style.opacity = '1';
             if (video.readyState >= 1) syncVerticalFitMediaBox(video);
             if (video.readyState >= 2) revealVideo();
-            else video.addEventListener('loadeddata', revealVideo, { once: true });
+            else on('loadeddata', revealVideo, { once: true });
             let videoActivated = false;
             const activateVideo = () => {
                 if (videoActivated || token !== bridge.state.renderToken || !video.isConnected) return;
@@ -4346,12 +4479,13 @@ function renderCurrent() {
                 const promise = video.play();
                 if (promise && typeof promise.catch === 'function') promise.catch(() => { });
             };
-            video.addEventListener('pointerdown', activateVideo, { once: true });
+            on('pointerdown', activateVideo, { once: true });
             if ((usedPredicted || bufferedVideo) && !video.getAttribute('src')) video.src = primaryVideoSrc;
             if (video.readyState < 2) {
                 setStageFetching(true);
                 stallWatch = watchStageMedia({
                     element: video,
+                    signal: renderAbort.signal,
                     wrap: wrap,
                     url: item.src,
                     isCurrent: ownsVideoSession,
@@ -4657,5 +4791,5 @@ async function openFavoriteFolders(item, anchor) {
             setFavoriteMenuStatus(menu, error && error.message ? error.message : 'Could not load favorite folders.', 'error');
         }
     }
-return { openEditorWindow, openEditorFrame, flashHostElement, snapshotGhostSource, paintClusterSeams, mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
+return { openEditorWindow, openEditorFrame, flashHostElement, snapshotGhostSource, paintClusterSeams, mountOpenInGalleryButton, hasOutOfFlowChild, prefersReducedMotion, flyGhost, cancelFlyGhost, scrollGridToCurrent, flyFromCell, syncZoomSliderAvailability, createLauncher, beginOpen, resetLayout, finishOpen, clearViewerMedia, revealHost, addSettingsGearButton, closeFavoriteMenu, positionFavoriteMenu, setFavoriteMenuStatus, addFavoriteMenuSection, openFavoriteFolders, showPostPanel, setInfoPanelVisible, isInfoPanelVisible, setTitlePanelVisible, refreshGridSize, renderTitleRow, paintTopbar, renderCurrent, paintCurrentLikeButton, paintPostActions, showStageNotice, hideStageNotice, showGalleryEndNotice, getLoadingOverlay, showLoadingOverlay, updateLoadingOverlay, hideLoadingOverlay, ensureOverlay, onOverlayClick, tagsPanelIsScrollable, onOverlayWheel, navigateFromWheel, getWheelNavigationDirection, updateDropdownActiveStates, setBtnLabel, measureRowContentWidth, topbarLayoutSignature, updateTopbarCompact, bindTopbarCompactObserver, updateButtons, updatePositionControl, commitPositionInput, bindPositionControl, ensureMediaBox, syncVerticalFitMediaBox, applyFitClass, toggleThumbs, setGridMode, renderGrid, disablePan, applyTitleRowHeight, applyTagsFontSize, bindTitleRowResizer, bindTagsPanelResizer, toggleTagsPanel, captionHtmlFromItem, captionFitsSnapchat, setCaptionMode, clickCaptionModeButton, handleCaptionModeMessage, applyCaptionSnapInset, bindCaptionSnapDrag, updateMediaCaptionOverlay, appendCaptionModeControls, setTopbarLoading, updateHdButton, enablePanForImage, shouldAutoPan, togglePanMode, clearFullscreenIdleTimer, scheduleFullscreenIdleHide, wakeFullscreenTopbar, toggleStageFullscreen, handleImageZoomClick, createPlaceholderIcon, getPastelColorForGroupId, getSourceClass, promoteLazyThumbVideo, promoteLazyMp4Poster, observeLazyThumb, createLazyThumbVideo, createLazyMp4PosterImg, preloadStageVideo, appendVideoThumbMedia, stopThumbTrackAnimation, animateThumbTrackTo, setActiveThumb, thumbStripCenterTarget, applyThumbStripCenter, thumbSourceClass, thumbItemKey, resetMediaThumbEl, onWindowedThumbClick, onWindowedGridClick, fillThumbButton, invalidateThumbGroupData, thumbGroupData, thumbsGroupCounts, ensureThumbsWindow, onThumbsWindowScroll, takePoolCell, paintThumbsWindow, paintLoadMarks, paintThumbGroupOutlines, syncThumbsWindow, gridMetrics, ensureGridWindow, onGridWindowScroll, paintGridWindow, fillGridCell, syncGridWindow, renderThumbs, updateSingleThumb, markItemMediaLoaded, enableThumbDragScroll, appendErrorBanner, renderErrorStage, prepareMediaWrap, bindGlobalGalleryHandlers, unbindGlobalGalleryHandlers, closeGallerySettings, openInGalleryButtonHtml, createOpenInGalleryButton };
 }

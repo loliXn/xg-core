@@ -172,6 +172,10 @@ export function prepareMediaSlot(options) {
     const keepVideo = null;
     wrap.querySelectorAll('video, audio').forEach((element) => {
         if (element === keepVideo) return;
+        // The runtime keeps its stage videos for the whole session and parks
+        // them between items; destroying one here would only make it build
+        // another, which is the thing the pool exists to avoid.
+        if (typeof options.retireVideo === 'function' && options.retireVideo(element)) return;
         try {
             element.pause();
             element.removeAttribute('src');

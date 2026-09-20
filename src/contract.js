@@ -1,5 +1,5 @@
 export const XGALLERY_CORE_API_VERSION = 1;
-export const XGALLERY_CORE_VERSION = '0.7.2';
+export const XGALLERY_CORE_VERSION = '0.7.3';
 
 export const MEDIA_TYPES = Object.freeze([
     'img',
