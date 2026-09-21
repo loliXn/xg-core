@@ -48,22 +48,57 @@
     async function inspectImageFormat(blob) {
         const bytes = new Uint8Array(await blob.slice(0, 65536).arrayBuffer());
         const text = (at, n) => String.fromCharCode(...bytes.subarray(at, at + n));
-        const result = (format, animated = false) => ({ format, animated,
-            mime: 'image/' + (format === 'jpg' ? 'jpeg' : format) });
-        if (text(0, 6) === 'GIF87a' || text(0, 6) === 'GIF89a') return result('gif', true);
-        if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return result('jpg');
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const result = (format, animated = false, size = null) => ({ format, animated,
+            mime: 'image/' + (format === 'jpg' ? 'jpeg' : format),
+            width: size ? size.width : 0, height: size ? size.height : 0 });
+
+        // Every one of these formats declares its size within the first bytes, so
+        // the answer is already in hand: the caller reads at most 64 KB to
+        // classify the file and can now learn how big the picture is without
+        // fetching, let alone decoding, the rest of it.
+        const safe = (fn) => { try { return fn(); } catch (e) { return null; } };
+        const gifSize = () => ({ width: view.getUint16(6, true), height: view.getUint16(8, true) });
+        const pngSize = () => ({ width: view.getUint32(16), height: view.getUint32(20) });
+        const jpegSize = () => {
+            // Walk the segment chain to the frame header, which carries the size.
+            for (let at = 2; at + 9 < bytes.length;) {
+                if (bytes[at] !== 0xFF) { at += 1; continue; }
+                const marker = bytes[at + 1];
+                if (marker === 0xD8 || marker === 0x01 || (marker >= 0xD0 && marker <= 0xD7)) { at += 2; continue; }
+                const length = view.getUint16(at + 2);
+                const isFrame = marker >= 0xC0 && marker <= 0xCF
+                    && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC;
+                if (isFrame) return { height: view.getUint16(at + 5), width: view.getUint16(at + 7) };
+                if (marker === 0xDA) break;
+                at += 2 + length;
+            }
+            return null;
+        };
+        const webpSize = () => {
+            const chunk = text(12, 4);
+            if (chunk === 'VP8X') return { width: (bytes[24] | (bytes[25] << 8) | (bytes[26] << 16)) + 1, height: (bytes[27] | (bytes[28] << 8) | (bytes[29] << 16)) + 1 };
+            if (chunk === 'VP8 ') return { width: view.getUint16(26, true) & 0x3FFF, height: view.getUint16(28, true) & 0x3FFF };
+            if (chunk === 'VP8L') {
+                const bits = bytes[21] | (bytes[22] << 8) | (bytes[23] << 16) | (bytes[24] << 24);
+                return { width: (bits & 0x3FFF) + 1, height: ((bits >> 14) & 0x3FFF) + 1 };
+            }
+            return null;
+        };
+        if (text(0, 6) === 'GIF87a' || text(0, 6) === 'GIF89a') return result('gif', true, safe(gifSize));
+        if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return result('jpg', false, safe(jpegSize));
         if (text(0, 4) === 'RIFF' && text(8, 4) === 'WEBP') {
-            return result('webp', text(12, 4) === 'VP8X' && !!(bytes[20] & 2));
+            return result('webp', text(12, 4) === 'VP8X' && !!(bytes[20] & 2), safe(webpSize));
         }
         if (bytes[0] === 137 && text(1, 3) === 'PNG') {
             const view = new DataView(bytes.buffer);
             for (let at = 8; at + 8 <= bytes.length;) {
                 const type = text(at + 4, 4);
-                if (type === 'acTL') return result('png', true);
+                if (type === 'acTL') return result('png', true, safe(pngSize));
                 if (type === 'IDAT' || type === 'IEND') break;
                 at += 12 + view.getUint32(at);
             }
-            return result('png');
+            return result('png', false, safe(pngSize));
         }
         return null;
     }
@@ -9160,18 +9195,6 @@
             return !shown || shown === media;
         }
 
-    // Learned when a cell's picture loads: the size is not knowable before then,
-    // so the first one is paid for once and every cell after it is spared.
-    function noteThumbSourceSize(img, item, thumbSrc, index) {
-            if (!item || item._msThumbOversized) return;
-            const edge = Math.max(img.naturalWidth || 0, img.naturalHeight || 0);
-            if (edge <= THUMB_MAX_SOURCE_EDGE || !thumbIsOwnMedia(item, thumbSrc)) return;
-            item._msThumbOversized = true;
-            invalidateThumbWindow();
-            const entry = bridge.state.items[index];
-            if (entry && (entry.item || entry) === item) updateSingleThumb(index, entry);
-        }
-
     function thumbPlanInput(item, thumbSrc) {
             return {
                 frozen: item && item._frozenThumb,
@@ -9182,7 +9205,11 @@
                 isImageUrl: isStaticVideoThumbUrl,
                 mayAnimate: mayBeAnimatedImageUrl,
                 canExtract: () => !!(bridge.canExtractMp4Poster && bridge.canExtractMp4Poster(item, (item && item.src) || thumbSrc)),
-                oversized: !!(item && item._msThumbOversized),
+                // Read from the file's header while it was being classified, so
+                // an enormous picture is never decoded for a cell in the first
+                // place. Anything the adapter could not measure is shown as usual.
+                oversized: !!(item && thumbIsOwnMedia(item, thumbSrc)
+                    && Math.max(item.thumbnailWidth || 0, item.thumbnailHeight || 0) > THUMB_MAX_SOURCE_EDGE),
                 // A <video> in a cell is opt-in and nothing opts in: see thumbs.js.
                 allowVideoElement: bridge.allowThumbVideoElements === true
             };
@@ -9356,8 +9383,11 @@
             // long before it finishes loading, and the refill restarted that
             // download from zero.
             const animated = (bridge.isFreezableAnimatedThumb && bridge.isFreezableAnimatedThumb(item)) || !!item.thumbnailAnimated;
+            // Learning that the only picture on offer is far too big changes what
+            // the cell shows, so it has to change what the cell remembers too.
+            const oversized = Number(Math.max(item.thumbnailWidth || 0, item.thumbnailHeight || 0) > THUMB_MAX_SOURCE_EDGE);
             return token + '|' + String(item.type || '') + '|' + Number(!!item.isVideo)
-                + '|' + Number(animated) + '|' + (animated ? String(item.thumbnailFormat || item.detectedFormat || '') : '');
+                + '|' + Number(animated) + '|' + oversized + '|' + (animated ? String(item.thumbnailFormat || item.detectedFormat || '') : '');
         }
 
     function takeThumbVisual(el) {
@@ -9520,7 +9550,6 @@
                 appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-placeholder'),
                 loadImage: (img) => {
                     img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
-                    img.addEventListener('load', () => noteThumbSourceSize(img, item, thumbSrc, index), { once: true });
                     if (animated) {
                         bridge.freezeAnimatedThumbnail(img, item);
                     } else {
@@ -9996,7 +10025,6 @@
                 appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-grid-placeholder'),
                 loadImage: (img) => {
                     img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
-                    img.addEventListener('load', () => noteThumbSourceSize(img, item, thumbSrc, index), { once: true });
                     if (animated) {
                         bridge.freezeAnimatedThumbnail(img, item);
                     } else {

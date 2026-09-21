@@ -2403,18 +2403,6 @@ function thumbIsOwnMedia(item, thumbSrc) {
         return !shown || shown === media;
     }
 
-// Learned when a cell's picture loads: the size is not knowable before then,
-// so the first one is paid for once and every cell after it is spared.
-function noteThumbSourceSize(img, item, thumbSrc, index) {
-        if (!item || item._msThumbOversized) return;
-        const edge = Math.max(img.naturalWidth || 0, img.naturalHeight || 0);
-        if (edge <= THUMB_MAX_SOURCE_EDGE || !thumbIsOwnMedia(item, thumbSrc)) return;
-        item._msThumbOversized = true;
-        invalidateThumbWindow();
-        const entry = bridge.state.items[index];
-        if (entry && (entry.item || entry) === item) updateSingleThumb(index, entry);
-    }
-
 function thumbPlanInput(item, thumbSrc) {
         return {
             frozen: item && item._frozenThumb,
@@ -2425,7 +2413,11 @@ function thumbPlanInput(item, thumbSrc) {
             isImageUrl: isStaticVideoThumbUrl,
             mayAnimate: mayBeAnimatedImageUrl,
             canExtract: () => !!(bridge.canExtractMp4Poster && bridge.canExtractMp4Poster(item, (item && item.src) || thumbSrc)),
-            oversized: !!(item && item._msThumbOversized),
+            // Read from the file's header while it was being classified, so
+            // an enormous picture is never decoded for a cell in the first
+            // place. Anything the adapter could not measure is shown as usual.
+            oversized: !!(item && thumbIsOwnMedia(item, thumbSrc)
+                && Math.max(item.thumbnailWidth || 0, item.thumbnailHeight || 0) > THUMB_MAX_SOURCE_EDGE),
             // A <video> in a cell is opt-in and nothing opts in: see thumbs.js.
             allowVideoElement: bridge.allowThumbVideoElements === true
         };
@@ -2599,8 +2591,11 @@ function thumbPreviewRevision(entry) {
         // long before it finishes loading, and the refill restarted that
         // download from zero.
         const animated = (bridge.isFreezableAnimatedThumb && bridge.isFreezableAnimatedThumb(item)) || !!item.thumbnailAnimated;
+        // Learning that the only picture on offer is far too big changes what
+        // the cell shows, so it has to change what the cell remembers too.
+        const oversized = Number(Math.max(item.thumbnailWidth || 0, item.thumbnailHeight || 0) > THUMB_MAX_SOURCE_EDGE);
         return token + '|' + String(item.type || '') + '|' + Number(!!item.isVideo)
-            + '|' + Number(animated) + '|' + (animated ? String(item.thumbnailFormat || item.detectedFormat || '') : '');
+            + '|' + Number(animated) + '|' + oversized + '|' + (animated ? String(item.thumbnailFormat || item.detectedFormat || '') : '');
     }
 
 function takeThumbVisual(el) {
@@ -2763,7 +2758,6 @@ function fillThumbButton(btn, entry, index, groupCounts, visible) {
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-placeholder'),
             loadImage: (img) => {
                 img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
-                img.addEventListener('load', () => noteThumbSourceSize(img, item, thumbSrc, index), { once: true });
                 if (animated) {
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
@@ -3239,7 +3233,6 @@ function fillGridCell(cell, entry, index) {
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-grid-placeholder'),
             loadImage: (img) => {
                 img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
-                img.addEventListener('load', () => noteThumbSourceSize(img, item, thumbSrc, index), { once: true });
                 if (animated) {
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
