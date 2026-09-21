@@ -296,7 +296,10 @@ export const OVERLAY_CSS = String.raw`
             gap: 4px;
             align-items: center;
         }
-        .ms-gallery-overlay .ms-btn {
+        /* A panel outside the overlay - the bookmarks list, say - marks itself
+           .ms-ui-surface and gets the same controls as the viewer, rather than
+           a second set of button styles drifting alongside these. */
+        :is(.ms-gallery-overlay, .ms-ui-surface) .ms-btn {
             border: 1px solid transparent;
             background: transparent;
             color: var(--ms-text-3);
@@ -323,18 +326,43 @@ export const OVERLAY_CSS = String.raw`
            style.display='none' we set - so the Favorite heart, Loop and HD
            buttons were visible on sites that never support them. Re-hide via
            a higher-specificity rule that matches the inline style itself. */
+        :is(.ms-gallery-overlay, .ms-ui-surface) .ms-icon-btn {
+            width: 32px;
+            padding: 0;
+        }
+        :is(.ms-gallery-overlay, .ms-ui-surface) .ms-icon-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+        :is(.ms-gallery-overlay, .ms-ui-surface) .ms-btn:disabled {
+            opacity: .45;
+            cursor: default;
+            background: transparent;
+            color: var(--ms-text-4);
+        }
+        /* One row, one choice: the same grammar as the viewer's own toggles,
+           in the shape a list of filters wants. */
+        .ms-segmented {
+            display: inline-flex;
+            gap: 2px;
+            padding: 2px;
+            border: 1px solid var(--ms-line);
+            border-radius: 9px;
+            background: var(--ms-surface-1);
+        }
+        .ms-segmented .ms-btn { height: 26px; border-radius: 7px; }
         .ms-gallery-overlay .ms-btn[style*="display:none"],
         .ms-gallery-overlay .ms-btn[style*="display: none"],
         .ms-gallery-overlay .ms-icon-btn[style*="display:none"],
         .ms-gallery-overlay .ms-icon-btn[style*="display: none"] {
             display: none !important;
         }
-        .ms-gallery-overlay .ms-btn:hover {
+        :is(.ms-gallery-overlay, .ms-ui-surface) .ms-btn:hover {
             background: var(--ms-hover);
             color: var(--ms-text);
         }
-        .ms-gallery-overlay .ms-btn:active { background: var(--ms-pressed); }
-        .ms-gallery-overlay .ms-btn.active:hover { background: var(--ms-accent-tint-strong); }
+        :is(.ms-gallery-overlay, .ms-ui-surface) .ms-btn:active { background: var(--ms-pressed); }
+        :is(.ms-gallery-overlay, .ms-ui-surface) .ms-btn.active:hover { background: var(--ms-accent-tint-strong); }
         .ms-gallery-overlay .ms-gallery-topbar .ms-btn,
         .ms-gallery-overlay .ms-gallery-topbar .ms-icon-btn {
             border: none;
@@ -3221,7 +3249,7 @@ export const OVERLAY_CSS = String.raw`
             color: var(--ms-text-4);
             margin-right: 2px;
         }
-        .ms-gallery-overlay .ms-btn.active {
+        :is(.ms-gallery-overlay, .ms-ui-surface) .ms-btn.active {
             color: var(--ms-accent);
             background: var(--ms-accent-tint);
         }
