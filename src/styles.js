@@ -94,6 +94,28 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay * {
             box-sizing: border-box;
         }
+        /* The gallery is its own layout world.
+           Without this, every geometry read inside the viewer - the width of
+           the top bar, the strip's scroll position - forces the browser to lay
+           out the whole host document first. On a big page (an imageboard
+           thread of half a million nodes) one such read costs tens of
+           milliseconds, and a navigation makes a dozen of them; containment
+           keeps that work inside the overlay, which is a few hundred nodes.
+
+           It has to be strict (layout + paint + size + style): the browser
+           will only lay out a subtree on its own if the subtree's own size
+           cannot change, and layout containment alone does not promise that.
+           With layout+paint+style alone a trace still showed a full-document
+           layout - 5 dirty objects, 933,592 laid out, 22 ms - several times
+           per navigation. Size containment is safe for all three boxes below
+           because none of them is sized by its contents: the overlay fills the
+           viewport (inset: 0), and the strip and the grid fill panels of a
+           fixed height. */
+        .ms-gallery-overlay,
+        .ms-thumbs-track,
+        .ms-grid-wrap {
+            contain: strict;
+        }
         /* Buttons/inputs/selects/links don't inherit font-family by default
            (browser UA stylesheet quirk), so host-page styles can otherwise
            leak through and make them look mismatched from the rest of the UI. */

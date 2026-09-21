@@ -961,6 +961,38 @@ function measureRowContentWidth(row) {
         return total;
     }
 
+// The width of a box, as last reported by a ResizeObserver.
+//
+// Reading clientWidth is what forces the layout this whole file is trying to
+// avoid; a ResizeObserver already knows the answer and costs nothing to ask.
+// Until one has reported, fall back to a real read - once - and remember it.
+function observedWidth(el) {
+        if (!el) return 0;
+        if (typeof el._msObservedWidth === 'number') return el._msObservedWidth;
+        const width = el.clientWidth;
+        el._msObservedWidth = width;
+        watchWidth(el);
+        return width;
+    }
+
+function watchWidth(el) {
+        if (!el || el._msWidthWatched || typeof ResizeObserver === 'undefined') return;
+        el._msWidthWatched = true;
+        if (!bridge.state.widthObserver) {
+            bridge.state.widthObserver = new ResizeObserver((entries) => {
+                entries.forEach((entry) => {
+                    const box = entry.contentBoxSize && entry.contentBoxSize[0];
+                    const target = entry.target;
+                    const width = box ? box.inlineSize : entry.contentRect.width;
+                    // Padding is inside clientWidth and outside contentRect.
+                    const padded = target.clientWidth;
+                    target._msObservedWidth = Number.isFinite(padded) && padded ? padded : Math.round(width);
+                });
+            });
+        }
+        try { bridge.state.widthObserver.observe(el); } catch (e) { }
+    }
+
 function topbarLayoutSignature(topbar, controls) {
         const center = topbar.querySelector('.ms-gallery-center');
         const vis = (el) => el
@@ -971,7 +1003,7 @@ function topbarLayoutSignature(topbar, controls) {
         // Viewer and back, and that is a real width change now that the label
         // is never hidden.
         const pinned = topbar.querySelector('.ms-btn-pinned .ms-btn-label');
-        return topbar.clientWidth + '|' + vis(controls) + '|' + vis(center) + '|' + (pinned ? pinned.textContent : '');
+        return observedWidth(topbar) + '|' + vis(controls) + '|' + vis(center) + '|' + (pinned ? pinned.textContent : '');
     }
 
 function updateTopbarCompact() {
@@ -987,9 +1019,10 @@ function updateTopbarCompact() {
         topbar.classList.remove('ms-icons-only');
         topbar.classList.remove('ms-topbar-tight');
 
-        if (measureRowContentWidth(controls) > controls.clientWidth + 1) {
+        const room = observedWidth(controls) + 1;
+        if (measureRowContentWidth(controls) > room) {
             topbar.classList.add('ms-icons-only');
-            if (measureRowContentWidth(controls) > controls.clientWidth + 1) {
+            if (measureRowContentWidth(controls) > room) {
                 topbar.classList.add('ms-topbar-tight');
             }
         }
@@ -2470,6 +2503,17 @@ function animateThumbTrackTo(track, target) {
             track.scrollLeft = target;
             return;
         }
+        // Let the browser scroll it. A dozen hand-run frames means a dozen
+        // writes to scrollLeft from script, and every one of those forces the
+        // layout the browser would otherwise do once; the native animation
+        // runs off the main thread entirely. The manual loop stays for
+        // browsers without it.
+        if (typeof track.scrollTo === 'function' && 'scrollBehavior' in document.documentElement.style) {
+            try {
+                track.scrollTo({ left: target, behavior: 'smooth' });
+                return;
+            } catch (e) { }
+        }
         const started = bridge.performance.now();
         const duration = Math.min(180, 110 + Math.abs(distance) / 8);
         const step = (now) => {
@@ -2500,7 +2544,7 @@ function thumbStripCenterTarget(track, index) {
         const n = bridge.state.items.length;
         if (!track || !n) return 0;
         const sizer = track.querySelector('.ms-thumbs-sizer');
-        const width = track.clientWidth;
+        const width = observedWidth(track);
         const span = (sizer && sizer.offsetWidth) || (n * bridge.MS_THUMB_STRIDE);
         const maxScroll = Math.max(0, span - width);
         return Math.max(0, Math.min(maxScroll, index * bridge.MS_THUMB_STRIDE - width / 2 + bridge.MS_THUMB_STRIDE / 2));
@@ -2508,13 +2552,13 @@ function thumbStripCenterTarget(track, index) {
 
 function applyThumbStripCenter(track, animate) {
         if (!track) return;
-        if (!track.clientWidth) {
+        if (!observedWidth(track)) {
             if (bridge.state.thumbsCenterRetry) return;
             bridge.state.thumbsCenterRetry = requestAnimationFrame(() => {
                 bridge.state.thumbsCenterRetry = null;
                 if (!bridge.state.overlay) return;
                 const next = bridge.state.overlay.querySelector('.ms-thumbs-track');
-                if (next && next.clientWidth) applyThumbStripCenter(next, false);
+                if (next && next.clientWidth) { next._msObservedWidth = next.clientWidth; applyThumbStripCenter(next, false); }
             });
             return;
         }
@@ -2753,9 +2797,18 @@ function invalidateThumbGroupData() {
         bridge.state.thumbGroupData = null;
     }
 
+// A cell was refilled or a mark changed under an unchanged window.
+function invalidateThumbWindow() {
+        const track = bridge.state.overlay && bridge.state.overlay.querySelector('.ms-thumbs-track');
+        if (track) track._msWindowSignature = '';
+    }
+
 function thumbGroupData() {
         const cached = bridge.state.thumbGroupData;
         if (cached && cached.items === bridge.state.items && cached.length === bridge.state.items.length) return cached;
+        // Bumped whenever the data behind the strip is rebuilt, so a window
+        // that looks unchanged is still repainted when its contents changed.
+        bridge.state.thumbDataRevision = (bridge.state.thumbDataRevision || 0) + 1;
         const counts = new Map();
         const runs = [];
         bridge.state.items.forEach((entry) => {
@@ -2793,7 +2846,7 @@ function thumbGroupData() {
             if (sid && end - start > 1 && !sameAsPost) superRuns.push({ gid: sid, start: start, end: end });
             start = end;
         }
-        bridge.state.thumbGroupData = { items: bridge.state.items, length: bridge.state.items.length, counts: counts, runs: runs, superRuns: superRuns };
+        bridge.state.thumbGroupData = { items: bridge.state.items, length: bridge.state.items.length, counts: counts, runs: runs, superRuns: superRuns, revision: bridge.state.thumbDataRevision || 0 };
         return bridge.state.thumbGroupData;
     }
 
@@ -2843,14 +2896,21 @@ function takePoolCell(pool, used, key, reservedKeys) {
         return null;
     }
 
-function paintThumbsWindow(track, groupData) {
+function paintThumbsWindow(track, groupData, force) {
         const data = groupData || thumbGroupData();
         const groupCounts = data.counts;
         const n = bridge.state.items.length;
         const pad = 6;
         const start = Math.max(0, Math.floor(track.scrollLeft / bridge.MS_THUMB_STRIDE) - pad);
-        const vis = Math.ceil(Math.max(track.clientWidth, 1) / bridge.MS_THUMB_STRIDE) + pad * 2;
+        const vis = Math.ceil(Math.max(observedWidth(track), 1) / bridge.MS_THUMB_STRIDE) + pad * 2;
         const end = Math.min(n, start + vis);
+        // A scroll animation runs a dozen frames and the window it shows
+        // changes on one or two of them; the rest used to rewrite every cell's
+        // position anyway, which dirties layout and makes the next frame's
+        // scroll read force it again. Nothing has moved: leave it alone.
+        const signature = start + ':' + end + ':' + n + ':' + bridge.state.currentIndex + ':' + (bridge.state.thumbDataRevision || 0);
+        if (!force && track._msWindowSignature === signature) return;
+        track._msWindowSignature = signature;
         const want = Math.max(0, end - start);
         // The pad cells are off screen: their thumbnails load at low priority.
         const visStart = start + (start > 0 ? pad : 0);
@@ -3010,7 +3070,7 @@ function syncThumbsWindow(opts) {
             applyThumbStripCenter(track, !!(opts && opts.center));
         }
         bridge.state.thumbsPaintIndex = bridge.state.currentIndex;
-        paintThumbsWindow(track, thumbGroupData());
+        paintThumbsWindow(track, thumbGroupData(), true);
     }
 
 function gridMetrics(wrap, grid) {
@@ -3253,6 +3313,7 @@ function renderThumbs(options) {
 }
 
 function updateSingleThumb(index, entry) {
+        invalidateThumbWindow();
         if (!bridge.state.overlay) return;
         const track = bridge.state.overlay.querySelector('.ms-thumbs-track');
         if (!track) return;
