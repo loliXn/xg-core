@@ -31,7 +31,7 @@ function protectHostControl(button, compact) {
 // auxiliary button exists, but the auxiliary button has to render leftmost -
 // and CSS order cannot be used, because the seam and the clipped outer corners
 // both key off real DOM order.
-const LAUNCHER_SLOT_ORDER = {aux:10, settings:20, gallery:30};
+const LAUNCHER_SLOT_ORDER = {aux:10, settings:20, bookmarks:25, gallery:30};
 
 // The cluster carries the visible chrome, so it is the thing that needs the
 // shield protectHostControl used to put on each button: inline !important beats
@@ -441,6 +441,8 @@ function paintTopbar(model) {
     const overlay=bridge.state.overlay;if(!overlay)return;
     const loop=overlay.querySelector('[data-act="loop-toggle"]');loop.style.display=model.video?'':'none';loop.classList.toggle('active',!!model.loop);
     const favorite=overlay.querySelector('[data-act="fav-toggle"]');favorite.style.display=model.favoriteVisible?'':'none';favorite.title=model.favoriteTitle;favorite.classList.toggle('active',!!model.favoriteActive);
+    const bookmark=overlay.querySelector('[data-act="bookmark-toggle"]');
+    if(bookmark){bookmark.style.display=model.bookmarkVisible?'':'none';bookmark.title=model.bookmarkTitle||'Bookmark this image';bookmark.classList.toggle('active',!!model.bookmarkActive);}
     const info=overlay.querySelector('[data-act="show-tags"]');info.style.display=model.infoVisible?'':'none';setBtnLabel(info,model.infoLabel);
     if(isInfoPanelVisible())toggleTagsPanel(true);
     updateTopbarCompact();
@@ -772,6 +774,8 @@ function onOverlayClick(e) {
                 const loopItem = loopEntry ? (loopEntry.item || loopEntry) : null;
                 if (video) video.loop = bridge.globalLoop || !!(loopItem && loopItem.imageFallbackSrc);
                 bridge.updateTopbarStates();
+            } else if (act === 'bookmark-toggle') {
+                if (typeof bridge.toggleBookmark === 'function') bridge.toggleBookmark();
             } else if (act === 'fav-toggle') {
                 const entry = bridge.state.items[bridge.state.currentIndex];
                 const item = entry ? (entry.item || entry) : null;

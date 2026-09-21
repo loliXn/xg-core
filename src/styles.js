@@ -3386,6 +3386,20 @@ export const OVERLAY_CSS = String.raw`
         .ms-tags-font-btn {
             font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
         }
+        /* The bookmark reads as an outline until it holds something, then it
+           fills with the accent - the same grammar as the favourite heart. */
+        .ms-bookmark-btn svg {
+            width: 18px;
+            height: 18px;
+            fill: none;
+            stroke: var(--ms-text-3);
+            transition: stroke 120ms var(--ms-ease-out), fill 120ms var(--ms-ease-out);
+        }
+        .ms-bookmark-btn:hover svg { stroke: var(--ms-text); }
+        .ms-bookmark-btn.active svg {
+            fill: var(--ms-accent);
+            stroke: var(--ms-accent);
+        }
         .ms-fav-btn {
             display: inline-flex;
             align-items: center;

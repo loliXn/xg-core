@@ -4062,6 +4062,20 @@
             .ms-tags-font-btn {
                 font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
             }
+            /* The bookmark reads as an outline until it holds something, then it
+               fills with the accent - the same grammar as the favourite heart. */
+            .ms-bookmark-btn svg {
+                width: 18px;
+                height: 18px;
+                fill: none;
+                stroke: var(--ms-text-3);
+                transition: stroke 120ms var(--ms-ease-out), fill 120ms var(--ms-ease-out);
+            }
+            .ms-bookmark-btn:hover svg { stroke: var(--ms-text); }
+            .ms-bookmark-btn.active svg {
+                fill: var(--ms-accent);
+                stroke: var(--ms-accent);
+            }
             .ms-fav-btn {
                 display: inline-flex;
                 align-items: center;
@@ -5711,6 +5725,7 @@
             '    <div class="ms-topbar-spinner" title="Loading full image..."></div>',
             '    <button class="ms-mode-viewer ms-btn ms-icon-btn ms-fullscreen-btn" data-act="fullscreen-toggle" title="Fit to page"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg></button>',
             '    <button class="ms-mode-viewer ms-btn ms-icon-btn ms-fav-btn" data-act="fav-toggle" style="display:none;" title="Favorite"><svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z"/></svg></button>',
+            '    <button class="ms-mode-viewer ms-btn ms-icon-btn ms-bookmark-btn" data-act="bookmark-toggle" style="display:none;" title="Bookmark this image"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3h11a1.5 1.5 0 0 1 1.5 1.5V21l-7-4.7L5 21V4.5A1.5 1.5 0 0 1 6.5 3Z"/></svg></button>',
             '    <button class="ms-mode-viewer ms-btn ms-icon-btn ms-x-action" data-act="x-like" style="display:none;" title="Like post"><svg viewBox="0 0 24 24"><path d="M16.7 5.5c-1.3 0-2.7.6-3.9 2.2L12 8.8l-.8-1.1C10 6.1 8.6 5.5 7.3 5.5 5 5.6 3.4 7.8 4.4 10.4c.8 2.2 3.2 5.3 7.6 8 4.4-2.7 6.8-5.8 7.6-8 1-2.6-.6-4.8-2.9-4.9Z"/></svg></button>',
             '    <button class="ms-mode-viewer ms-btn ms-icon-btn ms-x-action" data-act="x-bookmark" style="display:none;" title="Bookmark post"><svg viewBox="0 0 24 24"><path d="M6.5 3h11c.8 0 1.5.7 1.5 1.5V21l-7-5-7 5V4.5C5 3.7 5.7 3 6.5 3Z"/></svg></button>',
             '    <div class="ms-mode-viewer ms-zoom-slider-wrap ms-zoom-idle">',
@@ -6823,7 +6838,7 @@
     // auxiliary button exists, but the auxiliary button has to render leftmost -
     // and CSS order cannot be used, because the seam and the clipped outer corners
     // both key off real DOM order.
-    const LAUNCHER_SLOT_ORDER = {aux:10, settings:20, gallery:30};
+    const LAUNCHER_SLOT_ORDER = {aux:10, settings:20, bookmarks:25, gallery:30};
 
     // The cluster carries the visible chrome, so it is the thing that needs the
     // shield protectHostControl used to put on each button: inline !important beats
@@ -7233,6 +7248,8 @@
         const overlay=bridge.state.overlay;if(!overlay)return;
         const loop=overlay.querySelector('[data-act="loop-toggle"]');loop.style.display=model.video?'':'none';loop.classList.toggle('active',!!model.loop);
         const favorite=overlay.querySelector('[data-act="fav-toggle"]');favorite.style.display=model.favoriteVisible?'':'none';favorite.title=model.favoriteTitle;favorite.classList.toggle('active',!!model.favoriteActive);
+        const bookmark=overlay.querySelector('[data-act="bookmark-toggle"]');
+        if(bookmark){bookmark.style.display=model.bookmarkVisible?'':'none';bookmark.title=model.bookmarkTitle||'Bookmark this image';bookmark.classList.toggle('active',!!model.bookmarkActive);}
         const info=overlay.querySelector('[data-act="show-tags"]');info.style.display=model.infoVisible?'':'none';setBtnLabel(info,model.infoLabel);
         if(isInfoPanelVisible())toggleTagsPanel(true);
         updateTopbarCompact();
@@ -7564,6 +7581,8 @@
                     const loopItem = loopEntry ? (loopEntry.item || loopEntry) : null;
                     if (video) video.loop = bridge.globalLoop || !!(loopItem && loopItem.imageFallbackSrc);
                     bridge.updateTopbarStates();
+                } else if (act === 'bookmark-toggle') {
+                    if (typeof bridge.toggleBookmark === 'function') bridge.toggleBookmark();
                 } else if (act === 'fav-toggle') {
                     const entry = bridge.state.items[bridge.state.currentIndex];
                     const item = entry ? (entry.item || entry) : null;
