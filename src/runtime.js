@@ -961,38 +961,6 @@ function measureRowContentWidth(row) {
         return total;
     }
 
-// The width of a box, as last reported by a ResizeObserver.
-//
-// Reading clientWidth is what forces the layout this whole file is trying to
-// avoid; a ResizeObserver already knows the answer and costs nothing to ask.
-// Until one has reported, fall back to a real read - once - and remember it.
-function observedWidth(el) {
-        if (!el) return 0;
-        if (typeof el._msObservedWidth === 'number') return el._msObservedWidth;
-        const width = el.clientWidth;
-        el._msObservedWidth = width;
-        watchWidth(el);
-        return width;
-    }
-
-function watchWidth(el) {
-        if (!el || el._msWidthWatched || typeof ResizeObserver === 'undefined') return;
-        el._msWidthWatched = true;
-        if (!bridge.state.widthObserver) {
-            bridge.state.widthObserver = new ResizeObserver((entries) => {
-                entries.forEach((entry) => {
-                    const box = entry.contentBoxSize && entry.contentBoxSize[0];
-                    const target = entry.target;
-                    const width = box ? box.inlineSize : entry.contentRect.width;
-                    // Padding is inside clientWidth and outside contentRect.
-                    const padded = target.clientWidth;
-                    target._msObservedWidth = Number.isFinite(padded) && padded ? padded : Math.round(width);
-                });
-            });
-        }
-        try { bridge.state.widthObserver.observe(el); } catch (e) { }
-    }
-
 function topbarLayoutSignature(topbar, controls) {
         const center = topbar.querySelector('.ms-gallery-center');
         const vis = (el) => el
@@ -1003,23 +971,29 @@ function topbarLayoutSignature(topbar, controls) {
         // Viewer and back, and that is a real width change now that the label
         // is never hidden.
         const pinned = topbar.querySelector('.ms-btn-pinned .ms-btn-label');
-        return observedWidth(topbar) + '|' + vis(controls) + '|' + vis(center) + '|' + (pinned ? pinned.textContent : '');
+        // No width here on purpose. Reading one costs a layout, this runs on
+        // every render, and it was the most expensive thing the gallery did on
+        // a big page. The only other input is the bar's own width, and a
+        // ResizeObserver already re-runs the fit when that changes.
+        return vis(controls) + '|' + vis(center) + '|' + (pinned ? pinned.textContent : '');
     }
 
-function updateTopbarCompact() {
+function updateTopbarCompact(force) {
         if (!bridge.state.overlay) return;
         const topbar = bridge.state.overlay.querySelector('.ms-gallery-topbar');
         const controls = bridge.state.overlay.querySelector('.ms-gallery-controls');
         if (!topbar || !controls) return;
 
         const sig = topbarLayoutSignature(topbar, controls);
-        if (topbar.dataset.msCompactSig === sig) return;
+        // force: the bar itself changed width, which the signature no longer
+        // watches, so the fit has to be measured again.
+        if (!force && topbar.dataset.msCompactSig === sig) return;
         topbar.dataset.msCompactSig = sig;
 
         topbar.classList.remove('ms-icons-only');
         topbar.classList.remove('ms-topbar-tight');
 
-        const room = observedWidth(controls) + 1;
+        const room = controls.clientWidth + 1;
         if (measureRowContentWidth(controls) > room) {
             topbar.classList.add('ms-icons-only');
             if (measureRowContentWidth(controls) > room) {
@@ -1040,7 +1014,7 @@ function bindTopbarCompactObserver() {
             pending = true;
             requestAnimationFrame(() => {
                 pending = false;
-                updateTopbarCompact();
+                updateTopbarCompact(true);
             });
         });
         ro.observe(topbar);
@@ -2503,17 +2477,11 @@ function animateThumbTrackTo(track, target) {
             track.scrollLeft = target;
             return;
         }
-        // Let the browser scroll it. A dozen hand-run frames means a dozen
-        // writes to scrollLeft from script, and every one of those forces the
-        // layout the browser would otherwise do once; the native animation
-        // runs off the main thread entirely. The manual loop stays for
-        // browsers without it.
-        if (typeof track.scrollTo === 'function' && 'scrollBehavior' in document.documentElement.style) {
-            try {
-                track.scrollTo({ left: target, behavior: 'smooth' });
-                return;
-            } catch (e) { }
-        }
+        // Hand-run, not the browser's own smooth scrolling. Native smooth
+        // scroll has its own pace - about twice as long as this - and there is
+        // no way to cut it short, so moving quickly through a gallery left the
+        // strip still travelling to the item before last. These frames are
+        // cheap now that a scroll read no longer lays out the page.
         const started = bridge.performance.now();
         const duration = Math.min(180, 110 + Math.abs(distance) / 8);
         const step = (now) => {
@@ -2544,7 +2512,7 @@ function thumbStripCenterTarget(track, index) {
         const n = bridge.state.items.length;
         if (!track || !n) return 0;
         const sizer = track.querySelector('.ms-thumbs-sizer');
-        const width = observedWidth(track);
+        const width = track.clientWidth;
         const span = (sizer && sizer.offsetWidth) || (n * bridge.MS_THUMB_STRIDE);
         const maxScroll = Math.max(0, span - width);
         return Math.max(0, Math.min(maxScroll, index * bridge.MS_THUMB_STRIDE - width / 2 + bridge.MS_THUMB_STRIDE / 2));
@@ -2552,13 +2520,13 @@ function thumbStripCenterTarget(track, index) {
 
 function applyThumbStripCenter(track, animate) {
         if (!track) return;
-        if (!observedWidth(track)) {
+        if (!track.clientWidth) {
             if (bridge.state.thumbsCenterRetry) return;
             bridge.state.thumbsCenterRetry = requestAnimationFrame(() => {
                 bridge.state.thumbsCenterRetry = null;
                 if (!bridge.state.overlay) return;
                 const next = bridge.state.overlay.querySelector('.ms-thumbs-track');
-                if (next && next.clientWidth) { next._msObservedWidth = next.clientWidth; applyThumbStripCenter(next, false); }
+                if (next && next.clientWidth) applyThumbStripCenter(next, false);
             });
             return;
         }
@@ -2902,7 +2870,7 @@ function paintThumbsWindow(track, groupData, force) {
         const n = bridge.state.items.length;
         const pad = 6;
         const start = Math.max(0, Math.floor(track.scrollLeft / bridge.MS_THUMB_STRIDE) - pad);
-        const vis = Math.ceil(Math.max(observedWidth(track), 1) / bridge.MS_THUMB_STRIDE) + pad * 2;
+        const vis = Math.ceil(Math.max(track.clientWidth, 1) / bridge.MS_THUMB_STRIDE) + pad * 2;
         const end = Math.min(n, start + vis);
         // A scroll animation runs a dozen frames and the window it shows
         // changes on one or two of them; the rest used to rewrite every cell's
@@ -4318,6 +4286,11 @@ function renderCurrent() {
                 preload: usedPredicted ? '' : (bufferedVideo ? 'auto' : 'metadata')
             });
             video._msRenderAbort = renderAbort;
+            // The same element showed the last item too, and the browser keeps
+            // its controls' state with it: a set of controls that had faded
+            // out while the previous video played stayed faded for this one
+            // until it was clicked. Turning them off and on builds them fresh.
+            if (video._msPooled) { video.controls = false; video.controls = true; }
 
             let lastPlayTime = 0;
             let lastSeekAt = 0;

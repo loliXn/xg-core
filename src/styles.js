@@ -111,10 +111,15 @@ export const OVERLAY_CSS = String.raw`
            because none of them is sized by its contents: the overlay fills the
            viewport (inset: 0), and the strip and the grid fill panels of a
            fixed height. */
-        .ms-gallery-overlay,
+        .ms-gallery-overlay {
+            contain: strict;
+        }
+        /* The panels inside it are contained too, but without size: their
+           widths come from the overlay, and a scroller whose own size is
+           contained is a needless risk for the strip's centring maths. */
         .ms-thumbs-track,
         .ms-grid-wrap {
-            contain: strict;
+            contain: layout paint style;
         }
         /* Buttons/inputs/selects/links don't inherit font-family by default
            (browser UA stylesheet quirk), so host-page styles can otherwise
