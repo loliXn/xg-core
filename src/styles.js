@@ -1840,6 +1840,7 @@ export const OVERLAY_CSS = String.raw`
             flex-shrink: 0;
         }
         .ms-r34-settings-modal .ms-r34-btn-row button,
+        .ms-r34-settings-modal .ms-dialog-foot button,
         .ms-r34-settings-modal .ms-cache-clear,
         .ms-r34-settings-modal .ms-r34-clear {
             padding: 8px 14px;
@@ -1854,6 +1855,7 @@ export const OVERLAY_CSS = String.raw`
             transition: background 140ms var(--ms-ease), border-color 140ms var(--ms-ease), color 140ms var(--ms-ease), transform 140ms var(--ms-ease);
         }
         .ms-r34-settings-modal .ms-r34-btn-row button:hover,
+        .ms-r34-settings-modal .ms-dialog-foot button:hover,
         .ms-r34-settings-modal .ms-cache-clear:hover,
         .ms-r34-settings-modal .ms-r34-clear:hover {
             background: var(--ms-hover);
@@ -1861,16 +1863,20 @@ export const OVERLAY_CSS = String.raw`
             color: var(--ms-text);
         }
         .ms-r34-settings-modal .ms-r34-btn-row button:active,
+        .ms-r34-settings-modal .ms-dialog-foot button:active,
         .ms-r34-settings-modal .ms-cache-clear:active,
         .ms-r34-settings-modal .ms-r34-clear:active {
             transform: scale(0.97);
         }
-        .ms-r34-settings-modal button.ms-r34-save {
+        .ms-r34-settings-modal .ms-dialog-foot button:disabled { opacity: .45; cursor: default; }
+        .ms-r34-settings-modal button.ms-r34-save,
+        .ms-r34-settings-modal .ms-dialog-foot button.ms-dialog-primary {
             background: var(--ms-accent);
             border-color: var(--ms-accent);
             color: var(--ms-on-accent);
         }
-        .ms-r34-settings-modal button.ms-r34-save:hover {
+        .ms-r34-settings-modal button.ms-r34-save:hover,
+        .ms-r34-settings-modal .ms-dialog-foot button.ms-dialog-primary:not(:disabled):hover {
             background: var(--ms-accent-hover);
             border-color: var(--ms-accent-hover);
             color: var(--ms-on-accent);
@@ -2535,6 +2541,115 @@ export const OVERLAY_CSS = String.raw`
         .ms-media-wrap img.ms-media.ms-ready:not(.ms-pannable) {
             cursor: zoom-in;
         }
+        /* Panel furniture, shared by every dialog rather than re-invented in
+           each one. The footer band closes a card the way the header opens
+           it: same surface, same hairline, one primary action. */
+        .ms-dialog-foot {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            flex-shrink: 0;
+            padding: 12px 16px;
+            border-top: 1px solid var(--ms-hairline);
+            background: var(--ms-surface-2);
+        }
+        .ms-dialog-foot-spacer { flex: 1 1 auto; min-width: 0; }
+        .ms-dialog-status {
+            padding: 0 16px 12px;
+            min-height: 17px;
+            font: 12px/1.4 var(--ms-font-ui);
+            color: var(--ms-text-3);
+            background: var(--ms-surface-2);
+        }
+        /* A count beside a heading - metadata about the panel, which is the
+           one thing a pill is for. */
+        .ms-count-pill {
+            flex: none;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--ms-surface-3);
+            color: var(--ms-text-3);
+            font: 600 11px/1.6 var(--ms-font-ui);
+            font-variant-numeric: tabular-nums;
+            letter-spacing: .04em;
+            text-transform: uppercase;
+        }
+        /* A row in a panel card that is itself the control. Hover is a fill
+           and press is a scale, like every other control; the trailing
+           buttons sit above it and take their own clicks. */
+        .ms-list-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            width: 100%;
+            padding: 8px 8px 8px 10px;
+            border: 0;
+            border-bottom: 1px solid var(--ms-hairline);
+            border-radius: 0;
+            background: transparent;
+            color: var(--ms-text);
+            text-align: left;
+            cursor: pointer;
+            transition: background-color 150ms var(--ms-ease), scale 150ms var(--ms-ease);
+        }
+        .ms-list-row:last-child { border-bottom: 0; }
+        .ms-list-row:hover { background: var(--ms-hover); }
+        .ms-list-row:active { scale: 0.995; }
+        .ms-list-row:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: -2px; }
+        .ms-list-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .ms-list-row-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font: 500 13px/1.4 var(--ms-font-ui);
+            color: var(--ms-text);
+        }
+        .ms-list-row-meta {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font: 11px/1.4 var(--ms-font-ui);
+            color: var(--ms-text-4);
+        }
+        .ms-list-row-actions { flex: none; display: flex; align-items: center; gap: 2px; }
+        /* A section label that stays readable while its rows scroll past. */
+        .ms-list-group-head {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            /* No width of its own: 100% plus the inset margins overflows the
+               body, and overflow-y:auto next to a visible overflow-x earns
+               the panel a horizontal scrollbar. */
+            margin: 14px 2px 8px;
+            padding: 2px 0;
+            border: 0;
+            background: var(--ms-surface-1);
+            color: var(--ms-text-4);
+            font: 650 11px/1.6 var(--ms-font-ui);
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            cursor: pointer;
+        }
+        .ms-list-group-head:first-child { margin-top: 0; }
+        .ms-list-group-head:hover { color: var(--ms-text-3); }
+        .ms-list-group-head:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: 2px; }
+        .ms-list-group-head svg {
+            width: 10px;
+            height: 10px;
+            flex: none;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2.4;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            transition: rotate 150ms var(--ms-ease-out);
+        }
+        .ms-list-group-head[aria-expanded="false"] svg { rotate: -90deg; }
+        .ms-list-group-count { font-variant-numeric: tabular-nums; opacity: .72; }
         .ms-settings-section-group {
             font-size: 11px;
             font-weight: 650;

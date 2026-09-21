@@ -322,32 +322,111 @@ export function renderPostPanel(options) {
     else content.scrollTop = 0;
 }
 
-export function createSettingsPanel(options) {
-    const doc = options.document || document;
-    if (doc.getElementById('ms-settings-root')) return null;
+// The shell every panel of ours is built from: a shadow root so host page CSS
+// cannot reach in, the overlay and card, a header with a title and a close,
+// a scrolling body, and the behaviour a dialog is expected to have - Escape,
+// a click on the backdrop, a focus trap, focus handed back to whatever opened
+// it, and the mount-then-reveal entrance. Callers fill `body` and, if they
+// asked for one, `footer`; anything that belongs between the header and the
+// body (a tab row) goes in with modal.insertBefore(row, body).
+export function createDialog(options) {
+    const opts = options || {};
+    const doc = opts.document || document;
+    if (opts.id && doc.getElementById(opts.id)) return null;
     const previousFocus = doc.activeElement;
-    const host = doc.createElement('xgallery-settings');
-    host.id = 'ms-settings-root';
+    const host = doc.createElement(opts.hostTag || 'xgallery-dialog');
+    if (opts.id) host.id = opts.id;
     host.style.cssText = 'all:initial!important;position:fixed!important;inset:0!important;z-index:2147483647!important;display:block!important;visibility:visible!important;pointer-events:auto!important;';
-    const shadow = host.attachShadow({mode:'open'});
-    const sheet = doc.createElement('style');
+    const shadow = host.attachShadow({mode: 'open'});
     // Same reason as the gallery overlay's sheet (see view.js): Dark Reader
     // rewrites stylesheets inside open shadow roots and turns our white-alpha
     // hairlines dark, and its style manager skips any sheet carrying this
     // class. Shadow sheets only - it removes .darkreader nodes from the light
     // DOM when it is switched off, and does not search shadow roots.
+    const sheet = doc.createElement('style');
     sheet.className = 'darkreader';
     sheet.textContent = OVERLAY_CSS;
     shadow.append(sheet);
-    const overlay = panelElement(doc, 'div', 'ms-r34-settings-overlay');
-    overlay.id = 'ms-r34-settings-overlay';
+    if (opts.css) {
+        const extra = doc.createElement('style');
+        extra.className = 'darkreader';
+        extra.textContent = String(opts.css);
+        shadow.append(extra);
+    }
+    const overlay = panelElement(doc, 'div', 'ms-r34-settings-overlay ms-ui-surface');
+    if (opts.overlayId) overlay.id = opts.overlayId;
     const modal = panelElement(doc, 'div', 'ms-r34-settings-modal');
-    modal.setAttribute('role', 'dialog'); modal.setAttribute('aria-modal', 'true');
-    const heading = panelElement(doc, 'div', 'ms-settings-head');
-    heading.append(panelElement(doc, 'h3', '', 'Gallery Settings'));
-    const close = panelElement(doc, 'button', 'ms-settings-close', '×'); close.type = 'button'; close.setAttribute('aria-label', 'Close');
-    heading.append(close); modal.append(heading);
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    const head = panelElement(doc, 'div', 'ms-settings-head');
+    const title = panelElement(doc, 'h3', '', opts.title == null ? '' : opts.title);
+    if (opts.icon) title.insertAdjacentHTML('afterbegin', opts.icon);
+    const close = panelElement(doc, 'button', 'ms-settings-close', '\u00d7');
+    close.type = 'button';
+    close.setAttribute('aria-label', 'Close');
+    head.append(title, close);
+    modal.append(head);
     const body = panelElement(doc, 'div', 'ms-settings-body');
+    modal.append(body);
+    const footer = opts.footer ? panelElement(doc, 'div', typeof opts.footer === 'string' ? opts.footer : 'ms-dialog-foot') : null;
+    if (footer) modal.append(footer);
+    overlay.append(modal);
+
+    let gone = false;
+    const dismiss = () => {
+        if (gone) return;
+        gone = true;
+        host.remove();
+        if (previousFocus && previousFocus.isConnected) previousFocus.focus({preventScroll: true});
+        if (opts.onClose) opts.onClose(overlay);
+    };
+    close.addEventListener('click', dismiss);
+    overlay.addEventListener('click', (event) => { if (event.target === overlay) dismiss(); });
+    // The host page is still listening underneath; a key pressed in here is
+    // ours and nobody else's.
+    overlay.addEventListener('keydown', (event) => {
+        event.stopPropagation();
+        if (event.key === 'Escape') { event.preventDefault(); dismiss(); }
+        if (event.key === 'Tab') {
+            const targets = Array.from(modal.querySelectorAll('button,input,select,textarea,a[href],[tabindex]:not([tabindex="-1"])'))
+                .filter((el) => !el.disabled && el.getClientRects().length);
+            if (!targets.length) return;
+            const first = targets[0], last = targets[targets.length - 1];
+            if (event.shiftKey && shadow.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && shadow.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+    });
+
+    // Attached and laid out first, so a caller can measure, then revealed on
+    // the next frame - a dialog opened from a click is always foreground and
+    // anything that resizes a frame later would be seen doing it.
+    const mount = (afterLayout) => {
+        shadow.append(overlay);
+        doc.body.append(host);
+        if (typeof afterLayout === 'function') { try { afterLayout(); } catch (error) { } }
+        requestAnimationFrame(() => {
+            overlay.classList.add('ms-settings-open');
+            const focusTarget = opts.initialFocus ? modal.querySelector(opts.initialFocus) : null;
+            (focusTarget || close).focus();
+        });
+        return overlay;
+    };
+    return {host, shadow, overlay, modal, head, title, close, body, footer, dismiss, mount};
+}
+
+export function createSettingsPanel(options) {
+    const doc = options.document || document;
+    const dialog = createDialog({
+        document: doc,
+        id: 'ms-settings-root',
+        hostTag: 'xgallery-settings',
+        overlayId: 'ms-r34-settings-overlay',
+        title: 'Gallery Settings',
+        footer: 'ms-r34-btn-row',
+        onClose: options.onClose
+    });
+    if (!dialog) return null;
+    const {shadow, overlay, modal, body, footer, dismiss} = dialog;
     const tabs = panelElement(doc, 'div', 'ms-settings-tabs');
     tabs.setAttribute('role', 'tablist');
     tabs.setAttribute('aria-label', 'Settings category');
@@ -381,7 +460,7 @@ export function createSettingsPanel(options) {
         });
         groups.set(name, {tab, group}); tabs.append(tab); body.append(group);
     });
-    modal.append(tabs);
+    modal.insertBefore(tabs, body);
     const controls = new Map();
     options.sections.forEach(section => {
         const sectionBody = groups.get(section.tab || 'General').group;
@@ -488,41 +567,21 @@ export function createSettingsPanel(options) {
         });
         sectionBody.append(card);
     });
-    modal.append(body);
-    const footer = panelElement(doc, 'div', 'ms-r34-btn-row');
     const cancel = panelElement(doc, 'button', 'ms-r34-cancel', 'Cancel');
     const save = panelElement(doc, 'button', 'ms-r34-save', 'Save');
-    cancel.type = save.type = 'button'; footer.append(cancel, save); modal.append(footer); overlay.append(modal);
-    const dismiss = () => {
-        host.remove();
-        if (previousFocus && previousFocus.isConnected) previousFocus.focus({preventScroll:true});
-        if (options.onClose) options.onClose(overlay);
-    };
-    close.addEventListener('click', dismiss); cancel.addEventListener('click', dismiss);
-    overlay.addEventListener('click', e => { if (e.target === overlay) dismiss(); });
-    overlay.addEventListener('keydown', e => {
-        e.stopPropagation();
-        if (e.key === 'Escape') { e.preventDefault(); dismiss(); }
-        if (e.key === 'Tab') {
-            const targets = Array.from(modal.querySelectorAll('button,input,select,textarea,a[href]')).filter(el => !el.disabled && el.getClientRects().length);
-            const first = targets[0], last = targets[targets.length-1];
-            if (e.shiftKey && shadow.activeElement === first) { e.preventDefault(); last.focus(); }
-            else if (!e.shiftKey && shadow.activeElement === last) { e.preventDefault(); first.focus(); }
-        }
-    });
+    cancel.type = save.type = 'button'; footer.append(cancel, save);
+    cancel.addEventListener('click', dismiss);
     save.addEventListener('click', () => {
         const values = {};
         controls.forEach(({input,field}, id) => { if (field.type !== 'button') values[id] = field.type === 'checkbox' ? input.checked : input.value; });
         options.onSave(values); dismiss();
     });
-    shadow.append(overlay);
-    doc.body.append(host);
     // Every page gets the height of the tallest one, so switching tabs cannot
     // resize the dialog. Measured after the host is in the document, because
     // a detached subtree has no layout; done synchronously rather than on a
     // frame, since a settings panel opened from a click is always foreground
     // and a resize one frame later would be visible.
-    try {
+    return dialog.mount(() => {
         let tallest = 0;
         groups.forEach(({group}) => {
             const wasHidden = group.hidden;
@@ -533,7 +592,5 @@ export function createSettingsPanel(options) {
         if (tallest > 0) {
             groups.forEach(({group}) => { group.style.minHeight = tallest + 'px'; });
         }
-    } catch (error) { }
-    requestAnimationFrame(() => { overlay.classList.add('ms-settings-open'); close.focus(); });
-    return overlay;
+    });
 }

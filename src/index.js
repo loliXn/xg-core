@@ -21,7 +21,7 @@ export {
     readGoogleDriveFolder
 } from './gdrive.js';
 export { createViewerRuntime } from './runtime.js';
-export { renderPostPanel, createSettingsPanel } from './panels.js';
+export { renderPostPanel, createSettingsPanel, createDialog } from './panels.js';
 export { OVERLAY_CSS, LAUNCHER_CSS, installOverlayStyles, installLauncherStyles, DEFAULT_ACCENT, ACCENT_PRESETS, accentTokens, applyAccent } from './styles.js';
 export { createOverlayShell } from './view.js';
 export {

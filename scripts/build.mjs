@@ -66,6 +66,7 @@ const bundle = [
     '        createViewerRuntime,',
     '        renderPostPanel,',
     '        createSettingsPanel,',
+    '        createDialog,',
     '        MEDIA_TYPES,',
     '        XGALLERY_CORE_API_VERSION,',
     '        XGALLERY_CORE_VERSION,',
