@@ -39,6 +39,8 @@ export const THUMB_PLANS = Object.freeze(['frozen', 'still', 'freeze', 'extract'
  * @param {function} [input.canExtract] a first frame can be pulled from this item.
  * @param {boolean} [input.allowVideoElement] adapter opt-in, off by default.
  * @param {boolean} [input.preferExtract] extraction beats a poster here.
+ * @param {boolean} [input.oversized] the only candidate is the media itself
+ *   and it is far too large to decode for a thumbnail.
  * @returns {{kind: string, url: string}}
  */
 export function planVideoThumb(input) {
@@ -49,6 +51,11 @@ export function planVideoThumb(input) {
     const canExtract = typeof spec.canExtract === 'function' ? spec.canExtract : () => !!spec.canExtract;
 
     if (spec.frozen) return { kind: 'frozen', url: String(spec.frozen) };
+    // The only picture on offer is the media itself and it turned out to be
+    // enormous. A cell is 76 pixels; a 3000-pixel photo decoded for it costs
+    // tens of megabytes and is rescaled on every paint. The cell keeps its
+    // placeholder - the picture is still one click away on the stage.
+    if (spec.oversized) return { kind: 'placeholder', url: '' };
 
     const posterCandidates = [spec.thumbSrc, spec.itemThumbSrc];
     let poster = '';

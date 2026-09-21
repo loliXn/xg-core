@@ -971,11 +971,13 @@ function topbarLayoutSignature(topbar, controls) {
         // Viewer and back, and that is a real width change now that the label
         // is never hidden.
         const pinned = topbar.querySelector('.ms-btn-pinned .ms-btn-label');
-        // No width here on purpose. Reading one costs a layout, this runs on
-        // every render, and it was the most expensive thing the gallery did on
-        // a big page. The only other input is the bar's own width, and a
-        // ResizeObserver already re-runs the fit when that changes.
-        return vis(controls) + '|' + vis(center) + '|' + (pinned ? pinned.textContent : '');
+        // The width is back in the signature. Leaving it to the bar's
+        // ResizeObserver meant a fit decided once at an unlucky moment - while
+        // the overlay was still opening, or at a zoom level the observer had
+        // already reported - stuck for the session, with every button collapsed
+        // to its icon. The read is cheap now: the overlay is contained, so it
+        // lays out a few hundred nodes rather than the whole page.
+        return topbar.clientWidth + '|' + vis(controls) + '|' + vis(center) + '|' + (pinned ? pinned.textContent : '');
     }
 
 function updateTopbarCompact(force) {
@@ -1692,7 +1694,11 @@ function bindTagsPanelResizer() {
         const layouts = ['left', 'right', 'edge-left', 'edge-right'];
         shell.dataset.infoLayout = layouts.includes(bridge.infoPanelLayout) ? bridge.infoPanelLayout : 'left';
         const setHeight = (height) => {
-            const bounded = Math.max(160, Math.min(height, overlayEl.parentElement.clientHeight));
+            // The panel is built before the overlay is shown, and a hidden
+            // parent measures zero - which turned the remembered height into
+            // the 160px minimum, every time.
+            const room = overlayEl.parentElement ? overlayEl.parentElement.clientHeight : 0;
+            const bounded = Math.max(160, room > 0 ? Math.min(height, room) : height);
             shell.style.setProperty('--ms-info-height', bounded + 'px');
         };
         if (bridge.infoPanelHeight > 0) setHeight(bridge.infoPanelHeight);
@@ -2383,6 +2389,32 @@ function appendStaticVideoThumb(host, url, onError) {
         host.appendChild(img);
     }
 
+// A picture wider or taller than this is not worth decoding for a cell.
+// Chosen well above anything a site would call a thumbnail, so only a page
+// serving its originals as thumbnails is affected.
+const THUMB_MAX_SOURCE_EDGE = 2300;
+
+// Whether the picture offered for the cell is the media itself. A site that
+// made a real thumbnail has already done the work, however big its original.
+function thumbIsOwnMedia(item, thumbSrc) {
+        const media = String((item && item.src) || '');
+        if (!media) return false;
+        const shown = String(thumbSrc || (item && item.thumbSrc) || '');
+        return !shown || shown === media;
+    }
+
+// Learned when a cell's picture loads: the size is not knowable before then,
+// so the first one is paid for once and every cell after it is spared.
+function noteThumbSourceSize(img, item, thumbSrc, index) {
+        if (!item || item._msThumbOversized) return;
+        const edge = Math.max(img.naturalWidth || 0, img.naturalHeight || 0);
+        if (edge <= THUMB_MAX_SOURCE_EDGE || !thumbIsOwnMedia(item, thumbSrc)) return;
+        item._msThumbOversized = true;
+        invalidateThumbWindow();
+        const entry = bridge.state.items[index];
+        if (entry && (entry.item || entry) === item) updateSingleThumb(index, entry);
+    }
+
 function thumbPlanInput(item, thumbSrc) {
         return {
             frozen: item && item._frozenThumb,
@@ -2393,6 +2425,7 @@ function thumbPlanInput(item, thumbSrc) {
             isImageUrl: isStaticVideoThumbUrl,
             mayAnimate: mayBeAnimatedImageUrl,
             canExtract: () => !!(bridge.canExtractMp4Poster && bridge.canExtractMp4Poster(item, (item && item.src) || thumbSrc)),
+            oversized: !!(item && item._msThumbOversized),
             // A <video> in a cell is opt-in and nothing opts in: see thumbs.js.
             allowVideoElement: bridge.allowThumbVideoElements === true
         };
@@ -2730,6 +2763,7 @@ function fillThumbButton(btn, entry, index, groupCounts, visible) {
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-placeholder'),
             loadImage: (img) => {
                 img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
+                img.addEventListener('load', () => noteThumbSourceSize(img, item, thumbSrc, index), { once: true });
                 if (animated) {
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
@@ -3205,6 +3239,7 @@ function fillGridCell(cell, entry, index) {
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-grid-placeholder'),
             loadImage: (img) => {
                 img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
+                img.addEventListener('load', () => noteThumbSourceSize(img, item, thumbSrc, index), { once: true });
                 if (animated) {
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
@@ -4287,10 +4322,22 @@ function renderCurrent() {
             });
             video._msRenderAbort = renderAbort;
             // The same element showed the last item too, and the browser keeps
-            // its controls' state with it: a set of controls that had faded
-            // out while the previous video played stayed faded for this one
-            // until it was clicked. Turning them off and on builds them fresh.
-            if (video._msPooled) { video.controls = false; video.controls = true; }
+            // its controls with it: the panel that had faded out while the
+            // previous video played stayed hidden for this one until it was
+            // clicked. Rebuilding them has to wait until the new media is
+            // ready - done before that, the browser hides them again as it
+            // sets the player up for the new source.
+            const rebuildControls = () => {
+                if (!video.isConnected) return;
+                video.controls = false;
+                // A frame apart, or the browser coalesces the two and nothing
+                // is rebuilt.
+                requestAnimationFrame(() => { if (video.isConnected) video.controls = true; });
+            };
+            if (video._msPooled) {
+                if (video.readyState >= 1) rebuildControls();
+                on('loadedmetadata', rebuildControls, { once: true });
+            }
 
             let lastPlayTime = 0;
             let lastSeekAt = 0;
