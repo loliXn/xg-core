@@ -103,6 +103,100 @@
         return null;
     }
 
+    // A still of the first frame, cut out of the bytes already in hand.
+    //
+    // Freezing an animated thumbnail used to mean downloading the whole file: a
+    // few megabytes per cell, and a page of them took minutes to fill while the
+    // original had been on screen for ages. But the first frame sits at the front
+    // of both formats, well inside the 64 KB the sniff reads to classify the file,
+    // so the frame can be cut out of that and the rest never asked for.
+    //
+    // Returns bytes that are a valid one-frame file of the same format, or null
+    // when the first frame runs past what was read - then the caller falls back to
+    // fetching the whole thing.
+    function firstFrameStill(bytes) {
+        if (!bytes || bytes.length < 16) return null;
+        const text = (at, n) => String.fromCharCode(...bytes.subarray(at, at + n));
+        if (text(0, 3) === 'GIF') return gifFirstFrame(bytes);
+        if (text(0, 4) === 'RIFF' && text(8, 4) === 'WEBP') return webpFirstFrame(bytes);
+        return null;
+    }
+
+    function gifFirstFrame(bytes) {
+        const packed = bytes[10];
+        let at = 13;
+        if (packed & 0x80) at += 3 * (1 << ((packed & 7) + 1));
+        // Extensions (graphic control, loop, comments) then the first image.
+        const skipSubBlocks = (from) => {
+            let cursor = from;
+            while (cursor < bytes.length) {
+                const size = bytes[cursor];
+                if (size === 0) return cursor + 1;
+                cursor += size + 1;
+            }
+            return -1;
+        };
+        while (at < bytes.length) {
+            const marker = bytes[at];
+            if (marker === 0x21) {
+                const next = skipSubBlocks(at + 2);
+                if (next < 0) return null;
+                at = next;
+                continue;
+            }
+            if (marker === 0x2C) {
+                const local = bytes[at + 9];
+                let cursor = at + 10;
+                if (local & 0x80) cursor += 3 * (1 << ((local & 7) + 1));
+                cursor += 1; // LZW minimum code size
+                const end = skipSubBlocks(cursor);
+                if (end < 0 || end > bytes.length) return null;
+                const still = new Uint8Array(end + 1);
+                still.set(bytes.subarray(0, end));
+                still[end] = 0x3B; // trailer, in place of every frame after this one
+                return still;
+            }
+            return null;
+        }
+        return null;
+    }
+
+    function webpFirstFrame(bytes) {
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        const text = (at, n) => String.fromCharCode(...bytes.subarray(at, at + n));
+        let at = 12;
+        let frame = null;
+        while (at + 8 <= bytes.length && !frame) {
+            const type = text(at, 4);
+            const size = view.getUint32(at + 4, true);
+            const body = at + 8;
+            if (body + size > bytes.length) break;
+            if (type === 'ANMF') {
+                // The frame's own image data starts after its 16-byte header, as
+                // an ordinary VP8 or VP8L chunk - which is a whole WebP on its own.
+                let inner = body + 16;
+                while (inner + 8 <= body + size) {
+                    const innerType = text(inner, 4);
+                    const innerSize = view.getUint32(inner + 4, true);
+                    if (innerType === 'VP8 ' || innerType === 'VP8L') {
+                        frame = bytes.subarray(inner, inner + 8 + innerSize + (innerSize & 1));
+                        break;
+                    }
+                    inner += 8 + innerSize + (innerSize & 1);
+                }
+                break;
+            }
+            at = body + size + (size & 1);
+        }
+        if (!frame) return null;
+        const still = new Uint8Array(12 + frame.length);
+        still.set([0x52, 0x49, 0x46, 0x46]); // RIFF
+        new DataView(still.buffer).setUint32(4, 4 + frame.length, true);
+        still.set([0x57, 0x45, 0x42, 0x50], 8); // WEBP
+        still.set(frame, 12);
+        return still;
+    }
+
     /**
      * One budget for every byte the gallery fetches.
      *
@@ -9385,14 +9479,25 @@
             return item._msCoreThumbKey;
         }
 
+    // A short, stable stand-in for a long string. Not a checksum - it only has to
+    // tell one thumbnail's state from the same thumbnail's later state.
+    function hashToken(value) {
+            const text = String(value || '');
+            let hash = 5381;
+            for (let i = 0; i < text.length; i++) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+            return text.length.toString(36) + '-' + hash.toString(36);
+        }
+
     function thumbPreviewRevision(entry) {
             const item = entry && (entry.item || entry);
             if (!item) return '';
             const rawSource = String(item._frozenThumb || item.thumbSrc || item.src || '');
             const source = bridge.thumbnailIdentity ? bridge.thumbnailIdentity(rawSource) : rawSource;
-            const token = source.length > 180
-                ? source.length + ':' + source.slice(0, 96) + ':' + source.slice(-48)
-                : source;
+            // Hashed, not spelled out. This ends up in a DOM attribute on every
+            // cell, and a page's own URLs are long enough that the strip's markup
+            // was mostly this - readable in the inspector, but nothing reads it
+            // except the repaint check, which only needs "same or not".
+            const token = hashToken(source);
             // Only an animated result changes what the cell should show (a frozen
             // frame). Learning that a thumbnail is static used to bump the
             // revision too, so the next repaint rebuilt a cell that was already
@@ -11686,6 +11791,7 @@
         CORE_UPDATE_INTERVAL_MS,
         GalleryController,
         inspectImageFormat,
+        firstFrameStill,
         MEDIA_LANES,
         createMediaGate,
         sharedMediaGate,

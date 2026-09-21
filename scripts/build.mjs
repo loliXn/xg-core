@@ -50,6 +50,7 @@ const bundle = [
     '        CORE_UPDATE_INTERVAL_MS,',
     '        GalleryController,',
     '        inspectImageFormat,',
+    '        firstFrameStill,',
     '        MEDIA_LANES,',
     '        createMediaGate,',
     '        sharedMediaGate,',

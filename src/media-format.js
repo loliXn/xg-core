@@ -56,3 +56,97 @@ export async function inspectImageFormat(blob) {
     }
     return null;
 }
+
+// A still of the first frame, cut out of the bytes already in hand.
+//
+// Freezing an animated thumbnail used to mean downloading the whole file: a
+// few megabytes per cell, and a page of them took minutes to fill while the
+// original had been on screen for ages. But the first frame sits at the front
+// of both formats, well inside the 64 KB the sniff reads to classify the file,
+// so the frame can be cut out of that and the rest never asked for.
+//
+// Returns bytes that are a valid one-frame file of the same format, or null
+// when the first frame runs past what was read - then the caller falls back to
+// fetching the whole thing.
+export function firstFrameStill(bytes) {
+    if (!bytes || bytes.length < 16) return null;
+    const text = (at, n) => String.fromCharCode(...bytes.subarray(at, at + n));
+    if (text(0, 3) === 'GIF') return gifFirstFrame(bytes);
+    if (text(0, 4) === 'RIFF' && text(8, 4) === 'WEBP') return webpFirstFrame(bytes);
+    return null;
+}
+
+function gifFirstFrame(bytes) {
+    const packed = bytes[10];
+    let at = 13;
+    if (packed & 0x80) at += 3 * (1 << ((packed & 7) + 1));
+    // Extensions (graphic control, loop, comments) then the first image.
+    const skipSubBlocks = (from) => {
+        let cursor = from;
+        while (cursor < bytes.length) {
+            const size = bytes[cursor];
+            if (size === 0) return cursor + 1;
+            cursor += size + 1;
+        }
+        return -1;
+    };
+    while (at < bytes.length) {
+        const marker = bytes[at];
+        if (marker === 0x21) {
+            const next = skipSubBlocks(at + 2);
+            if (next < 0) return null;
+            at = next;
+            continue;
+        }
+        if (marker === 0x2C) {
+            const local = bytes[at + 9];
+            let cursor = at + 10;
+            if (local & 0x80) cursor += 3 * (1 << ((local & 7) + 1));
+            cursor += 1; // LZW minimum code size
+            const end = skipSubBlocks(cursor);
+            if (end < 0 || end > bytes.length) return null;
+            const still = new Uint8Array(end + 1);
+            still.set(bytes.subarray(0, end));
+            still[end] = 0x3B; // trailer, in place of every frame after this one
+            return still;
+        }
+        return null;
+    }
+    return null;
+}
+
+function webpFirstFrame(bytes) {
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const text = (at, n) => String.fromCharCode(...bytes.subarray(at, at + n));
+    let at = 12;
+    let frame = null;
+    while (at + 8 <= bytes.length && !frame) {
+        const type = text(at, 4);
+        const size = view.getUint32(at + 4, true);
+        const body = at + 8;
+        if (body + size > bytes.length) break;
+        if (type === 'ANMF') {
+            // The frame's own image data starts after its 16-byte header, as
+            // an ordinary VP8 or VP8L chunk - which is a whole WebP on its own.
+            let inner = body + 16;
+            while (inner + 8 <= body + size) {
+                const innerType = text(inner, 4);
+                const innerSize = view.getUint32(inner + 4, true);
+                if (innerType === 'VP8 ' || innerType === 'VP8L') {
+                    frame = bytes.subarray(inner, inner + 8 + innerSize + (innerSize & 1));
+                    break;
+                }
+                inner += 8 + innerSize + (innerSize & 1);
+            }
+            break;
+        }
+        at = body + size + (size & 1);
+    }
+    if (!frame) return null;
+    const still = new Uint8Array(12 + frame.length);
+    still.set([0x52, 0x49, 0x46, 0x46]); // RIFF
+    new DataView(still.buffer).setUint32(4, 4 + frame.length, true);
+    still.set([0x57, 0x45, 0x42, 0x50], 8); // WEBP
+    still.set(frame, 12);
+    return still;
+}

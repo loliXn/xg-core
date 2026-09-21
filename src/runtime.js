@@ -2578,14 +2578,25 @@ function thumbItemKey(entry) {
         return item._msCoreThumbKey;
     }
 
+// A short, stable stand-in for a long string. Not a checksum - it only has to
+// tell one thumbnail's state from the same thumbnail's later state.
+function hashToken(value) {
+        const text = String(value || '');
+        let hash = 5381;
+        for (let i = 0; i < text.length; i++) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
+        return text.length.toString(36) + '-' + hash.toString(36);
+    }
+
 function thumbPreviewRevision(entry) {
         const item = entry && (entry.item || entry);
         if (!item) return '';
         const rawSource = String(item._frozenThumb || item.thumbSrc || item.src || '');
         const source = bridge.thumbnailIdentity ? bridge.thumbnailIdentity(rawSource) : rawSource;
-        const token = source.length > 180
-            ? source.length + ':' + source.slice(0, 96) + ':' + source.slice(-48)
-            : source;
+        // Hashed, not spelled out. This ends up in a DOM attribute on every
+        // cell, and a page's own URLs are long enough that the strip's markup
+        // was mostly this - readable in the inspector, but nothing reads it
+        // except the repaint check, which only needs "same or not".
+        const token = hashToken(source);
         // Only an animated result changes what the cell should show (a frozen
         // frame). Learning that a thumbnail is static used to bump the
         // revision too, so the next repaint rebuilt a cell that was already
