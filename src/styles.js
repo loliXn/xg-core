@@ -3329,7 +3329,15 @@ export const OVERLAY_CSS = String.raw`
             line-height: 1.5;
             white-space: nowrap;
         }
-        .ms-info-description .ms-info-user-sm {
+        /* Who wrote this caption is a line of its own. Left inline, the
+           question of whether it got one was answered by the caption's own
+           markup: a caption that begins with a block element pushed its text
+           down, and one that begins with bare text - which is what a repost's
+           caption is - ran along beside the name. */
+        .ms-info-description > .ms-info-user-sm {
+            display: flex;
+            width: fit-content;
+            max-width: 100%;
             margin-bottom: 6px;
         }
         .ms-info-original {
