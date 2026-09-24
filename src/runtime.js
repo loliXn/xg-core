@@ -4541,6 +4541,34 @@ function renderCurrent() {
                 const failedSrc = video.currentSrc || video.src || item.src;
                 const signedHost = presentation.signedVideo;
                 const neverPlayed = resumeAt < 0.25 && video.readyState < 2;
+                if (neverPlayed && !item._gofileRecoveryTried && typeof bridge.recoverGofileVideo === 'function'
+                    && item.gofileId && /^https?:\/\/[^/]+\.gofile\.io\/download\/web\//i.test(item.src)) {
+                    item._gofileRecoveryTried = true;
+                    video._msRecovering = true;
+                    showStageNotice(wrap, 'Loading authenticated video…');
+                    bridge.recoverGofileVideo(item).then(blobUrl => {
+                        if (!ownsVideoSession()) {
+                            if (blobUrl) URL.revokeObjectURL(blobUrl);
+                            return;
+                        }
+                        video._msRecovering = false;
+                        hideStageNotice(wrap);
+                        if (blobUrl) {
+                            item.gofileOriginalSrc = item.src;
+                            item.src = blobUrl;
+                            item._gofileBlobUrl = blobUrl;
+                            renderCurrent();
+                        } else {
+                            video.dispatchEvent(new Event('error'));
+                        }
+                    }).catch(() => {
+                        if (!ownsVideoSession()) return;
+                        video._msRecovering = false;
+                        hideStageNotice(wrap);
+                        video.dispatchEvent(new Event('error'));
+                    });
+                    return;
+                }
                 if (signedHost && neverPlayed && item.resolveUrl && !item._signedRefreshTried) {
                     item._signedRefreshTried = true;
                     bridge.resolvedFileUrlCache.delete(item.resolveUrl);
