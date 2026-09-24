@@ -632,6 +632,67 @@ export const OVERLAY_CSS = String.raw`
             overflow: hidden !important;
             box-sizing: border-box !important;
         }
+        .ms-gallery-overlay .ms-album-preview {
+            width: min(720px, 100%);
+            max-height: 100%;
+            padding: 24px 24px 90px;
+            box-sizing: border-box;
+            overflow: hidden;
+            border: 1px solid var(--ms-line-strong);
+            border-radius: 18px;
+            background: var(--ms-surface-1);
+            box-shadow: var(--ms-shadow-md);
+            color: var(--ms-text);
+        }
+        .ms-gallery-overlay .ms-album-preview-head {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            min-width: 0;
+            margin-bottom: 18px;
+        }
+        .ms-gallery-overlay .ms-album-preview-label {
+            color: var(--ms-text-3);
+            font: 600 10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+        .ms-gallery-overlay .ms-album-preview-title {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font: 600 clamp(18px, 2.2vw, 25px)/1.2 system-ui, sans-serif;
+        }
+        .ms-gallery-overlay .ms-album-preview-meta {
+            color: var(--ms-text-3);
+            font: 12px/1.4 system-ui, sans-serif;
+        }
+        .ms-gallery-overlay .ms-album-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            width: 100%;
+        }
+        .ms-gallery-overlay .ms-album-preview-tile {
+            min-width: 0;
+            aspect-ratio: 1;
+            overflow: hidden;
+            border: 1px solid var(--ms-line);
+            border-radius: 9px;
+            background: var(--ms-surface-2);
+        }
+        .ms-gallery-overlay .ms-album-preview-tile > img {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: cover !important;
+            border-radius: 0;
+            margin: 0;
+        }
+        @media (max-width: 600px) {
+            .ms-gallery-overlay .ms-album-preview { padding: 18px 18px 84px; }
+            .ms-gallery-overlay .ms-album-preview-grid { gap: 4px; }
+        }
         .ms-gallery-overlay .ms-media-box {
             min-width: 0 !important;
             min-height: 0 !important;

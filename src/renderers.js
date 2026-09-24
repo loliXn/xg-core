@@ -347,9 +347,16 @@ export function createExpandButton(options) {
     label.textContent = options.label || 'Expand album';
     button.addEventListener('click', (event) => {
         event.stopPropagation();
+        if (button.disabled) return;
         button.disabled = true;
         label.textContent = options.pendingLabel || 'Expanding…';
-        if (typeof options.onExpand === 'function') options.onExpand();
+        Promise.resolve().then(() => options.onExpand && options.onExpand())
+            .catch(() => {})
+            .finally(() => {
+                if (!button.isConnected) return;
+                button.disabled = false;
+                label.textContent = options.label || 'Expand album';
+            });
     });
     return button;
 }

@@ -3940,6 +3940,57 @@ function createOpenInGalleryButton(startNode, variant) {
         });
         return btn;
     }
+function renderAlbumPreview(wrap, item, token) {
+    const card = document.createElement('section');
+    card.className = 'ms-album-preview';
+    const header = document.createElement('div');
+    header.className = 'ms-album-preview-head';
+    const eyebrow = document.createElement('span');
+    eyebrow.className = 'ms-album-preview-label';
+    eyebrow.textContent = 'Album preview';
+    const title = document.createElement('strong');
+    title.className = 'ms-album-preview-title';
+    title.textContent = item.galleryName || 'Album';
+    const meta = document.createElement('span');
+    meta.className = 'ms-album-preview-meta';
+    meta.textContent = 'Loading album details…';
+    header.append(eyebrow, title, meta);
+    const grid = document.createElement('div');
+    grid.className = 'ms-album-preview-grid';
+    const paintTiles = (urls) => {
+        grid.replaceChildren();
+        for (let index = 0; index < 4; index++) {
+            const tile = document.createElement('div');
+            tile.className = 'ms-album-preview-tile';
+            const src = urls[index];
+            if (src) {
+                const img = document.createElement('img');
+                img.src = bridge.wrapMediaUrl(src);
+                img.alt = '';
+                img.loading = 'lazy';
+                img.decoding = 'async';
+                tile.appendChild(img);
+            }
+            grid.appendChild(tile);
+        }
+    };
+    paintTiles(item.thumbSrc ? [item.thumbSrc] : []);
+    card.append(header, grid);
+    wrap.appendChild(card);
+    markItemMediaLoaded(item);
+    Promise.resolve().then(() => bridge.loadAlbumPreview(item)).then(preview => {
+        if (!card.isConnected || bridge.state.renderToken !== token) return;
+        if (!preview) { meta.textContent = 'Preview unavailable'; return; }
+        title.textContent = preview.title || title.textContent;
+        const count = Number(preview.count) || 0;
+        meta.textContent = count + (count === 1 ? ' item' : ' items')
+            + (preview.folders ? ' · ' + preview.folders + (preview.folders === 1 ? ' folder' : ' folders') : '');
+        if (preview.tiles && preview.tiles.length) paintTiles(preview.tiles);
+    }).catch(() => {
+        if (card.isConnected && bridge.state.renderToken === token) meta.textContent = 'Preview unavailable';
+    });
+}
+
 function renderCurrent() {
         if (!bridge.state.overlay || !bridge.state.items.length) return;
         if (bridge.state.gridMode) return;
@@ -4614,7 +4665,9 @@ function renderCurrent() {
             // stream initialization. Superseded items never start a decoder.
             requestAnimationFrame(() => requestAnimationFrame(activateVideo));
         } else {
-            if (presentation.coverAlbum) {
+            if (presentation.albumPreview && typeof bridge.loadAlbumPreview === 'function') {
+                renderAlbumPreview(wrap, item, token);
+            } else if (presentation.coverAlbum) {
                 const coverImg = globalThis.XGalleryCore.createImageMedia({
                     document: document,
                     src: bridge.wrapMediaUrl(item.thumbSrc || item.src),
@@ -4640,10 +4693,10 @@ function renderCurrent() {
             if (presentation.expandable && item.type !== 'img' && item.type !== 'video') {
                 const btn = globalThis.XGalleryCore.createExpandButton({
                     document: document,
-                    label: presentation.coverAlbum ? 'Expand gallery' : 'Expand album',
+                    label: presentation.albumPreview ? 'Expand album' : (presentation.coverAlbum ? 'Expand gallery' : 'Expand album'),
                     onExpand: () => {
-                    if (bridge.folderFavorites) bridge.expandPhotoAlbum(item.src, bridge.state.currentIndex);
-                    else bridge.expandSingleRemoteAlbum(item.src, bridge.state.currentIndex);
+                    if (bridge.folderFavorites) return bridge.expandPhotoAlbum(item.src, bridge.state.currentIndex);
+                    return bridge.expandSingleRemoteAlbum(item.src, bridge.state.currentIndex);
                     }
                 });
                 wrap.appendChild(btn);
