@@ -4325,7 +4325,9 @@ export const LAUNCHER_CSS = String.raw`
             min-height: 0 !important;
             max-height: none !important;
             padding: 0 0.45em !important;
-            margin: 0 0 0 0.4em !important;
+            /* Room on both sides: the scaled control reaches past its layout
+               box, and with a left margin only it sat against the next word. */
+            margin: 0 0.45em 0 0.45em !important;
             /* Sits inside the ascent/descent band rather than centred on the
                x-height, which is what used to push it past the descent. */
             vertical-align: -0.25em !important;
@@ -4355,6 +4357,22 @@ export const LAUNCHER_CSS = String.raw`
             padding: 0 !important;
             width: 1.3em !important;
             gap: 0 !important;
+            /* 1.3em is all the room there is: measured against 15px/1.4 prose,
+               a layout box over about 1.15x the font grows the line, and that
+               capped the control at 16px - small enough to be hard to hit and
+               hard to see. A transform is not laid out, so the box stays the
+               size the line can afford while the control renders half again
+               as big. Press scales from here rather than from 1. */
+            scale: 1.35;
+            transform-origin: center;
+        }
+        .ms-open-in-gallery:not(.ms-open-in-gallery--pinned):not(.ms-open-in-gallery--unfurl):active {
+            scale: 1.31;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .ms-open-in-gallery:not(.ms-open-in-gallery--pinned):not(.ms-open-in-gallery--unfurl):active {
+                scale: 1.35;
+            }
         }
         .ms-open-in-gallery:not(.ms-open-in-gallery--pinned):not(.ms-open-in-gallery--unfurl) .ms-btn-label {
             display: none !important;

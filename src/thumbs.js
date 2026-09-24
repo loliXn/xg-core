@@ -35,6 +35,7 @@ export const THUMB_PLANS = Object.freeze(['frozen', 'still', 'freeze', 'extract'
  * @param {string} [input.src] the media's URL.
  * @param {function} input.isPlaceholderUrl
  * @param {function} input.isImageUrl an image URL, by the adapter's rules.
+ * @param {function} [input.isVideoUrl] a video URL, by the adapter's rules.
  * @param {function} [input.mayAnimate] the URL could be an animated image.
  * @param {function} [input.canExtract] a first frame can be pulled from this item.
  * @param {boolean} [input.allowVideoElement] adapter opt-in, off by default.
@@ -47,6 +48,7 @@ export function planVideoThumb(input) {
     const spec = input || {};
     const isPlaceholderUrl = spec.isPlaceholderUrl || (() => false);
     const isImageUrl = spec.isImageUrl || (() => false);
+    const isVideoUrl = spec.isVideoUrl || (() => false);
     const mayAnimate = spec.mayAnimate || (() => false);
     const canExtract = typeof spec.canExtract === 'function' ? spec.canExtract : () => !!spec.canExtract;
 
@@ -63,12 +65,21 @@ export function planVideoThumb(input) {
         const candidate = String(posterCandidates[i] || '');
         if (!candidate) continue;
         if (isPlaceholderUrl(candidate)) continue;
-        // Only an image can be a poster. That is also what keeps a cell from
-        // pointing at the media file itself, which is how a thumbnail ended up
-        // streaming the very thing the stage was streaming, twice over the
-        // same host budget - while a still, or a GIF standing in for a video,
-        // is legitimately its own poster and still gets frozen below.
-        if (!isImageUrl(candidate) && !/^data:image\//i.test(candidate)) continue;
+        // A picture we can name is a poster outright, even when it is the
+        // media itself: a still, or a GIF standing in for a video, is
+        // legitimately its own poster and still gets frozen below.
+        if (isImageUrl(candidate) || /^data:image\//i.test(candidate)) { poster = candidate; break; }
+        // An address we cannot read a type from is still a poster when the
+        // site handed us one - plenty of hosts serve thumbnails from URLs
+        // with no extension at all, and demanding one turned every such
+        // thumbnail into a placeholder. What the rule is actually for is
+        // keeping a cell from pointing at the media file itself, which is
+        // how a thumbnail ended up streaming the very thing the stage was
+        // streaming, twice over the same host budget. So that is what it
+        // tests now: the media's own address, or anything that looks like a
+        // video, is not a poster.
+        if (candidate === String(spec.src || '')) continue;
+        if (isVideoUrl(candidate)) continue;
         poster = candidate;
         break;
     }

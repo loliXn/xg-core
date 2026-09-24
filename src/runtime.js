@@ -2415,6 +2415,7 @@ function thumbPlanInput(item, thumbSrc) {
             src: item && item.src,
             isPlaceholderUrl: (url) => typeof bridge.isPlaceholderUrl === 'function' && bridge.isPlaceholderUrl(url),
             isImageUrl: isStaticVideoThumbUrl,
+            isVideoUrl: (url) => typeof bridge.isVideoThumbSource === 'function' && bridge.isVideoThumbSource(url),
             mayAnimate: mayBeAnimatedImageUrl,
             canExtract: () => !!(bridge.canExtractMp4Poster && bridge.canExtractMp4Poster(item, (item && item.src) || thumbSrc)),
             // Read from the file's header while it was being classified, so
@@ -2585,6 +2586,10 @@ function hashToken(value) {
         let hash = 5381;
         for (let i = 0; i < text.length; i++) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
         return text.length.toString(36) + '-' + hash.toString(36);
+    }
+
+function canFreezeAnimatedThumbs() {
+        return typeof bridge.freezeAnimatedThumbnail === 'function';
     }
 
 function thumbPreviewRevision(entry) {
@@ -2773,7 +2778,13 @@ function fillThumbButton(btn, entry, index, groupCounts, visible) {
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-placeholder'),
             loadImage: (img) => {
                 img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
-                if (animated) {
+                // Freezing takes an adapter that can read the bytes. Where
+                // there is none the cell still says GIF, but the picture is
+                // loaded the ordinary way: a thumbnail that moves is a far
+                // smaller problem than one that never fills at all, which is
+                // what an adapter without a freeze left behind - an <img>
+                // whose src was never set, loading for ever.
+                if (animated && canFreezeAnimatedThumbs()) {
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
                     bridge.setCachedImgSrc(img, thumbSrc, item);
@@ -3179,6 +3190,14 @@ function paintGridWindow() {
             if (cell.dataset.msKey === key) {
                 cell.setAttribute('data-grid-index', String(index));
                 cell.classList.toggle('active', index === bridge.state.currentIndex);
+                // Same check the strip makes. Reusing on the key alone meant a
+                // cell kept whatever it was first painted with, so a thumbnail
+                // that only arrived later - a resolved item, a frozen frame, a
+                // poster pulled out of the file - reached the strip (which
+                // repaints on the revision) and never the grid.
+                if (cell.dataset.msThumbRevision !== thumbPreviewRevision(entry)) {
+                    fillGridCell(cell, entry, index);
+                }
                 continue;
             }
             fillGridCell(cell, entry, index);
@@ -3226,6 +3245,7 @@ function fillGridCell(cell, entry, index) {
         const cacheClass = (hdSrc && !bridge.state.cachedImageUrls.has(hdSrc) && !item._msMediaLoaded) ? ' ms-uncached' : '';
         cell.setAttribute('data-grid-index', String(index));
         cell.dataset.msKey = thumbItemKey(entry);
+        cell.dataset.msThumbRevision = thumbPreviewRevision(entry);
         const thumbSrc = item.thumbSrc || item.src;
         const isVideo = item.type === 'video' || item.type === 'iframe' || item.expectedVideo || item.xUnplayable;
         const hasPoster = !!(item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc));
@@ -3248,7 +3268,13 @@ function fillGridCell(cell, entry, index) {
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-grid-placeholder'),
             loadImage: (img) => {
                 img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
-                if (animated) {
+                // Freezing takes an adapter that can read the bytes. Where
+                // there is none the cell still says GIF, but the picture is
+                // loaded the ordinary way: a thumbnail that moves is a far
+                // smaller problem than one that never fills at all, which is
+                // what an adapter without a freeze left behind - an <img>
+                // whose src was never set, loading for ever.
+                if (animated && canFreezeAnimatedThumbs()) {
                     bridge.freezeAnimatedThumbnail(img, item);
                 } else {
                     bridge.setCachedImgSrc(img, thumbSrc, item);
@@ -3326,6 +3352,9 @@ function renderThumbs(options) {
 function updateSingleThumb(index, entry) {
         invalidateThumbWindow();
         if (!bridge.state.overlay) return;
+        const grid = bridge.state.overlay.querySelector('.ms-grid');
+        const cell = grid && grid.querySelector('[data-grid-index="' + index + '"]');
+        if (cell) fillGridCell(cell, entry, index);
         const track = bridge.state.overlay.querySelector('.ms-thumbs-track');
         if (!track) return;
         const btn = track.querySelector('[data-index="' + index + '"]');
