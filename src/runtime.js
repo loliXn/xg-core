@@ -2,6 +2,15 @@ import { renderPostPanel, revealOnNextFrame } from './panels.js';
 import { XGALLERY_CORE_VERSION } from './contract.js';
 // Shared viewer behavior. Host operations and persisted preferences enter through the bridge.
 export function createViewerRuntime(bridge) {
+let activePlaybackAbort = null;
+let activePlaybackDispose = null;
+const albumBrowserState = new WeakMap();
+function releasePlayback() {
+    if (activePlaybackAbort) activePlaybackAbort.abort();
+    activePlaybackAbort = null;
+    if (activePlaybackDispose) activePlaybackDispose();
+    activePlaybackDispose = null;
+}
 function protectHostControl(button, compact) {
     const values = {appearance:'none',background:'#191b20',color:'#e7e8eb',border:'1px solid rgba(255,255,255,.24)','border-radius':compact?'8px':'10px',font:'600 12px/1 system-ui, sans-serif','text-shadow':'none','box-shadow':'0 2px 8px rgba(0,0,0,.25)','text-transform':'none',opacity:'1',filter:'none','backdrop-filter':'none','box-sizing':'border-box'};
     for (const [key,value] of Object.entries(values)) button.style.setProperty(key,value,'important');
@@ -137,6 +146,7 @@ function finishOpen() {
     syncVerticalFitMediaBox();
 }
 function clearViewerMedia() {
+    releasePlayback();
     const overlay=bridge.state.overlay;if(!overlay)return;
     ++bridge.state.renderToken;
     clearFullscreenIdleTimer();stopThumbTrackAnimation();cancelFlyGhost();
@@ -870,7 +880,7 @@ function onOverlayWheel(e) {
         e.stopPropagation();
         if (bridge.state.gridMode) return;
         const target = e.target;
-        if (target && target.closest('.ms-thumbs-wrap, .ms-gallery-controls, .ms-gallery-center, .ms-filter-bar')) return;
+        if (target && target.closest('.ms-thumbs-wrap, .ms-gallery-controls, .ms-gallery-center, .ms-filter-bar, .ms-album-preview')) return;
         const tagsPanel = target && target.closest('.ms-tags-overlay');
         if (tagsPanel && tagsPanelIsScrollable(tagsPanel)) return;
         e.preventDefault();
@@ -3619,7 +3629,7 @@ function watchStageMedia(options) {
             noticed = true;
             showStageNotice(wrap, 'Still loading\u2026');
         }
-        if (idle >= STAGE_STALL_RETRY_MS) {
+        if (idle >= (options.recoveryStallMs || STAGE_STALL_RETRY_MS)) {
             lastProgressAt = Date.now();
             // Out of restarts: leave the element to keep waiting. The host may
             // still answer, and an error stage for a file that is merely slow
@@ -3814,6 +3824,7 @@ function bindGlobalGalleryHandlers() {
             const activeRoot = bridge.state.overlay && bridge.state.overlay.getRootNode && bridge.state.overlay.getRootNode();
             const active = (activeRoot && activeRoot.activeElement) || document.activeElement;
             if (active && (/^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName) || active.isContentEditable)) return;
+            if (active && active.closest && active.closest('.ms-album-preview') && /^Arrow/.test(e.key)) return;
             if (e.key === 'Escape') {
                 e.preventDefault();
                 if (!bridge.state.gridMode && bridge.state.cameFromGrid) {
@@ -3941,6 +3952,8 @@ function createOpenInGalleryButton(startNode, variant) {
         return btn;
     }
 function renderAlbumPreview(wrap, item, token) {
+    const saved = albumBrowserState.get(item) || { folderRef: '', folderStack: [], scrollTop: 0 };
+    albumBrowserState.set(item, saved);
     const card = document.createElement('section');
     card.className = 'ms-album-preview';
     const header = document.createElement('div');
@@ -3955,14 +3968,71 @@ function renderAlbumPreview(wrap, item, token) {
     meta.className = 'ms-album-preview-meta';
     meta.textContent = 'Loading album details…';
     header.append(eyebrow, title, meta);
+    const actions = document.createElement('div');
+    actions.className = 'ms-album-preview-actions';
+    const back = document.createElement('button');
+    back.type = 'button';
+    back.className = 'ms-album-preview-action';
+    back.textContent = 'Back';
+    back.hidden = true;
+    const addAll = document.createElement('button');
+    addAll.type = 'button';
+    addAll.className = 'ms-album-preview-action';
+    addAll.textContent = 'Add all';
+    addAll.disabled = true;
+    const original = document.createElement('a');
+    original.className = 'ms-album-preview-action';
+    original.textContent = 'Open original';
+    original.href = item.resolveUrl || item.src;
+    original.target = '_blank';
+    original.rel = 'noopener noreferrer';
+    actions.append(back, addAll, original);
+    header.append(actions);
     const grid = document.createElement('div');
     grid.className = 'ms-album-preview-grid';
-    const paintTiles = (urls) => {
-        grid.replaceChildren();
-        for (let index = 0; index < 4; index++) {
-            const tile = document.createElement('div');
+    const more = document.createElement('button');
+    more.type = 'button';
+    more.className = 'ms-album-preview-action';
+    more.textContent = 'Load more';
+    more.hidden = true;
+    const folderStack = saved.folderStack.slice();
+    let currentPreview = null;
+    let busy = false;
+    const tileUpdates = new Map();
+    const alive = () => card.isConnected && bridge.state.renderToken === token;
+    const load = async (folderRef, cursor = null) => {
+        meta.textContent = 'Loading album details…';
+        addAll.disabled = true;
+        more.disabled = true;
+        try {
+            const preview = await bridge.loadAlbumPreview(item, folderRef, cursor);
+            if (!alive()) return;
+            const append = cursor != null && currentPreview && preview;
+            currentPreview = append ? Object.assign({}, preview, { entries: currentPreview.entries.concat(preview.entries) }) : preview;
+            title.textContent = preview && preview.title || item.galleryName || 'Album';
+            const entries = currentPreview && currentPreview.entries || [];
+            const count = preview && Number.isFinite(Number(preview.count)) ? Number(preview.count) : entries.length;
+            meta.textContent = preview ? count + (count === 1 ? ' item' : ' items') : 'Preview unavailable';
+            back.hidden = !folderStack.length;
+            addAll.disabled = !entries.some(entry => entry.kind === 'file');
+            paintTiles(append ? preview.entries : entries, append);
+            more.hidden = !preview || !preview.nextCursor;
+            more.disabled = false;
+            if (!append) card.scrollTop = saved.scrollTop;
+            if (!folderStack.length && bridge.mediaPresentation(item).autoAddAlbum && entries.length) {
+                bridge.addAlbumEntries(item, entries.filter(entry => entry.kind === 'file'), false);
+            }
+        } catch (error) {
+            if (alive()) { meta.textContent = 'Preview unavailable'; more.disabled = false; if (!cursor) grid.replaceChildren(); }
+        }
+    };
+    const paintTiles = (entries, append) => {
+        if (!append) { grid.replaceChildren(); tileUpdates.clear(); }
+        for (const entry of entries) {
+            const tile = document.createElement('button');
+            tile.type = 'button';
             tile.className = 'ms-album-preview-tile';
-            const src = urls[index];
+            const src = entry.thumbSrc;
             if (src) {
                 const img = document.createElement('img');
                 img.src = bridge.wrapMediaUrl(src);
@@ -3971,29 +4041,75 @@ function renderAlbumPreview(wrap, item, token) {
                 img.decoding = 'async';
                 tile.appendChild(img);
             }
+            const badge = document.createElement('span');
+            badge.className = 'ms-album-preview-badge';
+            const updateAdded = () => {
+                const added = entry.kind === 'file' && bridge.isAlbumEntryAdded
+                    && bridge.isAlbumEntryAdded(item, entry);
+                tile.classList.toggle('ms-album-preview-added', !!added);
+                badge.textContent = added ? '✓ Added' : (entry.kind === 'folder' ? 'Folder' : (entry.mediaType || 'File'));
+            };
+            updateAdded();
+            tileUpdates.set(entry.id, updateAdded);
+            const name = document.createElement('span');
+            name.className = 'ms-album-preview-name';
+            name.textContent = entry.name || 'Untitled';
+            tile.append(badge, name);
+            tile.title = entry.name || 'Untitled';
+            tile.addEventListener('click', async event => {
+                event.stopPropagation();
+                if (busy || !alive()) return;
+                if (entry.kind === 'folder') {
+                    folderStack.push(currentPreview && currentPreview.folderRef || '');
+                    saved.folderStack = folderStack.slice();
+                    saved.folderRef = entry.ref;
+                    saved.scrollTop = 0;
+                    await load(entry.ref);
+                    return;
+                }
+                busy = true;
+                tile.disabled = true;
+                try { await bridge.addAlbumEntries(item, [entry], true); updateAdded(); }
+                finally { busy = false; if (alive()) tile.disabled = false; }
+            });
             grid.appendChild(tile);
         }
     };
-    paintTiles(item.thumbSrc ? [item.thumbSrc] : []);
-    card.append(header, grid);
+    back.addEventListener('click', event => {
+        event.stopPropagation();
+        if (folderStack.length) {
+            saved.folderRef = folderStack.pop();
+            saved.folderStack = folderStack.slice();
+            saved.scrollTop = 0;
+            load(saved.folderRef);
+        }
+    });
+    card.addEventListener('scroll', () => { saved.scrollTop = card.scrollTop; }, { passive: true });
+    more.addEventListener('click', event => {
+        event.stopPropagation();
+        if (currentPreview && currentPreview.nextCursor) load(currentPreview.folderRef, currentPreview.nextCursor);
+    });
+    addAll.addEventListener('click', async event => {
+        event.stopPropagation();
+        if (busy || !currentPreview) return;
+        busy = true;
+        addAll.disabled = true;
+        try {
+            await bridge.addAlbumEntries(item, currentPreview.entries.filter(entry => entry.kind === 'file'), false);
+            tileUpdates.forEach(update => update());
+        }
+        finally { busy = false; if (alive()) addAll.disabled = false; }
+    });
+    card.append(header, grid, more);
     wrap.appendChild(card);
     markItemMediaLoaded(item);
-    Promise.resolve().then(() => bridge.loadAlbumPreview(item)).then(preview => {
-        if (!card.isConnected || bridge.state.renderToken !== token) return;
-        if (!preview) { meta.textContent = 'Preview unavailable'; return; }
-        title.textContent = preview.title || title.textContent;
-        const count = Number(preview.count) || 0;
-        meta.textContent = count + (count === 1 ? ' item' : ' items')
-            + (preview.folders ? ' · ' + preview.folders + (preview.folders === 1 ? ' folder' : ' folders') : '');
-        if (preview.tiles && preview.tiles.length) paintTiles(preview.tiles);
-    }).catch(() => {
-        if (card.isConnected && bridge.state.renderToken === token) meta.textContent = 'Preview unavailable';
-    });
+    load(saved.folderRef);
 }
 
 function renderCurrent() {
         if (!bridge.state.overlay || !bridge.state.items.length) return;
         if (bridge.state.gridMode) return;
+        releasePlayback();
         bridge.syncCoreCurrent();
         // Let the current item paint before any host scroll/layout work starts.
         setTimeout(() => { if (bridge.state.open) bridge.checkTriggerInfiniteScroll(); }, 0);
@@ -4487,7 +4603,7 @@ function renderCurrent() {
             if (item.fallbackSrc && item.fallbackSrc !== item.src) retrySources.push(bridge.wrapMediaUrl(item.fallbackSrc));
 
             let retryIndex = 0;
-            on('error', () => {
+            const handleVideoError = () => {
                 if (!ownsVideoSession() || video._msRecovering) return;
                 const errCode = video.error ? video.error.code : 0;
                 const resumeAt = Math.max(video.currentTime || 0, lastPlayTime || 0);
@@ -4541,31 +4657,90 @@ function renderCurrent() {
                 const failedSrc = video.currentSrc || video.src || item.src;
                 const signedHost = presentation.signedVideo;
                 const neverPlayed = resumeAt < 0.25 && video.readyState < 2;
-                if (neverPlayed && !item._gofileRecoveryTried && typeof bridge.recoverGofileVideo === 'function'
-                    && item.gofileId && /^https?:\/\/[^/]+\.gofile\.io\/download\/web\//i.test(item.src)) {
-                    item._gofileRecoveryTried = true;
+                if (neverPlayed && !item._playbackRecoveryTried && typeof bridge.preparePlayback === 'function'
+                    && presentation.playbackRecovery) {
+                    item._playbackRecoveryTried = true;
                     video._msRecovering = true;
-                    showStageNotice(wrap, 'Loading authenticated video…');
-                    bridge.recoverGofileVideo(item).then(blobUrl => {
+                    if (stallWatch) stallWatch.stop(false);
+                    const controller = new AbortController();
+                    activePlaybackAbort = controller;
+                    try { video.pause(); video.removeAttribute('src'); video.load(); } catch (e) { }
+                    const panel = document.createElement('div');
+                    panel.className = 'ms-playback-progress';
+                    controller.signal.addEventListener('abort', () => {
+                        item._playbackRecoveryTried = false;
+                        panel.remove();
+                    }, { once: true });
+                    const label = document.createElement('span');
+                    label.textContent = 'Loading video…';
+                    const track = document.createElement('progress');
+                    track.removeAttribute('value');
+                    const cancel = document.createElement('button');
+                    cancel.type = 'button';
+                    cancel.textContent = 'Cancel';
+                    cancel.addEventListener('click', event => {
+                        event.stopPropagation();
+                        controller.abort();
+                        panel.remove();
+                        video._msRecovering = false;
+                        setStageFetching(false);
+                        renderErrorStage(wrap, 'Loading cancelled', item.src, item);
+                    });
+                    panel.append(label, track, cancel);
+                    wrap.appendChild(panel);
+                    let lastPaint = 0;
+                    bridge.preparePlayback(item, { signal: controller.signal, onProgress: progress => {
+                        if (!ownsVideoSession() || controller.signal.aborted) return;
+                        const now = Date.now();
+                        if (now - lastPaint < 200 && progress.loadedBytes !== progress.totalBytes) return;
+                        lastPaint = now;
+                        const loaded = Number(progress.loadedBytes) || 0;
+                        const total = Number(progress.totalBytes) || 0;
+                        label.textContent = total > 0
+                            ? 'Loading video · ' + (loaded / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1) + ' MB'
+                            : 'Loading video · ' + (loaded / 1048576).toFixed(1) + ' MB';
+                        if (total > 0) { track.max = total; track.value = Math.min(loaded, total); }
+                    } }).then(result => {
                         if (!ownsVideoSession()) {
-                            if (blobUrl) URL.revokeObjectURL(blobUrl);
+                            if (result && result.dispose) result.dispose();
                             return;
                         }
-                        video._msRecovering = false;
-                        hideStageNotice(wrap);
-                        if (blobUrl) {
-                            item.gofileOriginalSrc = item.src;
-                            item.src = blobUrl;
-                            item._gofileBlobUrl = blobUrl;
-                            renderCurrent();
+                        if (controller.signal.aborted) {
+                            if (result && result.dispose) result.dispose();
+                            return;
+                        }
+                        if (result && result.src) {
+                            activePlaybackDispose = result.dispose || null;
+                            label.textContent = 'Preparing video…';
+                            track.removeAttribute('value');
+                            video.src = result.src;
+                            video.load();
+                            const readyTimeout = setTimeout(() => {
+                                if (!ownsVideoSession() || video.readyState >= 2) return;
+                                panel.remove();
+                                video._msRecovering = false;
+                                setStageFetching(false);
+                                renderErrorStage(wrap, 'Video could not be prepared', item.src, item);
+                            }, 20000);
+                            controller.signal.addEventListener('abort', () => clearTimeout(readyTimeout), { once: true });
+                            on('loadeddata', () => {
+                                clearTimeout(readyTimeout);
+                                panel.remove(); video._msRecovering = false; setStageFetching(false);
+                            }, { once: true });
+                            const play = video.play();
+                            if (play && play.catch) play.catch(() => { });
                         } else {
-                            video.dispatchEvent(new Event('error'));
+                            panel.remove();
+                            video._msRecovering = false;
+                            setStageFetching(false);
+                            renderErrorStage(wrap, 'Video recovery unavailable', item.src, item);
                         }
                     }).catch(() => {
                         if (!ownsVideoSession()) return;
                         video._msRecovering = false;
-                        hideStageNotice(wrap);
-                        video.dispatchEvent(new Event('error'));
+                        panel.remove();
+                        setStageFetching(false);
+                        if (!controller.signal.aborted) renderErrorStage(wrap, 'Video recovery failed', item.src, item);
                     });
                     return;
                 }
@@ -4639,7 +4814,8 @@ function renderCurrent() {
                 }
                 const retry = video.play();
                 if (retry && typeof retry.catch === 'function') retry.catch(() => { });
-            });
+            };
+            on('error', handleVideoError);
 
             on('volumechange', () => {
                 if (!ownsVideoSession()) return;
@@ -4686,7 +4862,14 @@ function renderCurrent() {
                     wrap: wrap,
                     url: item.src,
                     isCurrent: ownsVideoSession,
-                    onRestart: restartStageVideo
+                    recoveryStallMs: presentation.playbackRecovery ? 20000 : 0,
+                    onRestart: () => {
+                        if (presentation.playbackRecovery && !item._playbackRecoveryTried && video.readyState < 2) {
+                            handleVideoError();
+                        } else {
+                            restartStageVideo();
+                        }
+                    }
                 });
             }
             // Two frames let navigation and the poster reach the screen before

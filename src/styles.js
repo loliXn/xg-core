@@ -633,11 +633,12 @@ export const OVERLAY_CSS = String.raw`
             box-sizing: border-box !important;
         }
         .ms-gallery-overlay .ms-album-preview {
-            width: min(720px, 100%);
-            max-height: 100%;
-            padding: 24px 24px 90px;
+            width: 100%;
+            height: 100%;
+            min-height: 0;
+            padding: 16px;
             box-sizing: border-box;
-            overflow: hidden;
+            overflow: auto;
             border: 1px solid var(--ms-line-strong);
             border-radius: 18px;
             background: var(--ms-surface-1);
@@ -649,7 +650,7 @@ export const OVERLAY_CSS = String.raw`
             flex-direction: column;
             gap: 7px;
             min-width: 0;
-            margin-bottom: 18px;
+            margin-bottom: 14px;
         }
         .ms-gallery-overlay .ms-album-preview-label {
             color: var(--ms-text-3);
@@ -669,29 +670,115 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-gallery-overlay .ms-album-preview-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 8px;
+            grid-template-columns: repeat(auto-fill, minmax(min(170px, 42vw), 1fr));
+            gap: 10px;
             width: 100%;
         }
         .ms-gallery-overlay .ms-album-preview-tile {
             min-width: 0;
-            aspect-ratio: 1;
+            height: 195px;
             overflow: hidden;
             border: 1px solid var(--ms-line);
             border-radius: 9px;
             background: var(--ms-surface-2);
+            color: var(--ms-text);
+            padding: 0;
+            cursor: pointer;
+            text-align: left;
+            display: flex;
+            flex-direction: column;
+            transition: background .15s ease, border-color .15s ease;
+        }
+        .ms-gallery-overlay .ms-album-preview-tile:hover,
+        .ms-gallery-overlay .ms-album-preview-action:hover {
+            background: var(--ms-surface-3);
+            border-color: var(--ms-line-strong);
+        }
+        .ms-gallery-overlay .ms-album-preview-tile.ms-album-preview-added {
+            border-color: var(--ms-line-strong);
+        }
+        .ms-gallery-overlay .ms-album-preview-added .ms-album-preview-badge {
+            color: var(--ms-text-2);
+        }
+        .ms-gallery-overlay .ms-album-preview-tile:focus-visible,
+        .ms-gallery-overlay .ms-album-preview-action:focus-visible {
+            outline: 2px solid var(--ms-accent);
+            outline-offset: 2px;
         }
         .ms-gallery-overlay .ms-album-preview-tile > img {
             display: block;
             width: 100% !important;
-            height: 100% !important;
+            height: 145px !important;
             object-fit: cover !important;
             border-radius: 0;
             margin: 0;
         }
+        .ms-gallery-overlay .ms-album-preview-badge,
+        .ms-gallery-overlay .ms-album-preview-name { padding: 2px 8px; }
+        .ms-gallery-overlay .ms-album-preview-badge {
+            color: var(--ms-text-3);
+            font: 10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+            text-transform: uppercase;
+        }
+        .ms-gallery-overlay .ms-album-preview-name {
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+            font: 12px/1.4 system-ui, sans-serif;
+        }
+        .ms-gallery-overlay .ms-album-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 7px; }
+        .ms-gallery-overlay .ms-album-preview-action {
+            color: var(--ms-text);
+            background: var(--ms-surface-2);
+            border: 1px solid var(--ms-line);
+            border-radius: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            text-decoration: none;
+            font: 12px/1.3 system-ui, sans-serif;
+        }
+        .ms-gallery-overlay .ms-album-preview-action[hidden] { display: none; }
+        .ms-gallery-overlay .ms-album-preview-action:disabled { opacity: .5; cursor: default; }
+        .ms-gallery-overlay .ms-playback-progress {
+            position: absolute;
+            left: 50%;
+            bottom: 22px;
+            transform: translateX(-50%);
+            z-index: 12;
+            width: min(360px, calc(100% - 32px));
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 8px 12px;
+            align-items: center;
+            box-sizing: border-box;
+            padding: 12px;
+            border: 1px solid var(--ms-line-strong);
+            border-radius: 10px;
+            background: var(--ms-surface-1);
+            box-shadow: var(--ms-shadow-md);
+            color: var(--ms-text);
+            font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-variant-numeric: tabular-nums;
+        }
+        .ms-gallery-overlay .ms-playback-progress > progress {
+            grid-column: 1;
+            width: 100%;
+            height: 5px;
+            accent-color: var(--ms-accent);
+        }
+        .ms-gallery-overlay .ms-playback-progress > button {
+            grid-column: 2;
+            grid-row: 1 / span 2;
+            padding: 6px 9px;
+            border: 1px solid var(--ms-line);
+            border-radius: 7px;
+            background: var(--ms-surface-2);
+            color: var(--ms-text);
+            cursor: pointer;
+        }
         @media (max-width: 600px) {
-            .ms-gallery-overlay .ms-album-preview { padding: 18px 18px 84px; }
-            .ms-gallery-overlay .ms-album-preview-grid { gap: 4px; }
+            .ms-gallery-overlay .ms-album-preview { padding: 10px; }
+            .ms-gallery-overlay .ms-album-preview-grid { gap: 6px; }
         }
         .ms-gallery-overlay .ms-media-box {
             min-width: 0 !important;
