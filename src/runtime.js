@@ -2370,7 +2370,7 @@ function mayBeAnimatedImageUrl(url) {
         const value = String(url || '');
         if (/^data:image\/(?:gif|webp)/i.test(value)) return true;
         if (/^(?:data|blob):/i.test(value)) return false;
-        return /\.(?:gif|webp)(?:[?#]|$)/i.test(value.split('?')[0]) || /[?&]format=(?:gif|webp)/i.test(value);
+        return /\.(?:gif|webp)(?:[?#]|$)/i.test(value.split('?')[0]) || /[?&]format=(?:gif|webp)\b/i.test(value);
     }
 
 function appendFrozenVideoThumb(host, url, item, onError) {
