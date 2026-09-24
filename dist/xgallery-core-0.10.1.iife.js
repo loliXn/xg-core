@@ -565,7 +565,6 @@
      * @param {string} [input.src] the media's URL.
      * @param {function} input.isPlaceholderUrl
      * @param {function} input.isImageUrl an image URL, by the adapter's rules.
-     * @param {function} [input.isVideoUrl] a video URL, by the adapter's rules.
      * @param {function} [input.mayAnimate] the URL could be an animated image.
      * @param {function} [input.canExtract] a first frame can be pulled from this item.
      * @param {boolean} [input.allowVideoElement] adapter opt-in, off by default.
@@ -578,7 +577,6 @@
         const spec = input || {};
         const isPlaceholderUrl = spec.isPlaceholderUrl || (() => false);
         const isImageUrl = spec.isImageUrl || (() => false);
-        const isVideoUrl = spec.isVideoUrl || (() => false);
         const mayAnimate = spec.mayAnimate || (() => false);
         const canExtract = typeof spec.canExtract === 'function' ? spec.canExtract : () => !!spec.canExtract;
 
@@ -595,21 +593,12 @@
             const candidate = String(posterCandidates[i] || '');
             if (!candidate) continue;
             if (isPlaceholderUrl(candidate)) continue;
-            // A picture we can name is a poster outright, even when it is the
-            // media itself: a still, or a GIF standing in for a video, is
-            // legitimately its own poster and still gets frozen below.
-            if (isImageUrl(candidate) || /^data:image\//i.test(candidate)) { poster = candidate; break; }
-            // An address we cannot read a type from is still a poster when the
-            // site handed us one - plenty of hosts serve thumbnails from URLs
-            // with no extension at all, and demanding one turned every such
-            // thumbnail into a placeholder. What the rule is actually for is
-            // keeping a cell from pointing at the media file itself, which is
-            // how a thumbnail ended up streaming the very thing the stage was
-            // streaming, twice over the same host budget. So that is what it
-            // tests now: the media's own address, or anything that looks like a
-            // video, is not a poster.
-            if (candidate === String(spec.src || '')) continue;
-            if (isVideoUrl(candidate)) continue;
+            // Only an image can be a poster. That is also what keeps a cell from
+            // pointing at the media file itself, which is how a thumbnail ended up
+            // streaming the very thing the stage was streaming, twice over the
+            // same host budget - while a still, or a GIF standing in for a video,
+            // is legitimately its own poster and still gets frozen below.
+            if (!isImageUrl(candidate) && !/^data:image\//i.test(candidate)) continue;
             poster = candidate;
             break;
         }
@@ -9535,7 +9524,6 @@
                 src: item && item.src,
                 isPlaceholderUrl: (url) => typeof bridge.isPlaceholderUrl === 'function' && bridge.isPlaceholderUrl(url),
                 isImageUrl: isStaticVideoThumbUrl,
-                isVideoUrl: (url) => typeof bridge.isVideoThumbSource === 'function' && bridge.isVideoThumbSource(url),
                 mayAnimate: mayBeAnimatedImageUrl,
                 canExtract: () => !!(bridge.canExtractMp4Poster && bridge.canExtractMp4Poster(item, (item && item.src) || thumbSrc)),
                 // Read from the file's header while it was being classified, so
@@ -9706,10 +9694,6 @@
             let hash = 5381;
             for (let i = 0; i < text.length; i++) hash = ((hash * 33) ^ text.charCodeAt(i)) >>> 0;
             return text.length.toString(36) + '-' + hash.toString(36);
-        }
-
-    function canFreezeAnimatedThumbs() {
-            return typeof bridge.freezeAnimatedThumbnail === 'function';
         }
 
     function thumbPreviewRevision(entry) {
@@ -9898,13 +9882,7 @@
                 appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-placeholder'),
                 loadImage: (img) => {
                     img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
-                    // Freezing takes an adapter that can read the bytes. Where
-                    // there is none the cell still says GIF, but the picture is
-                    // loaded the ordinary way: a thumbnail that moves is a far
-                    // smaller problem than one that never fills at all, which is
-                    // what an adapter without a freeze left behind - an <img>
-                    // whose src was never set, loading for ever.
-                    if (animated && canFreezeAnimatedThumbs()) {
+                    if (animated) {
                         bridge.freezeAnimatedThumbnail(img, item);
                     } else {
                         bridge.setCachedImgSrc(img, thumbSrc, item);
@@ -10310,14 +10288,6 @@
                 if (cell.dataset.msKey === key) {
                     cell.setAttribute('data-grid-index', String(index));
                     cell.classList.toggle('active', index === bridge.state.currentIndex);
-                    // Same check the strip makes. Reusing on the key alone meant a
-                    // cell kept whatever it was first painted with, so a thumbnail
-                    // that only arrived later - a resolved item, a frozen frame, a
-                    // poster pulled out of the file - reached the strip (which
-                    // repaints on the revision) and never the grid.
-                    if (cell.dataset.msThumbRevision !== thumbPreviewRevision(entry)) {
-                        fillGridCell(cell, entry, index);
-                    }
                     continue;
                 }
                 fillGridCell(cell, entry, index);
@@ -10365,7 +10335,6 @@
             const cacheClass = (hdSrc && !bridge.state.cachedImageUrls.has(hdSrc) && !item._msMediaLoaded) ? ' ms-uncached' : '';
             cell.setAttribute('data-grid-index', String(index));
             cell.dataset.msKey = thumbItemKey(entry);
-            cell.dataset.msThumbRevision = thumbPreviewRevision(entry);
             const thumbSrc = item.thumbSrc || item.src;
             const isVideo = item.type === 'video' || item.type === 'iframe' || item.expectedVideo || item.xUnplayable;
             const hasPoster = !!(item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc));
@@ -10388,13 +10357,7 @@
                 appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-grid-placeholder'),
                 loadImage: (img) => {
                     img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
-                    // Freezing takes an adapter that can read the bytes. Where
-                    // there is none the cell still says GIF, but the picture is
-                    // loaded the ordinary way: a thumbnail that moves is a far
-                    // smaller problem than one that never fills at all, which is
-                    // what an adapter without a freeze left behind - an <img>
-                    // whose src was never set, loading for ever.
-                    if (animated && canFreezeAnimatedThumbs()) {
+                    if (animated) {
                         bridge.freezeAnimatedThumbnail(img, item);
                     } else {
                         bridge.setCachedImgSrc(img, thumbSrc, item);
@@ -10472,9 +10435,6 @@
     function updateSingleThumb(index, entry) {
             invalidateThumbWindow();
             if (!bridge.state.overlay) return;
-            const grid = bridge.state.overlay.querySelector('.ms-grid');
-            const cell = grid && grid.querySelector('[data-grid-index="' + index + '"]');
-            if (cell) fillGridCell(cell, entry, index);
             const track = bridge.state.overlay.querySelector('.ms-thumbs-track');
             if (!track) return;
             const btn = track.querySelector('[data-index="' + index + '"]');
