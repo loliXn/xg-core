@@ -3964,10 +3964,14 @@ function renderAlbumPreview(wrap, item, token) {
     const title = document.createElement('strong');
     title.className = 'ms-album-preview-title';
     title.textContent = item.galleryName || 'Album';
+    const path = document.createElement('div');
+    path.className = 'ms-album-preview-path';
     const meta = document.createElement('span');
     meta.className = 'ms-album-preview-meta';
     meta.textContent = 'Loading album details…';
-    header.append(eyebrow, title, meta);
+    const heading = document.createElement('div');
+    heading.className = 'ms-album-preview-heading';
+    heading.append(eyebrow, title, path, meta);
     const actions = document.createElement('div');
     actions.className = 'ms-album-preview-actions';
     const back = document.createElement('button');
@@ -3978,7 +3982,7 @@ function renderAlbumPreview(wrap, item, token) {
     const addAll = document.createElement('button');
     addAll.type = 'button';
     addAll.className = 'ms-album-preview-action';
-    addAll.textContent = 'Add all';
+    addAll.textContent = 'Add shown';
     addAll.disabled = true;
     const original = document.createElement('a');
     original.className = 'ms-album-preview-action';
@@ -3987,7 +3991,13 @@ function renderAlbumPreview(wrap, item, token) {
     original.target = '_blank';
     original.rel = 'noopener noreferrer';
     actions.append(back, addAll, original);
-    header.append(actions);
+    header.append(heading, actions);
+    const body = document.createElement('div');
+    body.className = 'ms-album-preview-body';
+    const status = document.createElement('div');
+    status.className = 'ms-album-preview-status';
+    status.setAttribute('role', 'status');
+    status.textContent = 'Loading album…';
     const grid = document.createElement('div');
     grid.className = 'ms-album-preview-grid';
     const more = document.createElement('button');
@@ -3996,34 +4006,50 @@ function renderAlbumPreview(wrap, item, token) {
     more.textContent = 'Load more';
     more.hidden = true;
     const folderStack = saved.folderStack.slice();
+    const folderNames = (saved.folderNames || []).slice();
+    path.textContent = folderNames.length ? 'Album / ' + folderNames.join(' / ') : 'Browse files';
     let currentPreview = null;
     let busy = false;
+    let loadSequence = 0;
     const tileUpdates = new Map();
     const alive = () => card.isConnected && bridge.state.renderToken === token;
     const load = async (folderRef, cursor = null) => {
+        const sequence = ++loadSequence;
         meta.textContent = 'Loading album details…';
+        status.hidden = cursor != null;
+        status.textContent = folderRef ? 'Loading folder…' : 'Loading album…';
         addAll.disabled = true;
         more.disabled = true;
         try {
             const preview = await bridge.loadAlbumPreview(item, folderRef, cursor);
-            if (!alive()) return;
+            if (!alive() || sequence !== loadSequence) return;
             const append = cursor != null && currentPreview && preview;
             currentPreview = append ? Object.assign({}, preview, { entries: currentPreview.entries.concat(preview.entries) }) : preview;
             title.textContent = preview && preview.title || item.galleryName || 'Album';
             const entries = currentPreview && currentPreview.entries || [];
             const count = preview && Number.isFinite(Number(preview.count)) ? Number(preview.count) : entries.length;
-            meta.textContent = preview ? count + (count === 1 ? ' item' : ' items') : 'Preview unavailable';
+            meta.textContent = preview ? (count > entries.length
+                ? entries.length + ' shown of ' + count + ' items'
+                : count + (count === 1 ? ' item' : ' items')) : 'Preview unavailable';
+            path.textContent = folderNames.length ? 'Album / ' + folderNames.join(' / ') : 'Browse files';
             back.hidden = !folderStack.length;
             addAll.disabled = !entries.some(entry => entry.kind === 'file');
             paintTiles(append ? preview.entries : entries, append);
+            status.hidden = entries.length > 0;
+            status.textContent = preview ? 'No playable files in this folder' : 'Album preview unavailable';
             more.hidden = !preview || !preview.nextCursor;
             more.disabled = false;
-            if (!append) card.scrollTop = saved.scrollTop;
+            if (!append) body.scrollTop = saved.scrollTop;
             if (!folderStack.length && bridge.mediaPresentation(item).autoAddAlbum && entries.length) {
                 bridge.addAlbumEntries(item, entries.filter(entry => entry.kind === 'file'), false);
             }
         } catch (error) {
-            if (alive()) { meta.textContent = 'Preview unavailable'; more.disabled = false; if (!cursor) grid.replaceChildren(); }
+            if (alive() && sequence === loadSequence) {
+                meta.textContent = 'Preview unavailable'; more.disabled = false;
+                if (!cursor) grid.replaceChildren();
+                status.hidden = false;
+                status.textContent = 'Could not load this album. Open the original page to try there.';
+            }
         }
     };
     const paintTiles = (entries, append) => {
@@ -4032,36 +4058,68 @@ function renderAlbumPreview(wrap, item, token) {
             const tile = document.createElement('button');
             tile.type = 'button';
             tile.className = 'ms-album-preview-tile';
+            const cover = document.createElement('span');
+            cover.className = 'ms-album-preview-cover';
+            const fallback = document.createElement('span');
+            fallback.className = 'ms-album-preview-fallback';
+            if (entry.kind === 'folder') {
+                fallback.classList.add('ms-album-preview-fallback-folder');
+                fallback.innerHTML = '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 12h11l4 4h15v17H5zM5 16v-5a3 3 0 0 1 3-3h9l4 4h11a3 3 0 0 1 3 3v1"/></svg><span>FOLDER</span>';
+            } else {
+                fallback.textContent = entry.mediaType === 'video' ? 'VIDEO' : 'IMAGE';
+            }
+            cover.appendChild(fallback);
             const src = entry.thumbSrc;
             if (src) {
                 const img = document.createElement('img');
                 img.src = bridge.wrapMediaUrl(src);
+                img.className = 'ms-album-preview-image';
                 img.alt = '';
                 img.loading = 'lazy';
                 img.decoding = 'async';
-                tile.appendChild(img);
+                img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
+                if (img.complete && img.naturalWidth) img.classList.add('is-loaded');
+                cover.appendChild(img);
             }
             const badge = document.createElement('span');
             badge.className = 'ms-album-preview-badge';
+            badge.textContent = entry.kind === 'folder' ? 'Folder' : (entry.mediaType || 'File');
+            const check = document.createElement('span');
+            check.className = 'ms-album-preview-check';
+            check.textContent = '✓';
+            check.setAttribute('aria-hidden', 'true');
+            cover.append(badge, check);
+            const name = document.createElement('span');
+            name.className = 'ms-album-preview-name';
+            name.textContent = entry.name || 'Untitled';
+            const details = document.createElement('span');
+            details.className = 'ms-album-preview-details';
+            const bytes = Number(entry.bytes || (entry.item && entry.item.bytes)) || 0;
+            details.textContent = entry.kind === 'folder' ? 'Open folder'
+                : (bytes > 0 ? (bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB'
+                    : Math.ceil(bytes / 1024) + ' KB') : 'Add to gallery');
+            const caption = document.createElement('span');
+            caption.className = 'ms-album-preview-caption';
+            caption.append(name, details);
+            tile.append(cover, caption);
             const updateAdded = () => {
                 const added = entry.kind === 'file' && bridge.isAlbumEntryAdded
                     && bridge.isAlbumEntryAdded(item, entry);
                 tile.classList.toggle('ms-album-preview-added', !!added);
-                badge.textContent = added ? '✓ Added' : (entry.kind === 'folder' ? 'Folder' : (entry.mediaType || 'File'));
+                tile.setAttribute('aria-label', (entry.kind === 'folder' ? 'Open folder ' : (added ? 'Open added file ' : 'Add file '))
+                    + (entry.name || 'Untitled'));
             };
             updateAdded();
             tileUpdates.set(entry.id, updateAdded);
-            const name = document.createElement('span');
-            name.className = 'ms-album-preview-name';
-            name.textContent = entry.name || 'Untitled';
-            tile.append(badge, name);
             tile.title = entry.name || 'Untitled';
             tile.addEventListener('click', async event => {
                 event.stopPropagation();
                 if (busy || !alive()) return;
                 if (entry.kind === 'folder') {
                     folderStack.push(currentPreview && currentPreview.folderRef || '');
+                    folderNames.push(entry.name || 'Folder');
                     saved.folderStack = folderStack.slice();
+                    saved.folderNames = folderNames.slice();
                     saved.folderRef = entry.ref;
                     saved.scrollTop = 0;
                     await load(entry.ref);
@@ -4079,12 +4137,14 @@ function renderAlbumPreview(wrap, item, token) {
         event.stopPropagation();
         if (folderStack.length) {
             saved.folderRef = folderStack.pop();
+            folderNames.pop();
             saved.folderStack = folderStack.slice();
+            saved.folderNames = folderNames.slice();
             saved.scrollTop = 0;
             load(saved.folderRef);
         }
     });
-    card.addEventListener('scroll', () => { saved.scrollTop = card.scrollTop; }, { passive: true });
+    body.addEventListener('scroll', () => { saved.scrollTop = body.scrollTop; }, { passive: true });
     more.addEventListener('click', event => {
         event.stopPropagation();
         if (currentPreview && currentPreview.nextCursor) load(currentPreview.folderRef, currentPreview.nextCursor);
@@ -4100,7 +4160,8 @@ function renderAlbumPreview(wrap, item, token) {
         }
         finally { busy = false; if (alive()) addAll.disabled = false; }
     });
-    card.append(header, grid, more);
+    body.append(status, grid, more);
+    card.append(header, body);
     wrap.appendChild(card);
     markItemMediaLoaded(item);
     load(saved.folderRef);
@@ -4671,10 +4732,21 @@ function renderCurrent() {
                         item._playbackRecoveryTried = false;
                         panel.remove();
                     }, { once: true });
-                    const label = document.createElement('span');
-                    label.textContent = 'Loading video…';
+                    const head = document.createElement('div');
+                    head.className = 'ms-playback-progress-head';
+                    const signal = document.createElement('span');
+                    signal.className = 'ms-playback-progress-signal';
+                    signal.setAttribute('aria-hidden', 'true');
+                    const label = document.createElement('strong');
+                    label.className = 'ms-playback-progress-label';
+                    label.setAttribute('aria-live', 'polite');
+                    label.textContent = 'Connecting to video…';
                     const track = document.createElement('progress');
+                    track.setAttribute('aria-label', 'Video transfer');
                     track.removeAttribute('value');
+                    const stats = document.createElement('span');
+                    stats.className = 'ms-playback-progress-stats';
+                    stats.textContent = 'Waiting for transfer';
                     const cancel = document.createElement('button');
                     cancel.type = 'button';
                     cancel.textContent = 'Cancel';
@@ -4686,7 +4758,8 @@ function renderCurrent() {
                         setStageFetching(false);
                         renderErrorStage(wrap, 'Loading cancelled', item.src, item);
                     });
-                    panel.append(label, track, cancel);
+                    head.append(signal, label, cancel);
+                    panel.append(head, track, stats);
                     wrap.appendChild(panel);
                     let lastPaint = 0;
                     bridge.preparePlayback(item, { signal: controller.signal, onProgress: progress => {
@@ -4696,9 +4769,11 @@ function renderCurrent() {
                         lastPaint = now;
                         const loaded = Number(progress.loadedBytes) || 0;
                         const total = Number(progress.totalBytes) || 0;
-                        label.textContent = total > 0
-                            ? 'Loading video · ' + (loaded / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1) + ' MB'
-                            : 'Loading video · ' + (loaded / 1048576).toFixed(1) + ' MB';
+                        if (label.textContent !== 'Downloading video') label.textContent = 'Downloading video';
+                        stats.textContent = total > 0
+                            ? (loaded / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1)
+                                + ' MB · ' + Math.floor(Math.min(loaded / total, 1) * 100) + '%'
+                            : (loaded / 1048576).toFixed(1) + ' MB transferred';
                         if (total > 0) { track.max = total; track.value = Math.min(loaded, total); }
                     } }).then(result => {
                         if (!ownsVideoSession()) {
@@ -4712,6 +4787,7 @@ function renderCurrent() {
                         if (result && result.src) {
                             activePlaybackDispose = result.dispose || null;
                             label.textContent = 'Preparing video…';
+                            stats.textContent = 'Transfer complete · opening player';
                             track.removeAttribute('value');
                             video.src = result.src;
                             video.load();
