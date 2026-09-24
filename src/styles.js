@@ -72,6 +72,14 @@ export const OVERLAY_CSS = String.raw`
             font-size: 12px;
             opacity: 0.8;
         }
+        #ms-loading-overlay > progress {
+            width: min(240px, calc(100vw - 48px));
+            height: 4px;
+            margin-top: 16px;
+            border: 0;
+            border-radius: 999px;
+            accent-color: var(--ms-accent);
+        }
 
         .ms-gallery-overlay {
             --ms-topbar-h: 50px;
@@ -838,6 +846,7 @@ export const OVERLAY_CSS = String.raw`
             font: 13px/1.5 var(--ms-font-ui, system-ui, sans-serif);
         }
         .ms-gallery-overlay .ms-album-preview-status[hidden] { display: none; }
+        .ms-gallery-overlay .ms-album-preview-status > progress { max-width: 220px; }
         .ms-gallery-overlay .ms-album-preview-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
         .ms-gallery-overlay .ms-album-preview-action {
             color: var(--ms-text);
@@ -4730,16 +4739,17 @@ export const LAUNCHER_CSS = String.raw`
             margin-block-start: 0;
         }
         .ms-open-in-gallery--unfurl {
-            margin-inline-start: 0.4em;
+            margin-inline-start: 0;
             margin-block-start: 0;
-            height: 1.5em !important;
+            height: 32px !important;
             min-height: 0 !important;
-            padding: 0 0.5em;
-            font-size: 0.78em;
+            padding: 0 10px !important;
+            font-size: 11px;
             position: relative !important;
             z-index: 4 !important;
             pointer-events: auto !important;
             touch-action: manipulation;
+            white-space: nowrap;
             isolation: isolate;
         }
         .ms-open-in-gallery-host {

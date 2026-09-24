@@ -468,13 +468,7 @@ function showStageNotice(wrap, text, progress) {
         }
         const txt = pill.querySelector('.ms-resolve-text');
         if (txt) txt.textContent = text;
-        pill.classList.toggle('ms-stage-notice-progress', !!progress);
-        let track = pill.querySelector('progress');
-        if (progress && !track) {
-            track = document.createElement('progress');
-            track.setAttribute('aria-label', 'Media loading');
-            pill.appendChild(track);
-        } else if (!progress && track) track.remove();
+        setIndeterminateProgress(pill, !!progress, 'Media loading');
     }
 
 function hideStageNotice(wrap) {
@@ -482,6 +476,16 @@ function hideStageNotice(wrap) {
         const pill = wrap.querySelector('.ms-stage-notice');
         if (pill) pill.remove();
     }
+
+function setIndeterminateProgress(container, visible, label) {
+    container.classList.toggle('ms-stage-notice-progress', visible);
+    let track = container.querySelector('progress');
+    if (visible && !track) {
+        track = document.createElement('progress');
+        track.setAttribute('aria-label', label);
+        container.appendChild(track);
+    } else if (!visible && track) track.remove();
+}
 
 function showGalleryEndNotice() {
         const now = Date.now();
@@ -522,6 +526,10 @@ function showLoadingOverlay(mainText, subText) {
         overlay.querySelector('.ms-loading-main').textContent = mainText || 'Loading gallery...';
         overlay.querySelector('.ms-loading-sub').textContent = subText || '';
         overlay.style.display = 'flex';
+        clearTimeout(overlay._msProgressTimer);
+        overlay._msProgressTimer = setTimeout(() => {
+            if (overlay.style.display !== 'none') setIndeterminateProgress(overlay, true, 'Gallery loading');
+        }, 1200);
     }
 
 function updateLoadingOverlay(mainText, subText) {
@@ -535,7 +543,11 @@ function updateLoadingOverlay(mainText, subText) {
 
 function hideLoadingOverlay() {
         const overlay = document.getElementById('ms-loading-overlay');
-        if (overlay) overlay.style.display = 'none';
+        if (overlay) {
+            clearTimeout(overlay._msProgressTimer);
+            overlay.style.display = 'none';
+            setIndeterminateProgress(overlay, false, 'Gallery loading');
+        }
     }
 
 function ensureOverlay() {
@@ -3933,8 +3945,7 @@ function mountOpenInGalleryButton(host, btn) {
 function createOpenInGalleryButton(startNode, variant) {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'ms-open-in-gallery' + (variant ? ' ms-open-in-gallery--' + variant : '') +
-            (variant === 'unfurl' ? ' fauxBlockLink-link' : '');
+        btn.className = 'ms-open-in-gallery' + (variant ? ' ms-open-in-gallery--' + variant : '');
         btn.setAttribute('aria-label', 'Open in Gallery');
         btn.innerHTML = openInGalleryButtonHtml();
         protectHostControl(btn,true);
@@ -3947,6 +3958,10 @@ function createOpenInGalleryButton(startNode, variant) {
         btn.style.setProperty('min-height', '0', 'important');
         btn.style.setProperty('border-radius', '999px', 'important');
         btn.style.setProperty('pointer-events', 'auto', 'important');
+        if (variant === 'unfurl') {
+            btn.style.setProperty('height', '32px', 'important');
+            btn.style.setProperty('border-radius', '8px', 'important');
+        }
         btn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -4026,11 +4041,20 @@ function renderAlbumPreview(wrap, item, token) {
         meta.textContent = 'Loading album details…';
         status.hidden = cursor != null;
         status.textContent = folderRef ? 'Loading folder…' : 'Loading album…';
+        const progressTimer = setTimeout(() => {
+            if (alive() && sequence === loadSequence && !status.hidden) {
+                setIndeterminateProgress(status, true, 'Album loading');
+            }
+        }, 1200);
         addAll.disabled = true;
         more.disabled = true;
         try {
             const preview = await bridge.loadAlbumPreview(item, folderRef, cursor);
+            clearTimeout(progressTimer);
             if (!alive() || sequence !== loadSequence) return;
+            if (!folderRef && preview && preview.singleFile && preview.entries.length === 1
+                && typeof bridge.replaceSingleAlbumItem === 'function'
+                && bridge.replaceSingleAlbumItem(item, preview.entries[0])) return;
             const append = cursor != null && currentPreview && preview;
             currentPreview = append ? Object.assign({}, preview, { entries: currentPreview.entries.concat(preview.entries) }) : preview;
             title.textContent = preview && preview.title || item.galleryName || 'Album';
@@ -4052,6 +4076,7 @@ function renderAlbumPreview(wrap, item, token) {
                 bridge.addAlbumEntries(item, entries.filter(entry => entry.kind === 'file'), false);
             }
         } catch (error) {
+            clearTimeout(progressTimer);
             if (alive() && sequence === loadSequence) {
                 meta.textContent = 'Preview unavailable'; more.disabled = false;
                 if (!cursor) grid.replaceChildren();
@@ -4282,8 +4307,14 @@ function renderCurrent() {
 
             const loadingOverlay = globalThis.XGalleryCore.createResolveIndicator(document);
             wrap.appendChild(loadingOverlay);
+            const resolutionProgressTimer = setTimeout(() => {
+                if (token === bridge.state.renderToken && loadingOverlay.isConnected) {
+                    setIndeterminateProgress(loadingOverlay, true, 'Media resolution');
+                }
+            }, 1200);
 
             bridge.queueResolve(item.resolveUrl, item.expectedVideo).then((resolved) => {
+                clearTimeout(resolutionProgressTimer);
 
                 if (resolved === bridge.RESOLVE_CANCELLED) return;
                 let splicedExtras = false;
