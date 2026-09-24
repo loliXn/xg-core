@@ -2345,6 +2345,25 @@ export const OVERLAY_CSS = String.raw`
             pointer-events: none;
             box-shadow: var(--ms-shadow-sm);
         }
+        .ms-gallery-overlay .ms-stage-notice-progress {
+            min-width: min(240px, calc(100% - 32px));
+            flex-wrap: wrap;
+            box-sizing: border-box;
+        }
+        .ms-gallery-overlay .ms-stage-notice-progress > progress {
+            flex: 0 0 100%;
+            width: 100%;
+            height: 3px;
+            margin: 0;
+            border: 0;
+            border-radius: 999px;
+            overflow: hidden;
+            background: var(--ms-surface-3);
+            accent-color: var(--ms-accent);
+        }
+        .ms-gallery-overlay .ms-stage-notice-progress > progress::-webkit-progress-bar { background: var(--ms-surface-3); }
+        .ms-gallery-overlay .ms-stage-notice-progress > progress::-webkit-progress-value { background: var(--ms-accent); }
+        .ms-gallery-overlay .ms-stage-notice-progress > progress::-moz-progress-bar { background: var(--ms-accent); }
         .ms-resolve-spinner {
             width: 14px;
             height: 14px;

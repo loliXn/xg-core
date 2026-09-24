@@ -457,7 +457,7 @@ function paintTopbar(model) {
     if(isInfoPanelVisible())toggleTagsPanel(true);
     updateTopbarCompact();
 }
-function showStageNotice(wrap, text) {
+function showStageNotice(wrap, text, progress) {
         if (!wrap) return;
         let pill = wrap.querySelector('.ms-stage-notice');
         if (!pill) {
@@ -468,6 +468,13 @@ function showStageNotice(wrap, text) {
         }
         const txt = pill.querySelector('.ms-resolve-text');
         if (txt) txt.textContent = text;
+        pill.classList.toggle('ms-stage-notice-progress', !!progress);
+        let track = pill.querySelector('progress');
+        if (progress && !track) {
+            track = document.createElement('progress');
+            track.setAttribute('aria-label', 'Media loading');
+            pill.appendChild(track);
+        } else if (!progress && track) track.remove();
     }
 
 function hideStageNotice(wrap) {
@@ -3576,7 +3583,7 @@ function noteStageFailure(url, detail) {
     if (gate) gate.noteResult(url, detail || { timeout: true, status: 0 });
 }
 
-const STAGE_STALL_NOTICE_MS = 8000;
+const STAGE_STALL_NOTICE_MS = 1200;
 // Long enough that a host which is merely slow to send its first byte is not
 // interrupted: restarting resets the download, and a restart loop on a slow
 // host would be a video that never arrives at all.
@@ -3598,6 +3605,7 @@ function watchStageMedia(options) {
     const isReady = options.isReady || (() => element.readyState >= 2);
     // Dropped with the rest of this render's listeners when the element is reused.
     const listen = options.signal ? { signal: options.signal } : undefined;
+    const startedAt = Date.now();
     let lastProgressAt = Date.now();
     let noticed = false;
     let retries = 0;
@@ -3625,9 +3633,9 @@ function watchStageMedia(options) {
         // The notice alone: the gate has already narrowed everything else to
         // a width the stage tolerates, and cancelling the thumbnails in flight
         // here only made them start over.
-        if (!noticed && idle >= STAGE_STALL_NOTICE_MS) {
+        if (!noticed && Date.now() - startedAt >= STAGE_STALL_NOTICE_MS) {
             noticed = true;
-            showStageNotice(wrap, 'Still loading\u2026');
+            showStageNotice(wrap, 'Loading video\u2026', true);
         }
         if (idle >= (options.recoveryStallMs || STAGE_STALL_RETRY_MS)) {
             lastProgressAt = Date.now();
@@ -3635,14 +3643,14 @@ function watchStageMedia(options) {
             // still answer, and an error stage for a file that is merely slow
             // would be wrong; a real failure fires the element's own error.
             if (retries >= STAGE_STALL_MAX_RETRIES) {
-                showStageNotice(wrap, 'Still loading - the host is slow to answer…');
+                showStageNotice(wrap, 'Still loading - the host is slow to answer…', true);
                 stop(true);
                 return;
             }
             retries += 1;
             noteStageFailure(options.url, { timeout: true, status: 0, attempt: retries });
             yieldNetworkToStage();
-            showStageNotice(wrap, 'Still loading - trying again\u2026');
+            showStageNotice(wrap, 'Still loading - trying again\u2026', true);
             if (typeof options.onRestart === 'function') options.onRestart(retries);
         }
     }, 1000);
@@ -4338,7 +4346,11 @@ function renderCurrent() {
 
         if (item.type === 'img') {
             const thumbSrc = item.thumbSrc || '';
-            if (bridge.isItemGif(item)) showStageNotice(wrap, 'Loading GIF...');
+            const imageProgressTimer = setTimeout(() => {
+                if (token === bridge.state.renderToken && wrap.isConnected) {
+                    showStageNotice(wrap, bridge.isItemGif(item) ? 'Loading GIF…' : 'Loading image…', true);
+                }
+            }, 1200);
 
             const candidates = [item.src];
             if (Array.isArray(item.altSrcs)) {
@@ -4443,6 +4455,7 @@ function renderCurrent() {
 
             const showLoadedImage = (img, winnerSrc) => {
                 if (token !== bridge.state.renderToken) return;
+                clearTimeout(imageProgressTimer);
                 if (winnerSrc && winnerSrc !== item.src && winnerSrc !== wrappedSrc) {
                     item.src = winnerSrc;
                 }
@@ -4519,6 +4532,7 @@ function renderCurrent() {
                                 if (idx + 1 < candidates.length) {
                                     tryCandidate(idx + 1, 0);
                                 } else {
+                                    clearTimeout(imageProgressTimer);
                                     hideStageNotice(wrap);
                                     setTopbarLoading(false);
                                     setStageFetching(false);
@@ -4723,6 +4737,7 @@ function renderCurrent() {
                     item._playbackRecoveryTried = true;
                     video._msRecovering = true;
                     if (stallWatch) stallWatch.stop(false);
+                    hideStageNotice(wrap);
                     const controller = new AbortController();
                     activePlaybackAbort = controller;
                     try { video.pause(); video.removeAttribute('src'); video.load(); } catch (e) { }
