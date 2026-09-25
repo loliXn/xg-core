@@ -3650,9 +3650,37 @@ export const OVERLAY_CSS = String.raw`
             gap: 12px;
             min-width: 0;
         }
-        .ms-post-byline > .ms-info-user {
+        .ms-post-byline > .ms-info-user,
+        .ms-post-byline > .ms-post-who {
             min-width: 0;
         }
+        .ms-post-who {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+        /* A compact ghost beside the name: outline at rest, accent-tinted once
+           the account is followed, quiet while a request is out. */
+        .ms-follow-btn {
+            flex: none;
+            height: 24px;
+            padding: 0 10px;
+            border: 1px solid var(--ms-line);
+            border-radius: 8px;
+            background: transparent;
+            color: var(--ms-text-2);
+            font: 500 11px/1 var(--ms-font-ui);
+            letter-spacing: .04em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: background-color 150ms var(--ms-ease), color 150ms var(--ms-ease), border-color 150ms var(--ms-ease);
+        }
+        .ms-follow-btn:hover { background: var(--ms-hover); color: var(--ms-text); }
+        .ms-follow-btn.active { color: var(--ms-accent); background: var(--ms-accent-tint); border-color: var(--ms-accent-line); }
+        .ms-follow-btn.active:hover { background: var(--ms-accent-tint-strong); }
+        .ms-follow-btn:disabled { opacity: .55; cursor: default; }
+        .ms-follow-btn:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: 2px; }
         .ms-post-byline .ms-info-desc-username {
             overflow: hidden;
             text-overflow: ellipsis;

@@ -116,7 +116,30 @@ export function renderPostPanel(options) {
         // Read like a message header: who, when, and where it came from.
         const head = panelElement(doc, 'div', 'ms-info-posthead');
         const byline = panelElement(doc, 'div', 'ms-post-byline');
-        byline.append(user(info.author || {}));
+        const who = panelElement(doc, 'div', 'ms-post-who');
+        who.append(user(info.author || {}));
+        if (model.follow && model.follow.available) {
+            const follow = model.follow;
+            const button = panelElement(doc, 'button', 'ms-follow-btn');
+            button.type = 'button';
+            const paint = (state) => {
+                const following = state.state === 'following';
+                button.textContent = state.pending ? (following ? 'Unfollowing\u2026' : 'Following\u2026') : (following ? 'Following' : 'Follow');
+                button.classList.toggle('active', following);
+                button.disabled = !!state.pending || state.state === 'unknown';
+                button.title = state.title || (state.state === 'unknown' ? 'Follow state not readable here'
+                    : (following ? 'Unfollow ' + (follow.name || '') : 'Follow ' + (follow.name || '')));
+                button.setAttribute('aria-pressed', String(following));
+            };
+            paint(follow);
+            button.addEventListener('click', (event) => {
+                event.stopPropagation();
+                if (button.disabled || typeof follow.run !== 'function') return;
+                follow.run(paint);
+            });
+            who.append(button);
+        }
+        byline.append(who);
         const date = panelElement(doc, 'span', 'ms-info-postmeta', info.time || (model.reserveHeader ? '\u00a0' : ''));
         if (info.time) date.title = info.time;
         byline.append(date);

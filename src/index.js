@@ -12,6 +12,20 @@ export {
 export { GalleryController } from './controller.js';
 export { inspectImageFormat } from './media-format.js';
 export {
+    PLACEHOLDER_DATA_URI_MAX,
+    ensureHttpsUrl,
+    absoluteUrl,
+    hostOfUrl,
+    isPlaceholderUrl,
+    mediaThumbExtension,
+    isVideoExt,
+    isVideoThumbSource,
+    isImageThumbSource,
+    inferMediaExt,
+    htmlLooksLikeCloudflare,
+    unwrapProxiedUrl
+} from './media-url.js';
+export {
     GOOGLE_DRIVE_FOLDER_MIME,
     googleDriveFolderId,
     googleDriveFileId,
