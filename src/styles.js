@@ -72,13 +72,41 @@ export const OVERLAY_CSS = String.raw`
             font-size: 12px;
             opacity: 0.8;
         }
-        #ms-loading-overlay > progress {
+        #ms-loading-overlay > .ms-indeterminate-track {
             width: min(240px, calc(100vw - 48px));
-            height: 4px;
             margin-top: 16px;
-            border: 0;
+        }
+        #ms-loading-overlay > .ms-indeterminate-track,
+        .ms-gallery-overlay .ms-indeterminate-track {
+            position: relative;
+            display: block;
+            height: 4px;
+            overflow: hidden;
             border-radius: 999px;
-            accent-color: var(--ms-accent);
+            background: var(--ms-surface-3);
+        }
+        #ms-loading-overlay > .ms-indeterminate-track::before,
+        .ms-gallery-overlay .ms-indeterminate-track::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(90deg, transparent, var(--ms-accent) 42%, var(--ms-accent) 58%, transparent);
+            animation: ms-indeterminate-move 1.45s linear infinite;
+        }
+        @keyframes ms-indeterminate-move {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(100%); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            #ms-loading-overlay > .ms-indeterminate-track::before,
+            .ms-gallery-overlay .ms-indeterminate-track::before { animation: none; transform: none; opacity: .65; }
+        }
+        html[data-xg-minimal-motion="1"] #ms-loading-overlay > .ms-indeterminate-track::before,
+        html[data-xg-minimal-motion="1"] .ms-gallery-overlay .ms-indeterminate-track::before {
+            animation: none;
+            transform: none;
+            opacity: .65;
         }
 
         .ms-gallery-overlay {
@@ -846,7 +874,26 @@ export const OVERLAY_CSS = String.raw`
             font: 13px/1.5 var(--ms-font-ui, system-ui, sans-serif);
         }
         .ms-gallery-overlay .ms-album-preview-status[hidden] { display: none; }
-        .ms-gallery-overlay .ms-album-preview-status > progress { max-width: 220px; }
+        .ms-gallery-overlay .ms-album-preview-status > .ms-indeterminate-track { max-width: 220px; }
+        .ms-gallery-overlay .ms-album-preview-unlock {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 8px;
+            width: 100%;
+        }
+        .ms-gallery-overlay .ms-album-preview-unlock input {
+            width: min(220px, 100%);
+            box-sizing: border-box;
+            padding: 8px 10px;
+            border: 1px solid var(--ms-line);
+            border-radius: 8px;
+            background: var(--ms-surface-1);
+            color: var(--ms-text);
+            font: 12px/1.4 var(--ms-font-ui, system-ui, sans-serif);
+        }
+        .ms-gallery-overlay .ms-album-preview-unlock input:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: 2px; }
         .ms-gallery-overlay .ms-album-preview-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
         .ms-gallery-overlay .ms-album-preview-action {
             color: var(--ms-text);
@@ -2359,20 +2406,11 @@ export const OVERLAY_CSS = String.raw`
             flex-wrap: wrap;
             box-sizing: border-box;
         }
-        .ms-gallery-overlay .ms-stage-notice-progress > progress {
+        .ms-gallery-overlay .ms-stage-notice-progress > .ms-indeterminate-track {
             flex: 0 0 100%;
             width: 100%;
-            height: 3px;
             margin: 0;
-            border: 0;
-            border-radius: 999px;
-            overflow: hidden;
-            background: var(--ms-surface-3);
-            accent-color: var(--ms-accent);
         }
-        .ms-gallery-overlay .ms-stage-notice-progress > progress::-webkit-progress-bar { background: var(--ms-surface-3); }
-        .ms-gallery-overlay .ms-stage-notice-progress > progress::-webkit-progress-value { background: var(--ms-accent); }
-        .ms-gallery-overlay .ms-stage-notice-progress > progress::-moz-progress-bar { background: var(--ms-accent); }
         .ms-resolve-spinner {
             width: 14px;
             height: 14px;

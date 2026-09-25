@@ -479,10 +479,13 @@ function hideStageNotice(wrap) {
 
 function setIndeterminateProgress(container, visible, label) {
     container.classList.toggle('ms-stage-notice-progress', visible);
-    let track = container.querySelector('progress');
+    let track = container.querySelector('.ms-indeterminate-track');
     if (visible && !track) {
-        track = document.createElement('progress');
+        track = document.createElement('span');
+        track.className = 'ms-indeterminate-track';
+        track.setAttribute('role', 'progressbar');
         track.setAttribute('aria-label', label);
+        track.setAttribute('aria-valuetext', 'Loading');
         container.appendChild(track);
     } else if (!visible && track) track.remove();
 }
@@ -663,6 +666,25 @@ function ensureOverlay() {
         const mediaWrap = overlay.querySelector('.ms-media-wrap');
         if (mediaWrap) {
             mediaWrap.addEventListener('wheel', (e) => {
+                const album = e.target && e.target.closest('.ms-album-preview');
+                if (album) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const body = album.querySelector('.ms-album-preview-body');
+                    let amount = e.deltaY;
+                    if (e.deltaMode === 1) amount *= 16;
+                    else if (e.deltaMode === 2) amount *= body ? body.clientHeight : window.innerHeight;
+                    const maxScroll = body ? Math.max(0, body.scrollHeight - body.clientHeight) : 0;
+                    const canScroll = body && (amount > 0 ? body.scrollTop < maxScroll - 1 : body.scrollTop > 1);
+                    if (canScroll) {
+                        body.scrollTop = Math.max(0, Math.min(maxScroll, body.scrollTop + amount));
+                        bridge.state.wheelDeltaCarry = 0;
+                        return;
+                    }
+                    const direction = getWheelNavigationDirection(e);
+                    if (direction) navigateFromWheel(direction);
+                    return;
+                }
                 e.preventDefault();
                 e.stopPropagation();
                 if (bridge.panWheelScroll && bridge.state.pan && bridge.state.pan.active) {
@@ -3979,6 +4001,7 @@ function renderAlbumPreview(wrap, item, token) {
     albumBrowserState.set(item, saved);
     const card = document.createElement('section');
     card.className = 'ms-album-preview';
+    card.addEventListener('click', event => event.stopPropagation());
     const header = document.createElement('div');
     header.className = 'ms-album-preview-head';
     const eyebrow = document.createElement('span');
@@ -4078,10 +4101,53 @@ function renderAlbumPreview(wrap, item, token) {
         } catch (error) {
             clearTimeout(progressTimer);
             if (alive() && sequence === loadSequence) {
-                meta.textContent = 'Preview unavailable'; more.disabled = false;
+                meta.textContent = error && error.code === 'passwordRequired' ? 'Password required' : 'Preview unavailable';
+                more.hidden = true;
+                more.disabled = false;
                 if (!cursor) grid.replaceChildren();
                 status.hidden = false;
-                status.textContent = 'Could not load this album. Open the original page to try there.';
+                if (error && error.code === 'passwordRequired' && typeof bridge.unlockAlbum === 'function') {
+                    status.textContent = '';
+                    const copy = document.createElement('span');
+                    copy.textContent = item._gofileUnlockAttempted
+                        ? 'Incorrect password. Try again.' : 'This content is password protected';
+                    const form = document.createElement('form');
+                    form.className = 'ms-album-preview-unlock';
+                    const input = document.createElement('input');
+                    input.type = 'password';
+                    input.required = true;
+                    input.autocomplete = 'off';
+                    input.placeholder = 'Password';
+                    input.setAttribute('aria-label', 'Album password');
+                    const submit = document.createElement('button');
+                    submit.type = 'submit';
+                    submit.className = 'ms-album-preview-action';
+                    submit.textContent = 'Unlock';
+                    form.append(input, submit);
+                    form.addEventListener('submit', async event => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        if (!alive()) return;
+                        const password = input.value;
+                        input.value = '';
+                        submit.disabled = true;
+                        try {
+                            await bridge.unlockAlbum(item, folderRef, password);
+                            if (alive()) load(folderRef, cursor);
+                        } catch (failure) {
+                            if (alive()) {
+                                copy.textContent = 'Could not unlock this content';
+                                submit.disabled = false;
+                                input.focus();
+                            }
+                        }
+                    });
+                    status.append(copy, form);
+                } else {
+                    status.textContent = error && error.code === 'notFound'
+                        ? 'This content does not exist. It may have been removed or the link is incorrect.'
+                        : 'Could not load this album. Open the original page to try there.';
+                }
             }
         }
     };
