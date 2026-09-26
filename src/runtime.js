@@ -479,15 +479,40 @@ function hideStageNotice(wrap) {
 
 function setIndeterminateProgress(container, visible, label) {
     container.classList.toggle('ms-stage-notice-progress', visible);
-    let track = container.querySelector('.ms-indeterminate-track');
-    if (visible && !track) {
-        track = document.createElement('span');
-        track.className = 'ms-indeterminate-track';
-        track.setAttribute('role', 'progressbar');
-        track.setAttribute('aria-label', label);
-        track.setAttribute('aria-valuetext', 'Loading');
-        container.appendChild(track);
-    } else if (!visible && track) track.remove();
+    if (container._msProgressTimer) clearTimeout(container._msProgressTimer);
+    container._msProgressTimer = null;
+    container.querySelectorAll('.ms-indeterminate-track, .ms-measured-progress, .ms-progress-metric').forEach(el => el.remove());
+    if (!visible) { delete container._msProgressStartedAt; return; }
+    const startedAt = container._msProgressStartedAt || Date.now();
+    container._msProgressStartedAt = startedAt;
+    const metric = document.createElement('span');
+    metric.className = 'ms-progress-metric';
+    container.appendChild(metric);
+    const tick = () => {
+        if (!container.isConnected || !metric.isConnected) { container._msProgressTimer = null; return; }
+        metric.textContent = label + ' · ' + Math.floor((Date.now() - startedAt) / 1000) + 's';
+        container._msProgressTimer = setTimeout(tick, 1000);
+    };
+    metric.textContent = label + ' · 0s';
+    container._msProgressTimer = setTimeout(tick, 1000);
+}
+
+function setMeasuredProgress(container, fraction, text) {
+    if (container._msProgressTimer) clearTimeout(container._msProgressTimer);
+    container._msProgressTimer = null;
+    container.classList.add('ms-stage-notice-progress');
+    let progress = container.querySelector('.ms-measured-progress');
+    if (!progress) {
+        progress = document.createElement('progress');
+        progress.className = 'ms-measured-progress';
+        progress.max = 1;
+        progress.setAttribute('aria-label', 'Video buffered');
+        container.appendChild(progress);
+    }
+    progress.value = Math.max(0, Math.min(1, fraction));
+    let metric = container.querySelector('.ms-progress-metric');
+    if (!metric) { metric = document.createElement('span'); metric.className = 'ms-progress-metric'; container.appendChild(metric); }
+    metric.textContent = text;
 }
 
 function showGalleryEndNotice() {
@@ -1218,6 +1243,7 @@ function syncVerticalFitMediaBox(media) {
         const target = (media && wrap.contains(media) ? media : null) || (box && box.querySelector('img.ms-media, video.ms-media')) ||
             (wrap && wrap.querySelector('img.ms-media, video.ms-media'));
         if (!box) return;
+        box.style.removeProperty('left');
         if (!target || target.classList.contains('ms-pannable')) {
             box.style.removeProperty('width');
             box.style.removeProperty('height');
@@ -1234,6 +1260,13 @@ function syncVerticalFitMediaBox(media) {
         const scale = Math.min(wrapWidth / naturalWidth, wrapHeight / naturalHeight);
         box.style.width = Math.max(1, Math.round(naturalWidth * scale)) + 'px';
         box.style.height = Math.max(1, Math.round(naturalHeight * scale)) + 'px';
+        const layout = bridge.state.overlay.dataset.infoLayout;
+        if (naturalHeight > naturalWidth && /^edge-/.test(layout || '') && isInfoPanelVisible()) {
+            const panel = bridge.state.overlay.querySelector('.ms-tags-overlay.active');
+            const slack = Math.max(0, (wrapWidth - naturalWidth * scale) / 2 - 16);
+            const shift = Math.min(slack, ((panel && panel.offsetWidth) || 0) / 2);
+            box.style.left = (layout === 'edge-left' ? -shift : shift) + 'px';
+        }
         target.style.removeProperty('width');
         target.style.removeProperty('height');
         syncCaptionBounds();
@@ -3671,6 +3704,14 @@ function watchStageMedia(options) {
             noticed = true;
             showStageNotice(wrap, 'Loading video\u2026', true);
         }
+        if (noticed && Number.isFinite(element.duration) && element.duration > 0) {
+            let seconds = 0;
+            for (let i = 0; i < element.buffered.length; i++) seconds += element.buffered.end(i) - element.buffered.start(i);
+            const fraction = Math.min(1, seconds / element.duration);
+            const notice = wrap.querySelector('.ms-stage-notice');
+            if (notice) setMeasuredProgress(notice, fraction, 'Buffered ' + seconds.toFixed(1) + ' / '
+                + element.duration.toFixed(1) + 's · ' + Math.floor(fraction * 100) + '%');
+        }
         if (idle >= (options.recoveryStallMs || STAGE_STALL_RETRY_MS)) {
             lastProgressAt = Date.now();
             // Out of restarts: leave the element to keep waiting. The host may
@@ -4061,6 +4102,7 @@ function renderAlbumPreview(wrap, item, token) {
     const alive = () => card.isConnected && bridge.state.renderToken === token;
     const load = async (folderRef, cursor = null) => {
         const sequence = ++loadSequence;
+        setIndeterminateProgress(status, false, 'Album loading');
         meta.textContent = 'Loading album details…';
         status.hidden = cursor != null;
         status.textContent = folderRef ? 'Loading folder…' : 'Loading album…';
@@ -4075,6 +4117,7 @@ function renderAlbumPreview(wrap, item, token) {
             const preview = await bridge.loadAlbumPreview(item, folderRef, cursor);
             clearTimeout(progressTimer);
             if (!alive() || sequence !== loadSequence) return;
+            setIndeterminateProgress(status, false, 'Album loading');
             if (!folderRef && preview && preview.singleFile && preview.entries.length === 1
                 && typeof bridge.replaceSingleAlbumItem === 'function'
                 && bridge.replaceSingleAlbumItem(item, preview.entries[0])) return;
@@ -4086,6 +4129,13 @@ function renderAlbumPreview(wrap, item, token) {
             meta.textContent = preview ? (count > entries.length
                 ? entries.length + ' shown of ' + count + ' items'
                 : count + (count === 1 ? ' item' : ' items')) : 'Preview unavailable';
+            if (preview) {
+                const images = entries.filter(entry => entry.kind === 'file' && entry.mediaType !== 'video').length;
+                const videos = entries.filter(entry => entry.kind === 'file' && entry.mediaType === 'video').length;
+                const partial = !!preview.nextCursor || count > entries.length;
+                meta.textContent += ' · ' + images + ' images · ' + videos + ' videos · '
+                    + (images + videos) + ' media ' + (partial ? 'shown' : 'total');
+            }
             path.textContent = folderNames.length ? 'Album / ' + folderNames.join(' / ') : 'Browse files';
             back.hidden = !folderStack.length;
             addAll.disabled = !entries.some(entry => entry.kind === 'file');
@@ -4101,12 +4151,31 @@ function renderAlbumPreview(wrap, item, token) {
         } catch (error) {
             clearTimeout(progressTimer);
             if (alive() && sequence === loadSequence) {
+                setIndeterminateProgress(status, false, 'Album loading');
                 meta.textContent = error && error.code === 'passwordRequired' ? 'Password required' : 'Preview unavailable';
                 more.hidden = true;
                 more.disabled = false;
                 if (!cursor) grid.replaceChildren();
                 status.hidden = false;
-                if (error && error.code === 'passwordRequired' && typeof bridge.unlockAlbum === 'function') {
+                if (error && error.code === 'rateLimited') {
+                    meta.textContent = 'Temporarily rate limited';
+                    const copy = document.createElement('span');
+                    copy.textContent = 'Slow down a moment. The service is rate-limiting requests from this device.';
+                    const retry = document.createElement('button');
+                    retry.type = 'button';
+                    retry.className = 'ms-album-preview-action';
+                    const until = Number(error.retryAt) || Date.now() + 10000;
+                    const tick = () => {
+                        if (!alive() || sequence !== loadSequence) return;
+                        const remaining = Math.max(0, Math.ceil((until - Date.now()) / 1000));
+                        retry.disabled = remaining > 0;
+                        retry.textContent = remaining ? 'Retry in ' + remaining + 's' : 'Retry';
+                        if (remaining) setTimeout(tick, 1000);
+                    };
+                    retry.addEventListener('click', event => { event.stopPropagation(); load(folderRef, cursor); });
+                    status.replaceChildren(copy, retry);
+                    tick();
+                } else if (error && error.code === 'passwordRequired' && typeof bridge.unlockAlbum === 'function') {
                     status.textContent = '';
                     const copy = document.createElement('span');
                     copy.textContent = item._gofileUnlockAttempted

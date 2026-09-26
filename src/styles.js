@@ -861,18 +861,29 @@ export const OVERLAY_CSS = String.raw`
             font-variant-numeric: tabular-nums;
         }
         .ms-gallery-overlay .ms-album-preview-status {
-            display: grid;
-            place-items: center;
-            min-height: 160px;
-            margin-bottom: 12px;
-            border: 1px solid var(--ms-hairline);
-            border-radius: 10px;
-            background: var(--ms-surface-2);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            min-height: min(320px, 100%);
+            width: 100%;
+            border: 0;
+            border-radius: 0;
+            background: transparent;
             color: var(--ms-text-3);
             text-align: center;
             padding: 16px;
             font: 13px/1.5 var(--ms-font-ui, system-ui, sans-serif);
+            box-sizing: border-box;
         }
+        .ms-gallery-overlay .ms-album-preview-body:has(> .ms-album-preview-status:not([hidden])):not(:has(.ms-album-preview-tile)) {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .ms-gallery-overlay .ms-album-preview-body > .ms-album-preview-status.ms-stage-notice-progress { min-width: 0; }
         .ms-gallery-overlay .ms-album-preview-status[hidden] { display: none; }
         .ms-gallery-overlay .ms-album-preview-status > .ms-indeterminate-track { max-width: 220px; }
         .ms-gallery-overlay .ms-album-preview-unlock {
@@ -2406,6 +2417,23 @@ export const OVERLAY_CSS = String.raw`
             flex-wrap: wrap;
             box-sizing: border-box;
         }
+        .ms-progress-metric {
+            color: var(--ms-text-3);
+            font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-variant-numeric: tabular-nums;
+        }
+        .ms-resolve-loading > .ms-progress-metric { flex-basis: 100%; text-align: center; }
+        .ms-gallery-overlay .ms-measured-progress {
+            flex: 0 0 100%;
+            width: 100%;
+            height: 4px;
+            appearance: none;
+            border: 0;
+            accent-color: var(--ms-accent);
+        }
+        .ms-measured-progress::-webkit-progress-bar { background: var(--ms-surface-3); border-radius: 4px; }
+        .ms-measured-progress::-webkit-progress-value { background: var(--ms-accent); border-radius: 4px; }
+        .ms-measured-progress::-moz-progress-bar { background: var(--ms-accent); border-radius: 4px; }
         .ms-gallery-overlay .ms-stage-notice-progress > .ms-indeterminate-track {
             flex: 0 0 100%;
             width: 100%;
