@@ -2423,13 +2423,18 @@ export const OVERLAY_CSS = String.raw`
             font-variant-numeric: tabular-nums;
         }
         .ms-resolve-loading > .ms-progress-metric { flex-basis: 100%; text-align: center; }
-        .ms-gallery-overlay .ms-measured-progress {
+        .ms-gallery-overlay .ms-measured-progress,
+        #ms-loading-overlay > .ms-measured-progress {
             flex: 0 0 100%;
             width: 100%;
             height: 4px;
             appearance: none;
             border: 0;
             accent-color: var(--ms-accent);
+        }
+        #ms-loading-overlay > .ms-measured-progress {
+            width: min(240px, calc(100vw - 48px));
+            margin-top: 16px;
         }
         .ms-measured-progress::-webkit-progress-bar { background: var(--ms-surface-3); border-radius: 4px; }
         .ms-measured-progress::-webkit-progress-value { background: var(--ms-accent); border-radius: 4px; }

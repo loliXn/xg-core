@@ -147,6 +147,10 @@ function finishOpen() {
 }
 function clearViewerMedia() {
     releasePlayback();
+    if (bridge.state.activeStageImageController) {
+        bridge.state.activeStageImageController.abort();
+        bridge.state.activeStageImageController = null;
+    }
     const overlay=bridge.state.overlay;if(!overlay)return;
     ++bridge.state.renderToken;
     clearFullscreenIdleTimer();stopThumbTrackAnimation();cancelFlyGhost();
@@ -482,22 +486,14 @@ function setIndeterminateProgress(container, visible, label) {
     if (container._msProgressTimer) clearTimeout(container._msProgressTimer);
     container._msProgressTimer = null;
     container.querySelectorAll('.ms-indeterminate-track, .ms-measured-progress, .ms-progress-metric').forEach(el => el.remove());
-    if (!visible) { delete container._msProgressStartedAt; return; }
-    const startedAt = container._msProgressStartedAt || Date.now();
-    container._msProgressStartedAt = startedAt;
+    if (!visible) return;
     const metric = document.createElement('span');
     metric.className = 'ms-progress-metric';
+    metric.textContent = label;
     container.appendChild(metric);
-    const tick = () => {
-        if (!container.isConnected || !metric.isConnected) { container._msProgressTimer = null; return; }
-        metric.textContent = label + ' · ' + Math.floor((Date.now() - startedAt) / 1000) + 's';
-        container._msProgressTimer = setTimeout(tick, 1000);
-    };
-    metric.textContent = label + ' · 0s';
-    container._msProgressTimer = setTimeout(tick, 1000);
 }
 
-function setMeasuredProgress(container, fraction, text) {
+function setMeasuredProgress(container, fraction, text, measure = 'Progress') {
     if (container._msProgressTimer) clearTimeout(container._msProgressTimer);
     container._msProgressTimer = null;
     container.classList.add('ms-stage-notice-progress');
@@ -506,9 +502,9 @@ function setMeasuredProgress(container, fraction, text) {
         progress = document.createElement('progress');
         progress.className = 'ms-measured-progress';
         progress.max = 1;
-        progress.setAttribute('aria-label', 'Video buffered');
         container.appendChild(progress);
     }
+    progress.setAttribute('aria-label', measure);
     progress.value = Math.max(0, Math.min(1, fraction));
     let metric = container.querySelector('.ms-progress-metric');
     if (!metric) { metric = document.createElement('span'); metric.className = 'ms-progress-metric'; container.appendChild(metric); }
@@ -560,13 +556,19 @@ function showLoadingOverlay(mainText, subText) {
         }, 1200);
     }
 
-function updateLoadingOverlay(mainText, subText) {
+function updateLoadingOverlay(mainText, subText, progress) {
         const overlay = document.getElementById('ms-loading-overlay');
         if (!overlay || overlay.style.display === 'none') return;
         const main = overlay.querySelector('.ms-loading-main');
         const sub = overlay.querySelector('.ms-loading-sub');
         if (main && typeof mainText === 'string') main.textContent = mainText;
         if (sub && typeof subText === 'string') sub.textContent = subText;
+        if (progress && Number(progress.total) > 0) {
+            const done = Math.max(0, Math.min(Number(progress.done) || 0, Number(progress.total)));
+            const total = Number(progress.total);
+            setMeasuredProgress(overlay, done / total,
+                Math.floor(done / total * 100) + '% · ' + done + ' / ' + total + ' items', 'Gallery items resolved');
+        }
     }
 
 function hideLoadingOverlay() {
@@ -3709,8 +3711,8 @@ function watchStageMedia(options) {
             for (let i = 0; i < element.buffered.length; i++) seconds += element.buffered.end(i) - element.buffered.start(i);
             const fraction = Math.min(1, seconds / element.duration);
             const notice = wrap.querySelector('.ms-stage-notice');
-            if (notice) setMeasuredProgress(notice, fraction, 'Buffered ' + seconds.toFixed(1) + ' / '
-                + element.duration.toFixed(1) + 's · ' + Math.floor(fraction * 100) + '%');
+            if (notice) setMeasuredProgress(notice, fraction,
+                'Buffered ' + Math.floor(fraction * 100) + '%', 'Video buffered');
         }
         if (idle >= (options.recoveryStallMs || STAGE_STALL_RETRY_MS)) {
             lastProgressAt = Date.now();
@@ -4338,6 +4340,10 @@ function renderAlbumPreview(wrap, item, token) {
 function renderCurrent() {
         if (!bridge.state.overlay || !bridge.state.items.length) return;
         if (bridge.state.gridMode) return;
+        if (bridge.state.activeStageImageController) {
+            bridge.state.activeStageImageController.abort();
+            bridge.state.activeStageImageController = null;
+        }
         releasePlayback();
         bridge.syncCoreCurrent();
         // Let the current item paint before any host scroll/layout work starts.
@@ -4512,9 +4518,18 @@ function renderCurrent() {
 
         if (item.type === 'img') {
             const thumbSrc = item.thumbSrc || '';
+            let imageTransfer = null;
+            const imageController = new AbortController();
+            bridge.state.activeStageImageController = imageController;
+            let lastImageProgressPaint = 0;
             const imageProgressTimer = setTimeout(() => {
                 if (token === bridge.state.renderToken && wrap.isConnected) {
                     showStageNotice(wrap, bridge.isItemGif(item) ? 'Loading GIF…' : 'Loading image…', true);
+                    if (imageTransfer) {
+                        const notice = wrap.querySelector('.ms-stage-notice');
+                        if (notice) setMeasuredProgress(notice, imageTransfer.loaded / imageTransfer.total,
+                            'Image transfer ' + Math.floor(imageTransfer.loaded / imageTransfer.total * 100) + '%', 'Image transfer');
+                    }
                 }
             }, 1200);
 
@@ -4671,10 +4686,28 @@ function renderCurrent() {
             const MAX_TRANSIENT_RETRIES = 2;
             const tryCandidate = (idx, attempt) => {
                 if (token !== bridge.state.renderToken) return;
+                imageTransfer = null;
+                const pendingNotice = wrap.querySelector('.ms-stage-notice');
+                if (pendingNotice) setIndeterminateProgress(pendingNotice, true, 'Loading image');
                 const candidate = candidates[idx];
                 const startLoad = () => {
                     if (token !== bridge.state.renderToken) return;
-                    bridge.loadImageFully(candidate, 10000)
+                    bridge.loadImageFully(candidate, 10000, { signal: imageController.signal, onProgress: progress => {
+                        if (token !== bridge.state.renderToken) return;
+                        if (!progress || !(progress.totalBytes > 0)) {
+                            imageTransfer = null;
+                            const notice = wrap.querySelector('.ms-stage-notice');
+                            if (notice) setIndeterminateProgress(notice, true, 'Loading image');
+                            return;
+                        }
+                        imageTransfer = { loaded: Math.min(progress.loadedBytes, progress.totalBytes), total: progress.totalBytes };
+                        const now = Date.now();
+                        if (now - lastImageProgressPaint < 100 && imageTransfer.loaded < imageTransfer.total) return;
+                        lastImageProgressPaint = now;
+                        const notice = wrap.querySelector('.ms-stage-notice');
+                        if (notice) setMeasuredProgress(notice, imageTransfer.loaded / imageTransfer.total,
+                            'Image transfer ' + Math.floor(imageTransfer.loaded / imageTransfer.total * 100) + '%', 'Image transfer');
+                    } })
                         .then((img) => {
                             bridge.noteHostSuccess(candidate);
                             setStageFetching(false);
