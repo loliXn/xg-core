@@ -3786,6 +3786,39 @@ function prepareMediaWrap(wrap, item) {
         });
     }
 
+// Keep the already-painted preview above its decoded replacement, never above
+// an empty stage. This layer is noninteractive and owns no layout or media URL.
+function imageHandoff(wrap, previous) {
+        wrap.querySelectorAll('.ms-image-handoff').forEach(element => {
+            if (element._msFinishHandoff) element._msFinishHandoff();
+        });
+        if (!previous || !previous.complete || !previous.naturalWidth || prefersReducedMotion()
+            || typeof previous.animate !== 'function') return () => {};
+        const rect = previous.getBoundingClientRect();
+        const bounds = wrap.getBoundingClientRect();
+        if (!rect.width || !rect.height) return () => {};
+        return () => {
+            previous.className = 'ms-image-handoff';
+            previous.setAttribute('aria-hidden', 'true');
+            previous.style.cssText = 'position:absolute;pointer-events:none;object-fit:fill;max-width:none;max-height:none;margin:0;transform:none;z-index:4;'
+                + 'left:' + (rect.left - bounds.left - wrap.clientLeft + wrap.scrollLeft) + 'px;'
+                + 'top:' + (rect.top - bounds.top - wrap.clientTop + wrap.scrollTop) + 'px;'
+                + 'width:' + rect.width + 'px;height:' + rect.height + 'px;';
+            wrap.appendChild(previous);
+            const animation = previous.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 150, easing: 'ease-out' });
+            let timer;
+            const finish = () => {
+                clearTimeout(timer);
+                animation.cancel();
+                previous.remove();
+                previous._msFinishHandoff = null;
+            };
+            previous._msFinishHandoff = finish;
+            animation.onfinish = finish;
+            timer = setTimeout(finish, 180);
+        };
+    }
+
 // --- the stage's video elements -----------------------------------------------
 // Two <video> elements, made once and kept for as long as the page lives: one
 // on stage, one prefetching the neighbour, trading places as the user moves.
@@ -4444,7 +4477,7 @@ function renderCurrent() {
         else bridge.state.overlay.classList.remove('ms-iframe-nav-safe');
 
         if (item && item.needsResolve) {
-            if (item.thumbSrc && !bridge.isPlaceholderUrl(item.thumbSrc)) {
+            if (item.thumbSrc && !bridge.isPlaceholderUrl(item.thumbSrc) && !wrap.querySelector('img.ms-loading-thumb')) {
                 const validatePreview = typeof bridge.shouldValidateMediaUrl === 'function'
                     && bridge.shouldValidateMediaUrl(item.thumbSrc);
                 const thumbImg = globalThis.XGalleryCore.createLoadingPreview({
@@ -4632,23 +4665,29 @@ function renderCurrent() {
                         }
                         return;
                     }
-                    bridge.loadImageFully(upgrades[i])
-                        .then(() => {
+                    if (token !== bridge.state.renderToken || imageController.signal.aborted) return;
+                    bridge.loadImageFully(upgrades[i], 15000, { signal: imageController.signal })
+                        .then((readyImage) => {
+                            if (token !== bridge.state.renderToken || imageController.signal.aborted || !img.isConnected) return;
+                            const finishHandoff = imageHandoff(wrap, img);
+                            const pan = bridge.state.pan && bridge.state.pan.img === img ? bridge.state.pan : null;
+                            const v = pan && pan.view ? pan.view() : null;
+                            const zoomed = pan && pan.zoomed;
+                            const returnToFill = pan && pan.returnToFill;
+                            if (pan) disablePan();
                             item.src = upgrades[i];
                             item.upgradeSrcs = null;
                             setHd('max');
                             spinnerOff();
-                            if (token !== bridge.state.renderToken || !img.parentNode) return;
-                            img.addEventListener('load', () => {
-                                if (token !== bridge.state.renderToken) return;
-                                noteMediaDimensions(item, img);
-
-                                syncVerticalFitMediaBox(img);
-                                if (!bridge.state.pan || bridge.state.pan.img !== img) return;
-
-                                const zoomed = bridge.state.pan.zoomed;
-                                const returnToFill = bridge.state.pan.returnToFill;
-                                const v = bridge.state.pan.view ? bridge.state.pan.view() : null;
+                            img.replaceWith(readyImage);
+                            img = readyImage;
+                            img.addEventListener('click', clickEvent => {
+                                clickEvent.stopPropagation();
+                                handleImageZoomClick(wrap, img, item, clickEvent);
+                            });
+                            noteMediaDimensions(item, img);
+                            syncVerticalFitMediaBox(img);
+                            if (pan) {
                                 const wrapW = wrap.clientWidth;
                                 const wrapH = wrap.clientHeight;
                                 const cx = (v && v.dispW) ? (wrapW / 2 - v.x) / v.dispW : 0.5;
@@ -4666,10 +4705,12 @@ function renderCurrent() {
                                     initialY: wrapH / 2 - cy * newDispH,
                                     returnToFill: returnToFill
                                 });
-                            }, { once: true });
-                            img.src = bridge.wrapMediaUrl(upgrades[i]);
+                            }
+                            syncZoomSliderAvailability();
+                            updateMediaCaptionOverlay(item);
+                            finishHandoff();
                         })
-                        .catch(() => tryUpgrade(i + 1));
+                        .catch(() => { if (token === bridge.state.renderToken && !imageController.signal.aborted) tryUpgrade(i + 1); });
                 };
                 tryUpgrade(0);
             };
@@ -4682,6 +4723,7 @@ function renderCurrent() {
                 }
 
                 const box = ensureMediaBox(wrap);
+                const finishHandoff = imageHandoff(wrap, box.querySelector('img.ms-loading-thumb'));
                 box.querySelectorAll('video').forEach((element) => { if (element._msPooled) parkStageVideo(element); });
                 box.replaceChildren(img);
                 if (typeof bridge.trimMegaBlobs === 'function') bridge.trimMegaBlobs(item);
@@ -4720,6 +4762,7 @@ function renderCurrent() {
                     clickEvent.stopPropagation();
                     handleImageZoomClick(wrap, img, item, clickEvent);
                 });
+                finishHandoff();
                 startUpgrade(img);
             };
 

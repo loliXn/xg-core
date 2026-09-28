@@ -167,6 +167,12 @@ export function prepareMediaSlot(options) {
     const wrap = options.wrap;
     const item = options.item;
     if (!wrap) return false;
+    const sameItem = wrap._msStageItem === item;
+    wrap._msStageItem = item;
+    wrap.querySelectorAll('.ms-image-handoff').forEach(element => {
+        if (element._msFinishHandoff) element._msFinishHandoff();
+        else element.remove();
+    });
     // Retiring once avoids resetting a decoder here and then resetting it a
     // second time when the runtime replaces the old player and its listeners.
     const keepVideo = null;
@@ -203,13 +209,14 @@ export function prepareMediaSlot(options) {
         wrap.replaceChildren();
         return false;
     }
-    const keepStill = !!(item && item.type === 'img' && !item.needsResolve
-        && wrap.querySelector('img.ms-media:not(.ms-loading-thumb)'));
+    const keepPreview = sameItem && wrap.querySelector('img.ms-loading-thumb');
+    const keepStill = !!(item && item.type === 'img'
+        && (keepPreview || (!item.needsResolve && wrap.querySelector('img.ms-media:not(.ms-loading-thumb)'))));
     if (!keepStill) {
         wrap.replaceChildren();
         return false;
     }
-    wrap.querySelectorAll('img.ms-loading-thumb').forEach((element) => element.remove());
+    wrap.querySelectorAll('img.ms-loading-thumb').forEach((element) => { if (element !== keepPreview) element.remove(); });
     const keepBox = wrap.querySelector(':scope > .ms-media-box');
     Array.from(wrap.children).forEach((element) => { if (element !== keepBox) element.remove(); });
     if (keepBox) Array.from(keepBox.children).forEach((element, index) => { if (index > 0) element.remove(); });
