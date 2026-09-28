@@ -4445,13 +4445,16 @@ function renderCurrent() {
 
         if (item && item.needsResolve) {
             if (item.thumbSrc && !bridge.isPlaceholderUrl(item.thumbSrc)) {
+                const validatePreview = typeof bridge.shouldValidateMediaUrl === 'function'
+                    && bridge.shouldValidateMediaUrl(item.thumbSrc);
                 const thumbImg = globalThis.XGalleryCore.createLoadingPreview({
                     document: document,
-                    src: item.thumbSrc,
+                    src: validatePreview ? '' : item.thumbSrc,
                     onLoad: (image) => {
                         if (image.isConnected) syncVerticalFitMediaBox(image);
                     }
                 });
+                if (validatePreview) bridge.setCachedImgSrc(thumbImg, item.thumbSrc, item);
                 ensureMediaBox(wrap).appendChild(thumbImg);
                 if (thumbImg.complete) syncVerticalFitMediaBox(thumbImg);
             }
@@ -4824,10 +4827,12 @@ function renderCurrent() {
             const bufferedVideo = bridge.requiresBufferedVideo(item);
             const videoPoster = item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc)
                 ? item.thumbSrc : '';
+            const validatePoster = videoPoster && typeof bridge.shouldValidateMediaUrl === 'function'
+                && bridge.shouldValidateMediaUrl(videoPoster);
             video = globalThis.XGalleryCore.configureVideoElement({
                 document: document,
                 video: video,
-                poster: videoPoster,
+                poster: validatePoster ? '' : videoPoster,
                 volume: bridge.globalVolume,
                 muted: bridge.globalMuted,
                 // A video that stands in for an animated image (it carries the
@@ -4837,6 +4842,14 @@ function renderCurrent() {
                 preload: usedPredicted ? '' : (bufferedVideo ? 'auto' : 'metadata')
             });
             video._msRenderAbort = renderAbort;
+            if (validatePoster) {
+                const poster = new Image();
+                poster.onload = () => {
+                    if (token === bridge.state.renderToken && !renderAbort.signal.aborted) video.poster = poster.src;
+                };
+                renderAbort.signal.addEventListener('abort', () => poster._msCancelThumb?.(), { once: true });
+                bridge.setCachedImgSrc(poster, videoPoster, item);
+            }
             // The same element showed the last item too, and the browser keeps
             // its controls with it: the panel that had faded out while the
             // previous video played stayed hidden for this one until it was

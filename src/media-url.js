@@ -58,7 +58,7 @@ export function isVideoThumbSource(url) {
 }
 
 export function isImageThumbSource(url) {
-    return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(mediaThumbExtension(url));
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'avif'].includes(mediaThumbExtension(url));
 }
 
 // The extension a file most likely has, from its name first and its
