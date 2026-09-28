@@ -2684,6 +2684,7 @@ export const OVERLAY_CSS = String.raw`
             text-transform: uppercase;
             transition: background-color 150ms var(--ms-ease), border-color 150ms var(--ms-ease), color 150ms var(--ms-ease);
         }
+        .ms-media-error-stage a.ms-retry-btn { text-decoration: none; }
 
         /* Hand (pan) tool for oversized media */
         .ms-media-wrap.ms-pan-enabled {

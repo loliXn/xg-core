@@ -246,10 +246,22 @@ export function renderErrorStage(options) {
     const message = doc.createElement('div');
     message.className = 'ms-media-error-message';
     message.textContent = options.message || 'Failed to load media';
-    const url = doc.createElement('div');
-    url.className = 'ms-media-error-url';
-    url.textContent = 'URL: ' + (options.url || '');
-    stage.append(icon, message, url);
+    stage.append(icon, message);
+    if (options.url) {
+        const url = doc.createElement('div');
+        url.className = 'ms-media-error-url';
+        url.textContent = 'URL: ' + options.url;
+        stage.appendChild(url);
+    }
+    if (options.sourceHref) {
+        const source = doc.createElement('a');
+        source.className = 'ms-retry-btn';
+        source.href = options.sourceHref;
+        source.target = '_blank';
+        source.rel = 'noopener noreferrer';
+        source.textContent = options.sourceLabel || 'Open original';
+        stage.appendChild(source);
+    }
 
     if (options.canRetry) {
         const retry = doc.createElement('button');

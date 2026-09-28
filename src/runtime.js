@@ -3755,7 +3755,9 @@ function renderErrorStage(container, errMsg, url, item) {
             document: document,
             container: container,
             message: errMsg,
-            url: url,
+            url: item && item.megaFile ? '' : url,
+            sourceHref: item && item.megaFile ? item.resolveUrl : '',
+            sourceLabel: item && item.megaFile ? 'Open on MEGA' : '',
             canRetry: !!(item && (item.resolveUrl || item.src)),
             onRetry: () => {
                 const resolveUrl = item.resolveUrl || item.src;
@@ -4132,9 +4134,12 @@ function renderAlbumPreview(wrap, item, token) {
                 ? entries.length + ' shown of ' + count + ' items'
                 : count + (count === 1 ? ' item' : ' items')) : 'Preview unavailable';
             if (preview) {
-                const images = entries.filter(entry => entry.kind === 'file' && entry.mediaType !== 'video').length;
-                const videos = entries.filter(entry => entry.kind === 'file' && entry.mediaType === 'video').length;
-                const partial = !!preview.nextCursor || count > entries.length;
+                const hasTotals = Number.isFinite(preview.imageCount) && Number.isFinite(preview.videoCount);
+                const images = hasTotals ? preview.imageCount
+                    : entries.filter(entry => entry.kind === 'file' && entry.mediaType !== 'video').length;
+                const videos = hasTotals ? preview.videoCount
+                    : entries.filter(entry => entry.kind === 'file' && entry.mediaType === 'video').length;
+                const partial = !hasTotals && (!!preview.nextCursor || count > entries.length);
                 meta.textContent += ' · ' + images + ' images · ' + videos + ' videos · '
                     + (images + videos) + ' media ' + (partial ? 'shown' : 'total');
             }
@@ -4214,6 +4219,8 @@ function renderAlbumPreview(wrap, item, token) {
                         }
                     });
                     status.append(copy, form);
+                } else if (error && error.code === 'megaError') {
+                    status.textContent = error.safeMessage || 'MEGA folder could not be opened.';
                 } else {
                     status.textContent = error && error.code === 'notFound'
                         ? 'This content does not exist. It may have been removed or the link is incorrect.'
@@ -4390,6 +4397,9 @@ function renderCurrent() {
             const hasSourceOverride = !!(item && Object.prototype.hasOwnProperty.call(item, 'sourceUrl'));
             const linkUrl = item ? String(hasSourceOverride ? (item.sourceUrl || '') : (item.resolveUrl || item.src || '')) : '';
             if (item && item.error) {
+                if (item.megaFile) {
+                    return `<span class="ms-info-source"><a href="${escInfo(linkUrl)}" target="_blank" rel="noopener noreferrer">Open on MEGA</a>${infoMeta(presentation.date)}</span>`;
+                }
                 return `<span style="color: #f43f5e;"><a href="${escInfo(linkUrl)}" target="_blank" rel="noopener noreferrer">Error: ${escInfo(item.error)} (${escInfo(linkUrl)})</a></span>`;
             }
 
@@ -4453,9 +4463,20 @@ function renderCurrent() {
                     setIndeterminateProgress(loadingOverlay, true, 'Media resolution');
                 }
             }, 1200);
+            const stopMegaProgress = typeof bridge.subscribeMegaProgress === 'function'
+                ? bridge.subscribeMegaProgress(item.resolveUrl, progress => {
+                    if (token !== bridge.state.renderToken || !loadingOverlay.isConnected) return;
+                    const total = Number(progress.totalBytes) || 0;
+                    if (!(total > 0)) return;
+                    clearTimeout(resolutionProgressTimer);
+                    const loaded = Math.max(0, Math.min(Number(progress.loadedBytes) || 0, total));
+                    setMeasuredProgress(loadingOverlay, loaded / total,
+                        'MEGA transfer ' + Math.floor(loaded / total * 100) + '%', 'MEGA transfer');
+                }) : () => { };
 
             bridge.queueResolve(item.resolveUrl, item.expectedVideo).then((resolved) => {
                 clearTimeout(resolutionProgressTimer);
+                stopMegaProgress();
 
                 if (resolved === bridge.RESOLVE_CANCELLED) return;
                 let splicedExtras = false;
@@ -4502,6 +4523,22 @@ function renderCurrent() {
             } catch (e) {
                 domain = 'unknown';
             }
+            info.innerHTML = buildInfoHtml();
+            paintInfoMeta(item);
+            if (counter) {
+                const position = bridge.galleryPositionSnapshot();
+                counter.textContent = (position.currentIndex + 1) + ' / ' + position.length;
+            }
+            updatePositionControl();
+            const singleItem = bridge.state.items.length <= 1;
+            prevBtn.disabled = singleItem;
+            nextBtn.disabled = singleItem;
+            setActiveThumb(thumbs, true);
+            return;
+        }
+
+        if (item.megaFile && item.error) {
+            renderErrorStage(wrap, item.error, item.resolveUrl, item);
             info.innerHTML = buildInfoHtml();
             paintInfoMeta(item);
             if (counter) {
@@ -4644,6 +4681,7 @@ function renderCurrent() {
                 const box = ensureMediaBox(wrap);
                 box.querySelectorAll('video').forEach((element) => { if (element._msPooled) parkStageVideo(element); });
                 box.replaceChildren(img);
+                if (typeof bridge.trimMegaBlobs === 'function') bridge.trimMegaBlobs(item);
                 Array.from(wrap.children).forEach((el) => {
                     if (el !== box && !el.classList.contains('ms-caption-overlay')) el.remove();
                 });
@@ -4862,7 +4900,9 @@ function renderCurrent() {
             else on('loadeddata', () => {
                 if (!ownsVideoSession()) return;
                 markItemMediaLoaded(item);
+                if (typeof bridge.trimMegaBlobs === 'function') bridge.trimMegaBlobs(item);
             }, { once: true });
+            if (video.readyState >= 2 && typeof bridge.trimMegaBlobs === 'function') bridge.trimMegaBlobs(item);
             on('loadeddata', () => {
                 if (stallWatch) stallWatch.stop(true);
                 bridge.noteHostSuccess(item.src);
