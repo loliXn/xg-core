@@ -110,6 +110,8 @@ export function renderPostPanel(options) {
     const { content, model } = options;
     const doc = content.ownerDocument;
     const previousScrollTop = options.preserveState ? content.scrollTop : 0;
+    const focused = content.getRootNode()?.activeElement || doc.activeElement;
+    const previousAction = options.preserveState && content.contains(focused) ? focused?.dataset?.msPostAction : '';
     const wasLoading = content.dataset.msPostLoading === '1';
     const isLoading = !!model.loading;
     const now = Date.now();
@@ -164,14 +166,13 @@ export function renderPostPanel(options) {
         panel.insertBefore(head, body);
     }
     if (model.community?.href) {
-        const row = panelElement(doc, 'div', 'ms-post-community');
-        const link = panelElement(doc, 'a', '', model.community.label);
-        link.href = model.community.href;
-        row.append(link);
-        panelLinks(row);
+        const row = panelElement(doc, 'div', 'ms-post-community ms-post-who');
+        row.append(user({ username: model.community.label, profileUrl: model.community.href }));
         if (model.community.join?.available) row.append(relationshipButton(doc, model.community.join,
             { on: 'Joined', off: 'Join', undo: 'Leave' }));
-        body.append(row);
+        const header = panel.querySelector('.ms-info-posthead');
+        if (header) header.prepend(row);
+        else panel.insertBefore(row, body);
     }
     const captions = Array.isArray(info.captions) && info.captions.length ? info.captions : [{ html: model.description }];
     if (model.postTitle) body.append(panelElement(doc, 'h4', 'ms-info-post-title', model.postTitle));
@@ -308,8 +309,37 @@ export function renderPostPanel(options) {
     const footer = panelElement(doc, 'div', 'ms-post-footer');
     if (model.actions && model.actions.length) {
         const actions = panelElement(doc, 'div', 'ms-tags-actions-bar');
+        const up = model.actions.find(action => action.kind === 'upvote');
+        const down = model.actions.find(action => action.kind === 'downvote');
+        const pairedVotes = !!(up && down);
         model.actions.forEach(action => {
+            if (pairedVotes && action === down) return;
+            if (pairedVotes && action === up) {
+                const group = panelElement(doc, 'div', 'ms-post-votes');
+                group.setAttribute('role', 'group');
+                group.setAttribute('aria-label', 'Post votes');
+                const arrow = (vote, direction) => {
+                    const button = panelElement(doc, 'button', 'ms-post-vote ms-post-vote-' + direction);
+                    button.type = 'button';
+                    button.dataset.msPostAction = vote.kind;
+                    button.setAttribute('aria-label', direction === 'up' ? 'Upvote' : 'Downvote');
+                    button.setAttribute('aria-pressed', String(!!vote.active));
+                    button.classList.toggle('active', !!vote.active);
+                    button.disabled = !!vote.disabled;
+                    button.title = direction === 'up' ? 'Upvote' : 'Downvote';
+                    button.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="'
+                        + (direction === 'up' ? 'M12 19V5m-6 6 6-6 6 6' : 'M12 5v14m-6-6 6 6 6-6') + '"/></svg>';
+                    button.addEventListener('click', event => { event.stopPropagation(); vote.run?.(button); });
+                    return button;
+                };
+                const count = panelElement(doc, 'span', 'ms-post-vote-count', up.count == null || up.count === '' ? '\u2013' : String(up.count));
+                count.setAttribute('aria-label', up.count == null || up.count === '' ? 'Score unavailable' : 'Score ' + up.count);
+                group.append(arrow(up, 'up'), count, arrow(down, 'down'));
+                actions.append(group);
+                return;
+            }
             const button = panelElement(doc, action.href ? 'a' : 'button', 'ms-tags-action-btn ms-tags-' + action.kind + '-btn');
+            button.dataset.msPostAction = action.kind;
             if (!action.href) button.type = 'button';
             else { button.href = action.href; button.target = '_blank'; button.rel = 'noopener noreferrer'; }
             if (action.kind === 'like') {
@@ -338,6 +368,10 @@ export function renderPostPanel(options) {
         if (modes.childNodes.length > 1) footer.append(modes);
     }
     if (footer.childNodes.length) panel.append(footer);
+    if (previousAction) {
+        const target = Array.from(content.querySelectorAll('[data-ms-post-action]')).find(button => button.dataset.msPostAction === previousAction);
+        target?.focus({ preventScroll: true });
+    }
     if (!body.childNodes.length && isLoading) {
         // Details are still on their way: hold the space with a quiet
         // placeholder instead of claiming there is nothing to show.

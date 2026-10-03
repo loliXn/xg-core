@@ -2943,9 +2943,17 @@ export const OVERLAY_CSS = String.raw`
         .ms-info-dock-handle { position: absolute; top: 0; left: 35%; right: 35%; height: 12px; cursor: grab; touch-action: none; }
         .ms-info-dock-handle::after { content: ''; position: absolute; width: 28px; height: 3px; left: calc(50% - 14px); top: 4px; border-radius: 2px; background: var(--ms-line-strong); }
         .ms-info-dock-handle:hover::after, .ms-info-dock-handle:focus-visible::after { background: var(--ms-text-muted); }
-        .ms-post-community { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-        .ms-post-community a { color: var(--ms-text-muted); font-size: 12px; font-weight: 600; text-decoration: none; padding: 4px 6px; border-radius: 6px; }
-        .ms-post-community a:hover { color: var(--ms-text); background: var(--ms-hover); }
+        .ms-post-community { margin-bottom: 8px; }
+        .ms-post-community .ms-info-desc-username { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ms-post-votes { display: inline-flex; align-items: center; flex: none; height: 30px; border: 1px solid var(--ms-line); border-radius: 999px; overflow: hidden; background: var(--ms-surface-2); }
+        .ms-post-vote { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--ms-text-2); cursor: pointer; }
+        .ms-post-vote svg { width: 14px; height: 14px; fill: none; stroke: currentColor; }
+        .ms-post-vote:hover { background: var(--ms-hover); color: var(--ms-text); }
+        .ms-post-vote.active { color: var(--ms-accent); background: var(--ms-accent-tint); }
+        .ms-post-vote.active:hover { background: var(--ms-accent-tint-strong); }
+        .ms-post-vote:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: -3px; }
+        .ms-post-vote:disabled { opacity: .45; cursor: default; }
+        .ms-post-vote-count { min-width: 2ch; padding: 0 5px; color: var(--ms-text); font: 600 12px/1 var(--ms-font-mono, ui-monospace, monospace); font-variant-numeric: tabular-nums; text-align: center; }
         .ms-hd-btn.ms-hd-max {
             color: var(--ms-accent);
             border-color: var(--ms-accent-line);
