@@ -1,4 +1,4 @@
-import { renderPostPanel, revealOnNextFrame } from './panels.js';
+import { renderPostPanel, revealOnNextFrame, relationshipButton } from './panels.js';
 import { XGALLERY_CORE_VERSION } from './contract.js';
 // Shared viewer behavior. Host operations and persisted preferences enter through the bridge.
 export function createViewerRuntime(bridge) {
@@ -445,6 +445,8 @@ function renderTitleRow(model) {
         if(data.href){link.href=data.href;link.target='_blank';link.rel='noopener noreferrer';}
         meta.append(link);
     });
+    if (model.community?.join?.available) meta.append(relationshipButton(document, model.community.join, { on: 'Joined', off: 'Join', leave: 'Leave' }));
+    if (model.follow?.available) meta.append(relationshipButton(document, model.follow));
     row.querySelector('[data-rdvote="upvote"]').classList.toggle('upvoted',!!model.upvoted);
     row.querySelector('[data-rdvote="downvote"]').classList.toggle('downvoted',!!model.downvoted);
     row.querySelector('.ms-reddit-score').textContent=model.score==null || model.score===''?'•':String(model.score).replace(/\s*points?\s*$/i,'');
@@ -1223,6 +1225,16 @@ function ensureMediaBox(wrap) {
         return globalThis.XGalleryCore.ensureMediaBox(document, wrap);
     }
 
+function mediaHorizontalCenter(wrap, width) {
+    const laneCenter = wrap.clientWidth / 2;
+    if (!/^edge-/.test(bridge.state.overlay?.dataset.infoLayout || '') || !isInfoPanelVisible()) return laneCenter;
+    const stage = bridge.state.overlay.getBoundingClientRect();
+    const lane = wrap.getBoundingClientRect();
+    const slack = Math.max(0, (wrap.clientWidth - width) / 2);
+    const offset = stage.left + stage.width / 2 - (lane.left + laneCenter);
+    return laneCenter + Math.max(-slack, Math.min(slack, offset));
+}
+
 function syncVerticalFitMediaBox(media) {
         if (!bridge.state.overlay) return;
         const wrap = bridge.state.overlay.querySelector('.ms-media-wrap');
@@ -1262,16 +1274,7 @@ function syncVerticalFitMediaBox(media) {
         const scale = Math.min(wrapWidth / naturalWidth, wrapHeight / naturalHeight);
         box.style.width = Math.max(1, Math.round(naturalWidth * scale)) + 'px';
         box.style.height = Math.max(1, Math.round(naturalHeight * scale)) + 'px';
-        const layout = bridge.state.overlay.dataset.infoLayout;
-        if (/^edge-/.test(layout || '') && isInfoPanelVisible()) {
-            // Center on the gallery, not the leftover flex lane. Clamp every
-            // aspect ratio to that lane to preserve the panel gap and controls.
-            const stageRect = bridge.state.overlay.getBoundingClientRect();
-            const wrapRect = wrap.getBoundingClientRect();
-            const slack = Math.max(0, (wrapWidth - Math.round(naturalWidth * scale)) / 2);
-            const offset = stageRect.left + stageRect.width / 2 - (wrapRect.left + wrapRect.width / 2);
-            box.style.left = Math.max(-slack, Math.min(slack, offset)) + 'px';
-        }
+        box.style.left = (mediaHorizontalCenter(wrap, naturalWidth * scale) - wrapWidth / 2) + 'px';
         target.style.removeProperty('width');
         target.style.removeProperty('height');
         syncCaptionBounds();
@@ -1551,6 +1554,7 @@ function setGridMode(on) {
             // exist at all, and it drops the scrollIntoView that used to
             // repaint - and so re-pool - the cell a frame after the flight
             // had already started from it.
+            bridge.state.gridLayoutSnapshot = null;
             scrollGridToCurrent();
             renderGrid();
             syncZoomSliderAvailability();
@@ -2109,6 +2113,10 @@ function updateHdButton(status) {
 
 function enablePanForImage(wrap, img, opts) {
         if (!wrap || !img || !img.naturalWidth || !img.naturalHeight) return false;
+        const before = img.getBoundingClientRect();
+        const lane = wrap.getBoundingClientRect();
+        const anchorX = mediaHorizontalCenter(wrap, before.width);
+        const focalX = before.width ? (lane.left + anchorX - before.left) / before.width : 0.5;
         disablePan();
 
         const zoomMode = !!(opts && opts.zoom);
@@ -2141,14 +2149,15 @@ function enablePanForImage(wrap, img, opts) {
         img.style.setProperty('margin', '0', 'important');
         wrap.classList.add('ms-pan-enabled');
 
-        let x = (wrapW - dispW) / 2;
+        let x = anchorX - focalX * dispW;
+        let zoomAnchor = anchorX;
         let y = dispH <= wrapH ? (wrapH - dispH) / 2 : 0;
         if (opts && typeof opts.initialX === 'number') x = opts.initialX;
         if (opts && typeof opts.initialY === 'number') y = opts.initialY;
 
         let panRaf = null;
         const clampAndApply = () => {
-            if (dispW <= wrapW) x = (wrapW - dispW) / 2;
+            if (dispW <= wrapW) x = Math.max(0, Math.min(wrapW - dispW, x));
             else x = Math.min(0, Math.max(wrapW - dispW, x));
             if (dispH <= wrapH) y = (wrapH - dispH) / 2;
             else y = Math.min(0, Math.max(wrapH - dispH, y));
@@ -2167,12 +2176,13 @@ function enablePanForImage(wrap, img, opts) {
         clampAndApply();
 
         const panResize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
-            const focalX = dispW ? (wrapW / 2 - x) / dispW : 0.5;
+            const focalX = dispW ? (zoomAnchor - x) / dispW : 0.5;
             const focalY = dispH ? (wrapH / 2 - y) / dispH : 0.5;
             wrapW = wrap.clientWidth;
             wrapH = wrap.clientHeight;
             if (wrapW && wrapH) {
-                x = wrapW / 2 - focalX * dispW;
+                zoomAnchor = mediaHorizontalCenter(wrap, dispW);
+                x = zoomAnchor - focalX * dispW;
                 y = wrapH / 2 - focalY * dispH;
                 scheduleClampAndApply();
             }
@@ -2250,11 +2260,12 @@ function enablePanForImage(wrap, img, opts) {
                 scheduleClampAndApply();
             },
             updateZoom: (newScale) => {
-                const cx = dispW ? (wrapW / 2 - x) / dispW : 0.5;
+                const anchor = zoomAnchor;
+                const cx = dispW ? (anchor - x) / dispW : 0.5;
                 const cy = dispH ? (wrapH / 2 - y) / dispH : 0.5;
                 dispW = img.naturalWidth * newScale;
                 dispH = img.naturalHeight * newScale;
-                x = wrapW / 2 - cx * dispW;
+                x = anchor - cx * dispW;
                 y = wrapH / 2 - cy * dispH;
                 clampAndApply();
                 if (slider) {
@@ -2695,7 +2706,7 @@ function thumbSourceClass(item) {
 function thumbItemKey(entry) {
         const item = entry && (entry.item || entry);
         if (!item) return '';
-        item._msCoreThumbKey = String(bridge.mediaKey(item));
+        if (!item._msCoreThumbKey) item._msCoreThumbKey = String(bridge.mediaKey(item));
         return item._msCoreThumbKey;
     }
 
@@ -3101,6 +3112,34 @@ function paintThumbsWindow(track, groupData, force) {
         paintLoadMarks(track, start, end);
     }
 
+function galleryBoundaries() {
+    const cache = bridge.state;
+    const marks = bridge.galleryLoadMarks;
+    if (cache.boundaryItems === cache.items && cache.boundaryLength === marks.length) return cache.boundaries || [];
+    const indexes = new Map();
+    cache.items.forEach((entry, index) => {
+        const item = entry.item || entry;
+        indexes.set(item, index);
+        const key = thumbItemKey(entry);
+        if (key && !indexes.has(key)) indexes.set(key, index);
+        if (item.src && !indexes.has(item.src)) indexes.set(item.src, index);
+    });
+    const seen = new Set();
+    cache.boundaries = marks.map((mark, batch) => {
+        let index;
+        if (typeof mark === 'string') index = indexes.get(mark);
+        else for (const member of mark.members || []) {
+            index = indexes.get(member.item) ?? indexes.get(member.key);
+            if (Number.isFinite(index)) break;
+        }
+        if (!Number.isFinite(index) || index < 1 || seen.has(index)) return null;
+        seen.add(index);
+        return { index, label: mark.label || 'Batch ' + (batch + 2) };
+    }).filter(Boolean);
+    cache.boundaryItems = cache.items; cache.boundaryLength = marks.length;
+    return cache.boundaries;
+}
+
 function paintLoadMarks(track, visibleStart, visibleEnd) {
         let layer = track.querySelector('.ms-load-mark-layer');
         if (!layer) {
@@ -3112,30 +3151,18 @@ function paintLoadMarks(track, visibleStart, visibleEnd) {
         layer.style.width = Math.max(0, n * bridge.MS_THUMB_STRIDE) + 'px';
         const start = Math.max(0, Number.isFinite(visibleStart) ? visibleStart : 0);
         const end = Math.min(n, Number.isFinite(visibleEnd) ? visibleEnd : n);
-        const cache = bridge.state;
-        if (cache.markItems !== cache.items || cache.markCount !== n || cache.markLength !== bridge.galleryLoadMarks.length) {
-            cache.markItems = cache.items;
-            cache.markCount = n;
-            cache.markLength = bridge.galleryLoadMarks.length;
-            cache.markIndexes = new Map();
-            if (cache.markLength) for (let i = 0; i < n; i++) {
-                const it = cache.items[i].item || cache.items[i];
-                if (it && it.src && !cache.markIndexes.has(it.src)) cache.markIndexes.set(it.src, i);
-            }
-        }
-        const indexesBySrc = cache.markIndexes || new Map();
-        const visibleMarks = bridge.galleryLoadMarks.map((src) => indexesBySrc.get(src))
-            .filter((index) => Number.isFinite(index) && index >= 1 && index >= start && index <= end);
-        const signature = n + '|' + start + '|' + end + '|' + visibleMarks.join(',');
+        const visibleMarks = galleryBoundaries().filter(mark => mark.index >= start && mark.index <= end);
+        const signature = n + '|' + start + '|' + end + '|' + visibleMarks.map(mark => mark.index + ':' + mark.label).join(',');
         if (layer.dataset.msPaintSignature === signature) return;
         layer.dataset.msPaintSignature = signature;
         layer.innerHTML = '';
         if (!visibleMarks.length) return;
         for (let m = 0; m < visibleMarks.length; m++) {
-            const index = visibleMarks[m];
+            const {index, label} = visibleMarks[m];
             const mark = document.createElement('div');
             mark.className = 'ms-load-mark';
-            mark.title = 'Loaded more';
+            mark.title = label + ' - loaded here';
+            mark.dataset.label = label;
             mark.style.left = (index * bridge.MS_THUMB_STRIDE - 14) + 'px';
             mark.innerHTML = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3.5 1.5 8.5 6l-5 4.5"/></svg>';
             layer.appendChild(mark);
@@ -3277,6 +3304,19 @@ function paintGridWindow() {
         const m = gridMetrics(wrap, grid);
         const rows = Math.ceil(n / m.cols);
         sizer.style.height = Math.max(0, rows * m.rowH - m.gap) + 'px';
+        let seams = grid.querySelector('.ms-grid-batch-layer');
+        if (!seams) { seams = document.createElement('div'); seams.className = 'ms-grid-batch-layer'; grid.append(seams); }
+        const boundaries = galleryBoundaries();
+        const seamSignature = m.cols + ':' + m.rowH + ':' + boundaries.map(mark => mark.index + ':' + mark.label).join('|');
+        if (seams.dataset.signature !== seamSignature) {
+            seams.replaceChildren(); seams.dataset.signature = seamSignature;
+            for (const boundary of boundaries) {
+                const seam = document.createElement('div'); seam.className = 'ms-grid-batch-seam';
+                seam.style.top = (Math.floor(boundary.index / m.cols) * m.rowH - m.gap / 2) + 'px';
+                const label = document.createElement('span'); label.textContent = boundary.label;
+                seam.title = 'Starts at item ' + (boundary.index + 1); seam.append(label); seams.append(seam);
+            }
+        }
         const pad = 2;
         const startRow = Math.max(0, Math.floor(wrap.scrollTop / m.rowH) - pad);
         const visRows = Math.ceil(Math.max(wrap.clientHeight, 1) / m.rowH) + pad * 2;
@@ -3405,7 +3445,31 @@ function fillGridCell(cell, entry, index) {
     }
 
 function syncGridWindow() {
+        const wrap = bridge.state.overlay?.querySelector('.ms-grid-wrap');
+        const grid = bridge.state.overlay?.querySelector('.ms-grid');
+        if (!wrap || !grid) return;
+        const previous = bridge.state.gridLayoutSnapshot;
+        const metrics = gridMetrics(wrap, grid);
+        const changed = previous && (previous.items !== bridge.state.items || previous.cols !== metrics.cols || previous.rowH !== metrics.rowH);
+        if (changed && bridge.state.gridMode) {
+            const row = Math.max(0, Math.floor(wrap.scrollTop / previous.rowH));
+            const at = Math.min(previous.keys.length - 1, row * previous.cols);
+            const offset = wrap.scrollTop - row * previous.rowH;
+            const indexes = new Map(bridge.state.items.map((entry, index) => [thumbItemKey(entry), index]));
+            let found = indexes.get(previous.keys[at]);
+            for (let distance = 1; found == null && distance < previous.keys.length; distance++) {
+                found = indexes.get(previous.keys[at + distance]) ?? indexes.get(previous.keys[at - distance]);
+            }
+            if (found != null) {
+                const sizer = ensureGridWindow(grid, wrap);
+                sizer.style.height = Math.max(0, Math.ceil(bridge.state.items.length / metrics.cols) * metrics.rowH - metrics.gap) + 'px';
+                wrap.scrollTop = Math.max(0, Math.floor(found / metrics.cols) * metrics.rowH + offset);
+            }
+        }
         paintGridWindow();
+        if (!previous || changed) bridge.state.gridLayoutSnapshot = {
+            items: bridge.state.items, keys: bridge.state.items.map(thumbItemKey), cols: metrics.cols, rowH: metrics.rowH
+        };
     }
 
 function renderThumbs(options) {

@@ -78,7 +78,7 @@ const ATTACHMENT_ICONS = {
 };
 const ATTACHMENT_DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7.5 11 4.5 4.5 4.5-4.5"/><path d="M5 19h14"/></svg>';
 
-function relationshipButton(doc, control, labels = {}) {
+export function relationshipButton(doc, control, labels = {}) {
     const button = panelElement(doc, 'button', 'ms-follow-btn');
     button.type = 'button';
     const onLabel = labels.on || 'Following', offLabel = labels.off || 'Follow';
@@ -88,7 +88,7 @@ function relationshipButton(doc, control, labels = {}) {
         button.classList.toggle('active', active);
         button.disabled = !!state.pending || state.state === 'unknown';
         button.title = state.title || (state.state === 'unknown' ? 'Checking account state'
-            : (active ? (labels.undo || 'Unfollow') : offLabel) + ' ' + (control.name || ''));
+            : (active ? (labels.undo || labels.leave || 'Unfollow') : offLabel) + ' ' + (control.name || ''));
         button.setAttribute('aria-pressed', String(active));
         button.setAttribute('aria-busy', String(!!state.pending));
     };
@@ -506,14 +506,22 @@ export function createSettingsPanel(options) {
     });
     if (!dialog) return null;
     const {shadow, overlay, modal, body, footer, dismiss} = dialog;
+    modal.classList.add('ms-settings-catalog');
+    const layout = panelElement(doc, 'div', 'ms-settings-layout');
+    const sidebar = panelElement(doc, 'div', 'ms-settings-sidebar');
+    const search = doc.createElement('input');
+    search.type = 'search'; search.placeholder = 'Find a site';
+    search.className = 'ms-settings-search'; search.setAttribute('aria-label', 'Find site settings');
+    sidebar.append(search);
     const tabs = panelElement(doc, 'div', 'ms-settings-tabs');
     tabs.setAttribute('role', 'tablist');
     tabs.setAttribute('aria-label', 'Settings category');
+    tabs.setAttribute('aria-orientation', 'vertical');
     const names = [...new Set(options.sections.map(section => section.tab || 'General'))];
     const groups = new Map();
     // The tab key is the caller's string, but a bare hostname is a poor label;
     // www. adds nothing the user needs to read.
-    const tabLabel = (name) => String(name).replace(/^www\./i, '');
+    const tabLabel = (name) => options.tabLabels?.[name] || String(name);
     names.forEach((name, index) => {
         const tab = panelElement(doc, 'button', 'ms-settings-tab', tabLabel(name));
         tab.type = 'button'; tab.setAttribute('role', 'tab');
@@ -531,15 +539,22 @@ export function createSettingsPanel(options) {
             });
         });
         tab.addEventListener('keydown', event => {
-            if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+            if (!['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
             event.preventDefault();
-            const next = event.key === 'Home' ? 0 : event.key === 'End' ? names.length - 1 :
-                (index + (event.key === 'ArrowRight' ? 1 : -1) + names.length) % names.length;
-            const target = groups.get(names[next]).tab; target.click(); target.focus();
+            const visible = names.filter(key => !groups.get(key).tab.hidden);
+            const at = visible.indexOf(name);
+            const next = event.key === 'Home' ? 0 : event.key === 'End' ? visible.length - 1 :
+                (at + (['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : -1) + visible.length) % visible.length;
+            const target = groups.get(visible[next])?.tab; if (target) { target.click(); target.focus(); }
         });
         groups.set(name, {tab, group}); tabs.append(tab); body.append(group);
     });
-    modal.insertBefore(tabs, body);
+    search.addEventListener('input', () => {
+        const query = search.value.trim().toLowerCase();
+        groups.forEach(({tab}, name) => { tab.hidden = name !== 'General' && !tab.textContent.toLowerCase().includes(query); });
+    });
+    sidebar.append(tabs); layout.append(sidebar);
+    modal.insertBefore(layout, body); layout.append(body);
     const controls = new Map();
     options.sections.forEach(section => {
         const sectionBody = groups.get(section.tab || 'General').group;
@@ -655,21 +670,7 @@ export function createSettingsPanel(options) {
         controls.forEach(({input,field}, id) => { if (field.type !== 'button') values[id] = field.type === 'checkbox' ? input.checked : input.value; });
         options.onSave(values); dismiss();
     });
-    // Every page gets the height of the tallest one, so switching tabs cannot
-    // resize the dialog. Measured after the host is in the document, because
-    // a detached subtree has no layout; done synchronously rather than on a
-    // frame, since a settings panel opened from a click is always foreground
-    // and a resize one frame later would be visible.
-    return dialog.mount(() => {
-        let tallest = 0;
-        groups.forEach(({group}) => {
-            const wasHidden = group.hidden;
-            if (wasHidden) group.hidden = false;
-            tallest = Math.max(tallest, group.scrollHeight);
-            if (wasHidden) group.hidden = true;
-        });
-        if (tallest > 0) {
-            groups.forEach(({group}) => { group.style.minHeight = tallest + 'px'; });
-        }
-    });
+    // Fixed viewport; navigation and body scroll independently. Do not measure
+    // every hidden page just to keep the dialog steady when switching sites.
+    return dialog.mount();
 }

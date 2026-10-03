@@ -4355,6 +4355,24 @@ export const OVERLAY_CSS = String.raw`
            the header hairline and the body read as four separate controls
            rather than one switch. The seam the row sits on is the only border
            in the region; the tabs themselves carry none. */
+        .ms-settings-catalog{width:720px;height:min(80vh,640px)}
+        .ms-settings-layout{display:flex;flex:1;min-height:0;overflow:hidden}
+        .ms-settings-sidebar{width:156px;flex:none;display:flex;flex-direction:column;border-right:1px solid var(--ms-hairline);padding:12px 8px;gap:8px;min-height:0}
+        .ms-settings-search{width:100%;min-width:0;box-sizing:border-box;background:var(--ms-surface-3);border:1px solid var(--ms-line);border-radius:8px;color:var(--ms-text);padding:8px;font:12px var(--ms-font-ui)}
+        .ms-settings-search:focus-visible{outline:2px solid var(--ms-accent);outline-offset:1px}
+        .ms-settings-layout>.ms-settings-body{flex:1;min-width:0;overflow-y:auto;padding:16px}
+        .ms-settings-sidebar>.ms-settings-tabs{flex-direction:column;overflow-y:auto;overflow-x:hidden;padding:0;margin:0;border:0;flex:1;gap:2px}
+        .ms-settings-sidebar .ms-settings-tab{height:32px;min-height:32px;text-align:left;border-radius:8px;padding:0 10px;font-size:12px}
+        .ms-settings-sidebar .ms-settings-tab[aria-selected="true"]{background:var(--ms-accent-tint)}
+        .ms-settings-sidebar .ms-settings-tab::after{display:none}
+        .ms-settings-sidebar .ms-settings-tab[hidden]{display:none!important}
+        .ms-reddit-meta .ms-follow-btn{margin-left:8px;vertical-align:middle;flex-shrink:0}
+        .ms-grid-wrap{overflow-y:scroll;scrollbar-gutter:stable;overflow-anchor:none}
+        .ms-grid-batch-layer{position:absolute;inset:0;pointer-events:none;z-index:3}
+        .ms-grid-batch-seam{position:absolute;left:0;right:0;height:1px;background:var(--ms-line-strong)}
+        .ms-grid-batch-seam span{position:absolute;right:4px;top:2px;background:var(--ms-surface-1);color:var(--ms-text-3);border-radius:4px;padding:2px 4px;font:10px/1.2 var(--ms-font-mono,monospace)}
+        .ms-load-mark[data-label]::after{content:attr(data-label);position:absolute;bottom:0;left:50%;transform:translateX(-50%);padding:2px 4px;border-radius:4px;background:var(--ms-surface-1);color:var(--ms-text-3);font:9px/1.2 monospace;white-space:nowrap}
+        @media(max-width:540px){.ms-settings-sidebar{width:112px;padding:8px 4px}.ms-settings-layout>.ms-settings-body{padding:12px}.ms-settings-sidebar .ms-settings-tab{padding:0 8px}}
         .ms-settings-tabs {
             display: flex;
             gap: 2px;
