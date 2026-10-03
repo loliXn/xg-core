@@ -1784,7 +1784,7 @@ function bindTagsPanelResizer() {
             bridge.state.overlay.style.setProperty('--ms-tags-w', bridge.tagsPanelWidth + 'px');
         }
         const shell = bridge.state.overlay;
-        const layouts = ['left', 'right', 'edge-left', 'edge-right'];
+        const layouts = ['left', 'right', 'edge-left', 'edge-right', ...(bridge.bottomTitleDock ? ['bottom'] : [])];
         shell.dataset.infoLayout = layouts.includes(bridge.infoPanelLayout) ? bridge.infoPanelLayout : 'left';
         const setHeight = (height) => {
             // The panel is built before the overlay is shown, and a hidden
@@ -1818,31 +1818,52 @@ function bindTagsPanelResizer() {
         bottom.addEventListener('pointerup', finishHeight);
         bottom.addEventListener('pointercancel', finishHeight);
         bottom.addEventListener('click', (event) => event.stopPropagation());
-        const header = overlayEl.querySelector('.ms-tags-header');
-        if (header) {
-            header.title = 'Drag to dock left, right, or near either screen edge';
+        const handles = [overlayEl.querySelector('.ms-tags-header'), shell.querySelector('.ms-info-dock-handle')].filter(Boolean);
+        const commitDock = layout => {
+            shell.dataset.infoLayout = layout;
+            if (typeof bridge.setInfoPanelLayout === 'function') bridge.setInfoPanelLayout(layout);
+            else bridge.savePreference('MS_INFO_LAYOUT', layout);
+            shell.classList.toggle('ms-rich-info', !!(bridge.captionFeed || bridge.reservedPostHeader));
+            shell.classList.toggle('ms-imaglr', !!bridge.captionFeed);
+            shell.classList.toggle('ms-old-reddit', !!(bridge.titleCard && bridge.legacyHost()));
+            syncVerticalFitMediaBox();
+        };
+        handles.forEach(header => {
+            header.title = bridge.bottomTitleDock ? 'Drag to a side for details, or to the bottom for title only' : 'Drag to dock left, right, or near either screen edge';
             let moving = false;
+            let nextLayout = shell.dataset.infoLayout;
             header.addEventListener('pointerdown', (event) => {
                 if (event.button !== 0 || event.target.closest('button, a, input')) return;
                 moving = true;
+                nextLayout = shell.dataset.infoLayout;
                 header.setPointerCapture(event.pointerId);
                 event.preventDefault(); event.stopPropagation();
             });
             header.addEventListener('pointermove', (event) => {
                 if (!moving) return;
                 const x = event.clientX / window.innerWidth;
-                shell.dataset.infoLayout = x < .2 ? 'edge-left' : x > .8 ? 'edge-right' : x < .5 ? 'left' : 'right';
+                const stage = shell.querySelector('.ms-gallery-stage').getBoundingClientRect();
+                const floor = stage.bottom - Number.parseFloat(getComputedStyle(shell).getPropertyValue('--ms-thumbs-h') || '0');
+                nextLayout = bridge.bottomTitleDock && event.clientY > floor - 120 ? 'bottom'
+                    : x < .2 ? 'edge-left' : x > .8 ? 'edge-right' : x < .5 ? 'left' : 'right';
+                if (nextLayout !== 'bottom' && !bridge.titleCard) shell.dataset.infoLayout = nextLayout;
             });
-            const finishMove = () => {
+            const finishMove = (event) => {
                 if (!moving) return;
                 moving = false;
-                bridge.savePreference('MS_INFO_LAYOUT', shell.dataset.infoLayout);
-                syncVerticalFitMediaBox();
+                try { header.releasePointerCapture(event.pointerId); } catch (e) { }
+                if (event.type === 'pointercancel') return;
+                commitDock(nextLayout);
             };
             header.addEventListener('pointerup', finishMove);
             header.addEventListener('pointercancel', finishMove);
             header.addEventListener('click', (event) => event.stopPropagation());
-        }
+            if (header.classList.contains('ms-info-dock-handle')) header.addEventListener('keydown', event => {
+                if (event.key !== 'Enter' && event.key !== ' ') return;
+                event.preventDefault(); event.stopPropagation();
+                commitDock('left');
+            });
+        });
     }
 
 function toggleTagsPanel(show, keepWanted) {
@@ -2042,15 +2063,19 @@ function appendCaptionModeControls(content, item) {
 
 function setTopbarLoading(on) {
         if (!bridge.state.overlay) return;
-        const spinner = bridge.state.overlay.querySelector('.ms-topbar-spinner');
+        const btn = bridge.state.overlay.querySelector('[data-act="hd"]');
+        if (!btn) return;
+        btn.dataset.mediaLoading = on ? '1' : '';
+        updateHdButton(btn.dataset.hdStatus || '');
 
-        if (spinner) spinner.style.visibility = on ? 'visible' : 'hidden';
     }
 
 function updateHdButton(status) {
         if (!bridge.state.overlay) return;
+        status = ['ready', 'loading', 'max'].includes(status) ? status : '';
         const btn = bridge.state.overlay.querySelector('[data-act="hd"]');
         if (!btn) return;
+        btn.dataset.hdStatus = status || '';
         if (status === 'ready') {
             btn.style.display = '';
             btn.classList.remove('loading');
@@ -2072,6 +2097,12 @@ function updateHdButton(status) {
             btn.classList.remove('loading');
             btn.classList.remove('ms-hd-max');
         }
+        const busy = status === 'loading' || btn.dataset.mediaLoading === '1';
+        btn.classList.toggle('loading', busy);
+        btn.disabled = busy || status === 'max' || !status;
+        btn.setAttribute('aria-busy', String(busy));
+        btn.classList.toggle('ms-media-busy', busy && !status);
+        if (busy) { btn.style.display = ''; btn.title = status === 'loading' ? 'Loading full resolution' : 'Loading media'; }
 
         updateTopbarCompact();
     }
@@ -4870,6 +4901,24 @@ function renderCurrent() {
                 try { video.load(); } catch (e) { }
             }
             const primaryVideoSrc = bridge.wrapMediaUrl(item.src);
+            const streamingVideo = !!bridge.isStreamingVideo?.(item);
+            let streamDispose = null;
+            const startStream = () => {
+                streamDispose?.();
+                streamDispose = bridge.attachVideoStream(video, item, {
+                    signal: renderAbort.signal,
+                    onError: message => {
+                        if (token === bridge.state.renderToken && !renderAbort.signal.aborted) {
+                            if (stallWatch) stallWatch.stop(false);
+                            setStageFetching(false);
+                            setTopbarLoading(false);
+                            showStageNotice(wrap, message || 'Could not play this stream', false);
+                        }
+                    }
+                });
+                activePlaybackDispose = () => streamDispose?.();
+            };
+            if (streamingVideo) renderAbort.signal.addEventListener('abort', () => streamDispose?.(), { once: true });
             const bufferedVideo = bridge.requiresBufferedVideo(item);
             const videoPoster = item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc)
                 ? item.thumbSrc : '';
@@ -4926,6 +4975,7 @@ function renderCurrent() {
             // the sequence measured to work.
             const restartStageVideo = () => {
                 if (!ownsVideoSession()) return;
+                if (streamingVideo) { startStream(); return; }
                 video._msRecovering = true;
                 try { video.pause(); } catch (e) { }
                 video.removeAttribute('src');
@@ -4978,6 +5028,11 @@ function renderCurrent() {
             let retryIndex = 0;
             const handleVideoError = () => {
                 if (!ownsVideoSession() || video._msRecovering) return;
+                if (streamingVideo) {
+                    setTopbarLoading(false);
+                    showStageNotice(wrap, 'Stream playback failed. Try reopening this item.', false);
+                    return;
+                }
                 const errCode = video.error ? video.error.code : 0;
                 const resumeAt = Math.max(video.currentTime || 0, lastPlayTime || 0);
                 const seekGlitch = video.seeking || (Date.now() - lastSeekAt) < 1500 || errCode === 1;
@@ -5222,6 +5277,8 @@ function renderCurrent() {
             if (!video.isConnected || !video.closest('.ms-media-box')) placeNode(ensureMediaBox(wrap), video);
             const revealVideo = () => {
                 if (!ownsVideoSession()) return;
+                setTopbarLoading(false);
+                setStageFetching(false);
                 video.classList.add('ms-ready');
                 video.style.opacity = '1';
             };
@@ -5237,12 +5294,13 @@ function renderCurrent() {
                 if (videoActivated || token !== bridge.state.renderToken || !video.isConnected) return;
                 videoActivated = true;
                 video.preload = bufferedVideo ? 'auto' : 'metadata';
-                if (!video.getAttribute('src')) video.src = primaryVideoSrc;
+                if (streamingVideo) startStream();
+                else if (!video.getAttribute('src')) video.src = primaryVideoSrc;
                 const promise = video.play();
                 if (promise && typeof promise.catch === 'function') promise.catch(() => { });
             };
             on('pointerdown', activateVideo, { once: true });
-            if ((usedPredicted || bufferedVideo) && !video.getAttribute('src')) video.src = primaryVideoSrc;
+            if (!streamingVideo && (usedPredicted || bufferedVideo) && !video.getAttribute('src')) video.src = primaryVideoSrc;
             if (video.readyState < 2) {
                 setStageFetching(true);
                 stallWatch = watchStageMedia({

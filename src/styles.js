@@ -2915,23 +2915,15 @@ export const OVERLAY_CSS = String.raw`
            reserved - that was the reason for absolute positioning in the first
            place (no layout jitter when it appears), and it now holds without
            the fixed offset. */
-        .ms-topbar-spinner {
-            width: 14px;
-            height: 14px;
-            border: 2px solid var(--ms-line-strong);
-            border-top-color: var(--ms-text);
-            border-radius: 50%;
-            animation: ms-spin 0.8s linear infinite;
-            visibility: hidden;
-            flex-shrink: 0;
-        }
         .ms-hd-btn {
             display: inline-flex;
             align-items: center;
             gap: 6px;
+            min-width: 52px;
         }
         .ms-hd-spinner {
-            display: none;
+            display: inline-block;
+            visibility: hidden;
             width: 10px;
             height: 10px;
             border: 2px solid var(--ms-line-strong);
@@ -2941,7 +2933,19 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-hd-btn.loading .ms-hd-spinner {
             display: inline-block;
+            visibility: visible;
         }
+        .ms-hd-btn.ms-media-busy { font-size: 0; gap: 0; justify-content: center; }
+        .ms-hd-btn.loading:disabled { opacity: 1; }
+        .ms-x-action[data-act="x-bookmark"] svg { fill: none !important; stroke: currentColor !important; }
+        .ms-x-action[data-act="x-bookmark"].active svg > path:first-child { fill: var(--ms-accent-tint-strong) !important; }
+        .ms-bookmark-mark { fill: none !important; stroke: currentColor !important; }
+        .ms-info-dock-handle { position: absolute; top: 0; left: 35%; right: 35%; height: 12px; cursor: grab; touch-action: none; }
+        .ms-info-dock-handle::after { content: ''; position: absolute; width: 28px; height: 3px; left: calc(50% - 14px); top: 4px; border-radius: 2px; background: var(--ms-line-strong); }
+        .ms-info-dock-handle:hover::after, .ms-info-dock-handle:focus-visible::after { background: var(--ms-text-muted); }
+        .ms-post-community { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+        .ms-post-community a { color: var(--ms-text-muted); font-size: 12px; font-weight: 600; text-decoration: none; padding: 4px 6px; border-radius: 6px; }
+        .ms-post-community a:hover { color: var(--ms-text); background: var(--ms-hover); }
         .ms-hd-btn.ms-hd-max {
             color: var(--ms-accent);
             border-color: var(--ms-accent-line);

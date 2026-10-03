@@ -78,6 +78,34 @@ const ATTACHMENT_ICONS = {
 };
 const ATTACHMENT_DOWNLOAD_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7.5 11 4.5 4.5 4.5-4.5"/><path d="M5 19h14"/></svg>';
 
+function relationshipButton(doc, control, labels = {}) {
+    const button = panelElement(doc, 'button', 'ms-follow-btn');
+    button.type = 'button';
+    const onLabel = labels.on || 'Following', offLabel = labels.off || 'Follow';
+    const paint = state => {
+        const active = state.state === 'following';
+        button.textContent = state.pending ? (labels.pending || 'Updating\u2026') : active ? onLabel : offLabel;
+        button.classList.toggle('active', active);
+        button.disabled = !!state.pending || state.state === 'unknown';
+        button.title = state.title || (state.state === 'unknown' ? 'Checking account state'
+            : (active ? (labels.undo || 'Unfollow') : offLabel) + ' ' + (control.name || ''));
+        button.setAttribute('aria-pressed', String(active));
+        button.setAttribute('aria-busy', String(!!state.pending));
+    };
+    paint(control);
+    if (typeof control.hydrate === 'function') Promise.resolve().then(() => control.hydrate()).then(state => {
+        if (button.isConnected && state) paint(state);
+    }).catch(() => { if (button.isConnected) paint({ state: 'unknown', title: 'Could not read account state' }); });
+    button.addEventListener('click', event => {
+        event.stopPropagation();
+        if (button.disabled || typeof control.run !== 'function') return;
+        Promise.resolve(control.run(paint)).catch(() => {
+            if (button.isConnected) paint({ ...control, pending: false, title: 'Could not update account state' });
+        });
+    });
+    return button;
+}
+
 export function renderPostPanel(options) {
     const { content, model } = options;
     const doc = content.ownerDocument;
@@ -119,32 +147,7 @@ export function renderPostPanel(options) {
         const who = panelElement(doc, 'div', 'ms-post-who');
         who.append(user(info.author || {}));
         if (model.follow && model.follow.available) {
-            const follow = model.follow;
-            const button = panelElement(doc, 'button', 'ms-follow-btn');
-            button.type = 'button';
-            const paint = (state) => {
-                const following = state.state === 'following';
-                button.textContent = state.pending ? (following ? 'Unfollowing\u2026' : 'Following\u2026') : (following ? 'Following' : 'Follow');
-                button.classList.toggle('active', following);
-                button.disabled = !!state.pending || state.state === 'unknown';
-                button.title = state.title || (state.state === 'unknown' ? 'Follow state not readable here'
-                    : (following ? 'Unfollow ' + (follow.name || '') : 'Follow ' + (follow.name || '')));
-                button.setAttribute('aria-pressed', String(following));
-            };
-            paint(follow);
-            if (typeof follow.hydrate === 'function') {
-                Promise.resolve().then(() => follow.hydrate()).then(state => {
-                    if (button.isConnected && state) paint(state);
-                }).catch(() => {
-                    if (button.isConnected) paint({ state: 'unknown', title: 'Could not read follow state' });
-                });
-            }
-            button.addEventListener('click', (event) => {
-                event.stopPropagation();
-                if (button.disabled || typeof follow.run !== 'function') return;
-                follow.run(paint);
-            });
-            who.append(button);
+            who.append(relationshipButton(doc, model.follow));
         }
         byline.append(who);
         const date = panelElement(doc, 'span', 'ms-info-postmeta', info.time || (model.reserveHeader ? '\u00a0' : ''));
@@ -159,6 +162,16 @@ export function renderPostPanel(options) {
             head.append(repost);
         }
         panel.insertBefore(head, body);
+    }
+    if (model.community?.href) {
+        const row = panelElement(doc, 'div', 'ms-post-community');
+        const link = panelElement(doc, 'a', '', model.community.label);
+        link.href = model.community.href;
+        row.append(link);
+        panelLinks(row);
+        if (model.community.join?.available) row.append(relationshipButton(doc, model.community.join,
+            { on: 'Joined', off: 'Join', undo: 'Leave' }));
+        body.append(row);
     }
     const captions = Array.isArray(info.captions) && info.captions.length ? info.captions : [{ html: model.description }];
     if (model.postTitle) body.append(panelElement(doc, 'h4', 'ms-info-post-title', model.postTitle));
