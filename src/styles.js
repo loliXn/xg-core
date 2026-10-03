@@ -221,10 +221,11 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay[data-info-layout$="right"] .ms-tags-resizer { right:auto;left:0; }
         .ms-gallery-overlay[data-info-layout="right"] .ms-tags-overlay.active,
         .ms-gallery-overlay[data-info-layout="edge-right"] .ms-tags-overlay.active { order:2;margin-left:16px;margin-right:0; }
-        .ms-gallery-overlay[data-info-layout="edge-left"] .ms-gallery-stage:has(.ms-tags-overlay.active) { padding-left:calc(var(--ms-tags-w) + 32px); }
-        .ms-gallery-overlay[data-info-layout="edge-right"] .ms-gallery-stage:has(.ms-tags-overlay.active) { padding-right:calc(var(--ms-tags-w) + 32px); }
-        .ms-gallery-overlay[data-info-layout="edge-left"] .ms-tags-overlay.active { position:absolute;left:16px;top:calc(var(--ms-topbar-h) + var(--ms-filter-h) + 16px); }
-        .ms-gallery-overlay[data-info-layout="edge-right"] .ms-tags-overlay.active { position:absolute;right:16px;top:calc(var(--ms-topbar-h) + var(--ms-filter-h) + 16px); }
+        .ms-gallery-overlay { --ms-chrome-inset:max(20px, 2.5vw); }
+        .ms-gallery-overlay[data-info-layout="edge-left"] .ms-gallery-stage:has(.ms-tags-overlay.active) { padding-left:calc(var(--ms-tags-w) + var(--ms-chrome-inset) + 16px);padding-right:var(--ms-chrome-inset); }
+        .ms-gallery-overlay[data-info-layout="edge-right"] .ms-gallery-stage:has(.ms-tags-overlay.active) { padding-right:calc(var(--ms-tags-w) + var(--ms-chrome-inset) + 16px);padding-left:var(--ms-chrome-inset); }
+        .ms-gallery-overlay[data-info-layout="edge-left"] .ms-tags-overlay.active { position:absolute;left:var(--ms-chrome-inset);margin:0;top:calc(var(--ms-topbar-h) + var(--ms-filter-h) + 16px); }
+        .ms-gallery-overlay[data-info-layout="edge-right"] .ms-tags-overlay.active { position:absolute;right:var(--ms-chrome-inset);margin:0;top:calc(var(--ms-topbar-h) + var(--ms-filter-h) + 16px); }
         .ms-gallery-overlay[data-info-layout^="edge-"] .ms-tags-overlay.active { max-height:calc(100% - var(--ms-topbar-h) - var(--ms-filter-h) - var(--ms-thumbs-h) - 30px); }
         /* Closing: the overlay stays up, fully opaque and emptied, while the
            page underneath is scrolled back to the post being viewed. Hides the
@@ -243,8 +244,8 @@ export const OVERLAY_CSS = String.raw`
             top: 10px;
             left: 50%;
             transform: translateX(-50%);
-            width: calc(100% - 40px);
-            max-width: 95%;
+            width: calc(100% - 2 * var(--ms-chrome-inset));
+            max-width: none;
             height: 40px;
             display: grid;
             grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -3696,6 +3697,7 @@ export const OVERLAY_CSS = String.raw`
         }
         /* A compact ghost beside the name: outline at rest, accent-tinted once
            the account is followed, quiet while a request is out. */
+        .ms-info-post-title { margin:0 0 12px;color:var(--ms-text);font:600 15px/1.4 var(--ms-font-ui, system-ui, sans-serif);overflow-wrap:anywhere; }
         .ms-follow-btn {
             flex: none;
             height: 24px;

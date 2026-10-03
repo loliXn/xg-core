@@ -132,6 +132,13 @@ export function renderPostPanel(options) {
                 button.setAttribute('aria-pressed', String(following));
             };
             paint(follow);
+            if (typeof follow.hydrate === 'function') {
+                Promise.resolve().then(() => follow.hydrate()).then(state => {
+                    if (button.isConnected && state) paint(state);
+                }).catch(() => {
+                    if (button.isConnected) paint({ state: 'unknown', title: 'Could not read follow state' });
+                });
+            }
             button.addEventListener('click', (event) => {
                 event.stopPropagation();
                 if (button.disabled || typeof follow.run !== 'function') return;
@@ -154,6 +161,7 @@ export function renderPostPanel(options) {
         panel.insertBefore(head, body);
     }
     const captions = Array.isArray(info.captions) && info.captions.length ? info.captions : [{ html: model.description }];
+    if (model.postTitle) body.append(panelElement(doc, 'h4', 'ms-info-post-title', model.postTitle));
     const caption = panelElement(doc, 'div', 'ms-panel-caption');
     captions.forEach(cap => {
         if (!cap.html) return;
@@ -165,6 +173,7 @@ export function renderPostPanel(options) {
         caption.append(card);
     });
     if (caption.childNodes.length) body.append(caption);
+    else if (model.postTitle && isLoading) body.append(panelElement(doc, 'div', 'ms-info-empty', 'Loading description\u2026'));
     // A post's attachments, read the way an email lists them: a row each, with
     // a type icon, the name, and a second line naming the type (and size, when
     // the site says). An adapter passes data; the markup lives here so every

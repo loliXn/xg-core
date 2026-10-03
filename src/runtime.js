@@ -37,10 +37,10 @@ function protectHostControl(button, compact) {
     }
 }
 // Rank, not call order: addSiteGalleryButton creates Gallery before the
-// auxiliary button exists, but the auxiliary button has to render leftmost -
+// auxiliary button exists, but Settings must always render leftmost -
 // and CSS order cannot be used, because the seam and the clipped outer corners
 // both key off real DOM order.
-const LAUNCHER_SLOT_ORDER = {aux:10, settings:20, bookmarks:25, gallery:30};
+const LAUNCHER_SLOT_ORDER = {settings:10, aux:20, bookmarks:25, gallery:30};
 
 // The cluster carries the visible chrome, so it is the thing that needs the
 // shield protectHostControl used to put on each button: inline !important beats
@@ -1263,11 +1263,14 @@ function syncVerticalFitMediaBox(media) {
         box.style.width = Math.max(1, Math.round(naturalWidth * scale)) + 'px';
         box.style.height = Math.max(1, Math.round(naturalHeight * scale)) + 'px';
         const layout = bridge.state.overlay.dataset.infoLayout;
-        if (naturalHeight > naturalWidth && /^edge-/.test(layout || '') && isInfoPanelVisible()) {
-            const panel = bridge.state.overlay.querySelector('.ms-tags-overlay.active');
-            const slack = Math.max(0, (wrapWidth - naturalWidth * scale) / 2 - 16);
-            const shift = Math.min(slack, ((panel && panel.offsetWidth) || 0) / 2);
-            box.style.left = (layout === 'edge-left' ? -shift : shift) + 'px';
+        if (/^edge-/.test(layout || '') && isInfoPanelVisible()) {
+            // Center on the gallery, not the leftover flex lane. Clamp every
+            // aspect ratio to that lane to preserve the panel gap and controls.
+            const stageRect = bridge.state.overlay.getBoundingClientRect();
+            const wrapRect = wrap.getBoundingClientRect();
+            const slack = Math.max(0, (wrapWidth - Math.round(naturalWidth * scale)) / 2);
+            const offset = stageRect.left + stageRect.width / 2 - (wrapRect.left + wrapRect.width / 2);
+            box.style.left = Math.max(-slack, Math.min(slack, offset)) + 'px';
         }
         target.style.removeProperty('width');
         target.style.removeProperty('height');
