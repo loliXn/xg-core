@@ -1,8 +1,10 @@
 import { renderPostPanel, revealOnNextFrame, relationshipButton } from './panels.js';
 import { XGALLERY_CORE_VERSION } from './contract.js';
 import { buildPagedGridLayout, pagedGridWindow } from './grid-layout.js';
+import { createRuntimeFacade } from './bridge.js';
 // Shared viewer behavior. Host operations and persisted preferences enter through the bridge.
 export function createViewerRuntime(bridge) {
+bridge = createRuntimeFacade(bridge);
 let activePlaybackAbort = null;
 let activePlaybackDispose = null;
 const albumBrowserState = new WeakMap();
@@ -3321,7 +3323,7 @@ function gridMetrics(wrap, grid) {
             const cs = window.getComputedStyle(wrap);
             innerW = wrap.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
         }
-        const gutter = 12;
+        const gutter = 0;
         innerW = Math.max(1, (innerW || 1) - gutter);
         const cols = Math.max(1, Math.floor((innerW + gap) / (size + gap)));
         const cell = (innerW - (cols - 1) * gap) / cols;
@@ -3332,10 +3334,17 @@ function gridLayout(metrics) {
         const state = bridge.state;
         const marks = bridge.galleryLoadMarks || [];
         const canonical = state.allItems || state.items;
+        const sessionBatches = bridge.gridBatches;
         const label = bridge.initialBatchLabel || 'Batch 1';
         const signature = label + '|' + marks.map(mark => typeof mark === 'string' ? mark : (mark.label || '') + ':' + (mark.members || []).length).join('|');
         const cached = state.pagedGridCache;
-        if (cached && cached.items === state.items && cached.count === state.items.length && cached.canonical === canonical && cached.total === canonical.length && cached.signature === signature && cached.cols === metrics.cols && cached.cell === metrics.cell) return cached.layout;
+        if (cached && cached.batches === sessionBatches && cached.items === state.items && cached.count === state.items.length && cached.canonical === canonical && cached.total === canonical.length && cached.signature === signature && cached.cols === metrics.cols && cached.cell === metrics.cell) return cached.layout;
+        if (sessionBatches) {
+            const items = state.items.map((entry, index) => ({ id: thumbItemKey(entry), index }));
+            const layout = buildPagedGridLayout({ items, batches: sessionBatches, ...metrics });
+            state.pagedGridCache = { batches: sessionBatches, items: state.items, count: state.items.length, canonical, total: canonical.length, signature, cols: metrics.cols, cell: metrics.cell, layout };
+            return layout;
+        }
         const owners = new Map();
         const groups = new Map();
         const batches = [{ id: 'initial', label, ids: [] }];
@@ -3434,9 +3443,8 @@ function paintGridWindow() {
         if (seams.dataset.signature !== seamSignature) {
             seams.replaceChildren(); seams.dataset.signature = seamSignature;
             for (const section of sections) {
-                const seam = document.createElement('div'); seam.className = 'ms-grid-page-rail';
+                const seam = document.createElement('div'); seam.className = 'ms-grid-page-divider';
                 seam.style.top = section.top + 'px';
-                seam.style.height = section.height + 'px';
                 const label = document.createElement('span'); label.textContent = section.label;
                 seam.append(label); seams.append(seam);
             }

@@ -1,4 +1,4 @@
-export { BRIDGE_METHODS, CORE_EVENTS, createGalleryBridge } from './bridge.js';
+export { BRIDGE_METHODS, CORE_EVENTS, createGalleryBridge, createRuntimeFacade, XGALLERY_RUNTIME_API_VERSION } from './bridge.js';
 export {
     CORE_MANIFEST_URL,
     CORE_UPDATE_INTERVAL_MS,

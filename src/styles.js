@@ -4376,8 +4376,9 @@ export const OVERLAY_CSS = String.raw`
         .ms-reddit-meta .ms-follow-btn{margin-left:8px;vertical-align:middle;flex-shrink:0}
         .ms-grid-wrap{overflow-y:scroll;scrollbar-gutter:stable;overflow-anchor:none}
         .ms-grid-batch-layer{position:absolute;inset:0;pointer-events:none;z-index:3}
-        .ms-grid-page-rail{position:absolute;left:3px;width:1px;background:var(--ms-line-strong);pointer-events:none}
-        .ms-grid-page-rail span{position:absolute;left:9px;top:0;color:var(--ms-text-3);font:10px/14px var(--ms-font-mono,monospace);white-space:nowrap;pointer-events:none}
+        .ms-grid-page-divider{position:absolute;left:0;right:0;height:14px;display:flex;align-items:center;gap:8px;pointer-events:none}
+        .ms-grid-page-divider::after{content:'';height:1px;flex:1;background:var(--ms-line-strong)}
+        .ms-grid-page-divider span{flex-shrink:0;color:var(--ms-text-3);font:10px/14px var(--ms-font-mono,monospace);white-space:nowrap;pointer-events:none}
         .ms-load-mark[data-label]::after{content:attr(data-label);position:absolute;bottom:0;left:50%;transform:translateX(-50%);padding:2px 4px;border-radius:4px;background:var(--ms-surface-1);color:var(--ms-text-3);font:9px/1.2 monospace;white-space:nowrap}
         @media(max-width:540px){.ms-settings-sidebar{width:112px;padding:8px 4px}.ms-settings-layout>.ms-settings-body{padding:12px}.ms-settings-sidebar .ms-settings-tab{padding:0 8px}}
         .ms-settings-tabs {

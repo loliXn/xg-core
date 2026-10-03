@@ -1,5 +1,5 @@
 // Geometry only: identities and batch membership are supplied by the host.
-export function buildPagedGridLayout({ items, batches, cols, cell, gap, gutter = 12 }) {
+export function buildPagedGridLayout({ items, batches, cols, cell, gap, gutter = 0 }) {
     const byId = new Map();
     const byIndex = [];
     const rows = [];

@@ -51,6 +51,8 @@ const bundle = [
     '        CORE_MANIFEST_URL,',
     '        CORE_UPDATE_INTERVAL_MS,',
     '        GalleryController,',
+    '        createRuntimeFacade,',
+    '        XGALLERY_RUNTIME_API_VERSION,',
     '        buildPagedGridLayout,',
     '        pagedGridWindow,',
     '        inspectImageFormat,',

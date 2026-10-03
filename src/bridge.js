@@ -1,3 +1,13 @@
+export const XGALLERY_RUNTIME_API_VERSION = 1;
+
+// Legacy getters are still supported while consumers adopt session commands.
+export function createRuntimeFacade(bridge) {
+    if (!bridge || typeof bridge !== 'object' || !bridge.state) throw new TypeError('runtime bridge state is required');
+    const version = bridge.runtimeApiVersion ?? XGALLERY_RUNTIME_API_VERSION;
+    if (version !== XGALLERY_RUNTIME_API_VERSION) throw new TypeError('Unsupported runtime bridge version: ' + version);
+    return bridge;
+}
+
 export const BRIDGE_METHODS = Object.freeze([
     'resolveItem',
     'requestMore',
@@ -14,7 +24,9 @@ export const CORE_EVENTS = Object.freeze([
     'remove',
     'navigate',
     'action',
-    'more'
+    'more',
+    'batch',
+    'filter'
 ]);
 
 const noop = () => undefined;
