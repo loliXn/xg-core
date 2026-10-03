@@ -11,6 +11,37 @@ function releasePlayback() {
     if (activePlaybackDispose) activePlaybackDispose();
     activePlaybackDispose = null;
 }
+function bindRecoveredVideoSave(video, source, filename) {
+    let menu = null, dismiss = null;
+    const close = () => {
+        dismiss?.abort(); dismiss = null; menu?.remove(); menu = null;
+        if (bridge.state.videoSaveDismiss === close) bridge.state.videoSaveDismiss = null;
+    };
+    const onContext = event => {
+        if (event.shiftKey) { close(); return; }
+        event.preventDefault(); event.stopPropagation(); close();
+        menu = document.createElement('div'); menu.className = 'ms-video-save-menu'; menu.setAttribute('role', 'menu');
+        const save = document.createElement('button'); save.type = 'button'; save.setAttribute('role', 'menuitem');
+        save.textContent = 'Save video as ' + filename;
+        save.addEventListener('click', click => {
+            click.stopPropagation();
+            const link = document.createElement('a'); link.href = source; link.download = filename;
+            menu.append(link); link.click(); close();
+        });
+        const hint = document.createElement('small'); hint.textContent = 'Shift + right-click for browser menu';
+        menu.append(save, hint); bridge.state.overlay.append(menu);
+        bridge.state.videoSaveDismiss = close;
+        const host = bridge.state.overlay.getBoundingClientRect();
+        menu.style.left = Math.max(8, Math.min(event.clientX - host.left, host.width - menu.offsetWidth - 8)) + 'px';
+        menu.style.top = Math.max(8, Math.min(event.clientY - host.top, host.height - menu.offsetHeight - 8)) + 'px';
+        dismiss = new AbortController();
+        document.addEventListener('pointerdown', click => { if (!click.composedPath().includes(menu)) close(); }, { capture: true, signal: dismiss.signal });
+        document.addEventListener('keydown', key => { if (key.key === 'Escape') { key.stopPropagation(); close(); } }, { capture: true, signal: dismiss.signal });
+        save.focus({ preventScroll: true });
+    };
+    video.addEventListener('contextmenu', onContext);
+    return () => { close(); video.removeEventListener('contextmenu', onContext); };
+}
 function protectHostControl(button, compact) {
     const values = {appearance:'none',background:'#191b20',color:'#e7e8eb',border:'1px solid rgba(255,255,255,.24)','border-radius':compact?'8px':'10px',font:'600 12px/1 system-ui, sans-serif','text-shadow':'none','box-shadow':'0 2px 8px rgba(0,0,0,.25)','text-transform':'none',opacity:'1',filter:'none','backdrop-filter':'none','box-sizing':'border-box'};
     for (const [key,value] of Object.entries(values)) button.style.setProperty(key,value,'important');
@@ -137,6 +168,7 @@ function beginOpen() {
 }
 function resetLayout() {
     const overlay=bridge.state.overlay;
+    bridge.state.gridReturn = null;
     overlay.classList.remove('ms-grid-mode','ms-stage-fullscreen','ms-thumbs-hidden');
     const thumbs=overlay.querySelector('.ms-thumbs-wrap');if(thumbs)thumbs.style.display='block';
 }
@@ -169,6 +201,8 @@ function clearViewerMedia() {
     (bridge.state.gridPool||[]).forEach(cell=>resetMediaThumbEl(cell));
     const grid=overlay.querySelector('.ms-grid');if(grid)grid.replaceChildren();
     bridge.state.gridPool=[];bridge.state.gridSizer=null;
+    const gridWrap = overlay.querySelector('.ms-grid-wrap');
+    if (gridWrap) { delete gridWrap.dataset.msGridWindow; gridWrap.removeEventListener('scroll', onGridWindowScroll); }
     (bridge.state.thumbsPool||[]).forEach(cell=>resetMediaThumbEl(cell));
     const track=overlay.querySelector('.ms-thumbs-track');if(track)track.replaceChildren();
     bridge.state.thumbsPool=[];
@@ -443,10 +477,12 @@ function renderTitleRow(model) {
         if(index)meta.append(document.createTextNode(' • '));
         const link=document.createElement(data.href?'a':'span');link.textContent=data.label;
         if(data.href){link.href=data.href;link.target='_blank';link.rel='noopener noreferrer';}
-        meta.append(link);
+        const identity = document.createElement('span'); identity.className = 'ms-title-identity';
+        identity.append(link);
+        if (data.kind === 'community' && model.community?.join?.available) identity.append(relationshipButton(document, model.community.join, { on: 'Joined', off: 'Join', leave: 'Leave' }));
+        if (data.kind === 'author' && model.follow?.available) identity.append(relationshipButton(document, model.follow));
+        meta.append(identity);
     });
-    if (model.community?.join?.available) meta.append(relationshipButton(document, model.community.join, { on: 'Joined', off: 'Join', leave: 'Leave' }));
-    if (model.follow?.available) meta.append(relationshipButton(document, model.follow));
     row.querySelector('[data-rdvote="upvote"]').classList.toggle('upvoted',!!model.upvoted);
     row.querySelector('[data-rdvote="downvote"]').classList.toggle('downvoted',!!model.downvoted);
     row.querySelector('.ms-reddit-score').textContent=model.score==null || model.score===''?'•':String(model.score).replace(/\s*points?\s*$/i,'');
@@ -1242,7 +1278,10 @@ function syncVerticalFitMediaBox(media) {
         if (wrap.dataset.msVerticalFitBound !== '1' && typeof ResizeObserver !== 'undefined') {
             wrap.dataset.msVerticalFitBound = '1';
             let pending = false;
+            let width = wrap.clientWidth, height = wrap.clientHeight;
             const observer = new ResizeObserver(() => {
+                if ((width !== wrap.clientWidth || height !== wrap.clientHeight) && bridge.state.flyGhost?.handoff) cancelFlyGhost();
+                width = wrap.clientWidth; height = wrap.clientHeight;
                 if (pending) return;
                 pending = true;
                 requestAnimationFrame(() => {
@@ -1353,10 +1392,8 @@ function snapshotGhostSource(el) {
         }
     }
 
-    // A FLIP between two on-screen rectangles. Animating the box itself rather
-    // than a transform keeps an object-fit: cover ghost honest on every frame:
-    // scaling one bitmap between a 3:2 stage and a 1:1 cell squashed it for the
-    // whole flight, which is what the previous version did.
+    // Uniform FLIP scaling with an animated crop: no stretched bitmap and no
+    // left/top/width/height layout work on each animation frame.
 function flyGhost(fromRect, toRect, src, options) {
         const opts = options || {};
         if (!src || !fromRect || !toRect) { releaseFlyHidden(); return; }
@@ -1377,12 +1414,17 @@ function flyGhost(fromRect, toRect, src, options) {
         // Marked so the host-isolation rules, which hide every other child of
         // body while the gallery is open, leave the ghost visible.
         ghost.setAttribute('data-ms-fly-ghost', '1');
+        const aspect = src?.tagName === 'CANVAS' && src.height ? src.width / src.height : toRect.width / toRect.height;
+        const mediaWidth = Math.max(toRect.width, toRect.height * aspect);
+        const mediaHeight = mediaWidth / aspect;
+        const mediaLeft = toRect.left + (toRect.width - mediaWidth) / 2;
+        const mediaTop = toRect.top + (toRect.height - mediaHeight) / 2;
         ghost.style.cssText = 'position:fixed; z-index:2147483647; pointer-events:none; margin:0;'
-            + ' object-fit:cover; visibility:visible;'
-            + ' will-change:left, top, width, height, opacity;'
-            + ' left:' + fromRect.left + 'px; top:' + fromRect.top + 'px;'
-            + ' width:' + fromRect.width + 'px; height:' + fromRect.height + 'px;'
-            + ' border-radius:' + fromRadius + 'px;';
+            + ' object-fit:contain; visibility:visible;'
+            + ' will-change:transform, opacity; transform-origin:center;'
+            + ' left:' + mediaLeft + 'px; top:' + mediaTop + 'px;'
+            + ' width:' + mediaWidth + 'px; height:' + mediaHeight + 'px;'
+            + ' border-radius:' + toRadius + 'px;';
         document.body.appendChild(ghost);
 
         if (opts.hide && opts.hide.style) {
@@ -1393,13 +1435,17 @@ function flyGhost(fromRect, toRect, src, options) {
         // 200ms on the layout easing, the pair the motion table allows for
         // anything that moves or resizes. The token itself only exists inside
         // the shadow sheet, so the value is repeated rather than referenced.
+        const scale = Math.max(fromRect.width / mediaWidth, fromRect.height / mediaHeight);
+        const dx = fromRect.left + fromRect.width / 2 - (toRect.left + toRect.width / 2);
+        const dy = fromRect.top + fromRect.height / 2 - (toRect.top + toRect.height / 2);
+        const cropX = Math.max(0, (mediaWidth - fromRect.width / scale) / 2);
+        const cropY = Math.max(0, (mediaHeight - fromRect.height / scale) / 2);
+        const endCropX = Math.max(0, (mediaWidth - toRect.width) / 2);
+        const endCropY = Math.max(0, (mediaHeight - toRect.height) / 2);
         const frames = [
-            { left: fromRect.left + 'px', top: fromRect.top + 'px',
-              width: fromRect.width + 'px', height: fromRect.height + 'px',
-              borderRadius: fromRadius + 'px', opacity: 1 },
-            { left: toRect.left + 'px', top: toRect.top + 'px',
-              width: toRect.width + 'px', height: toRect.height + 'px',
-              borderRadius: toRadius + 'px', opacity: opts.fadeOut ? 0 : 1 }
+            { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + scale + ')',
+              clipPath: 'inset(' + cropY + 'px ' + cropX + 'px round ' + fromRadius / scale + 'px)', opacity: 1 },
+            { transform: 'translate(0,0) scale(1)', clipPath: 'inset(' + endCropY + 'px ' + endCropX + 'px round ' + toRadius + 'px)', opacity: opts.fadeOut ? 0 : 1 }
         ];
         if (opts.fadeOut) frames.splice(1, 0, { opacity: 1, offset: 0.55 });
         let anim = null;
@@ -1415,7 +1461,7 @@ function flyGhost(fromRect, toRect, src, options) {
             return;
         }
 
-        const live = { ghost: ghost, anim: anim, timer: null };
+        const live = { ghost: ghost, anim: anim, timer: null, handoff: opts.handoff || null, token: bridge.state.renderToken };
         bridge.state.flyGhost = live;
         const done = () => {
             if (bridge.state.flyGhost !== live) return;
@@ -1424,7 +1470,12 @@ function flyGhost(fromRect, toRect, src, options) {
             try { ghost.remove(); } catch (e) { }
             releaseFlyHidden();
         };
-        anim.addEventListener('finish', done);
+        live.done = done;
+        anim.addEventListener('finish', () => {
+            live.landed = true;
+            releaseFlyHidden();
+            if (!live.handoff || live.ready) done();
+        });
         anim.addEventListener('cancel', done);
         // Animations are throttled in a background tab, so never let the ghost
         // or the hidden cell depend on a frame that may never arrive.
@@ -1448,7 +1499,8 @@ function scrollGridToCurrent() {
         // be tall before the scroll rather than when paintGridWindow gets to it.
         sizer.style.height = Math.max(0, rows * m.rowH - m.gap) + 'px';
         const row = Math.floor(Math.max(0, bridge.state.currentIndex) / m.cols);
-        const target = row * m.rowH - Math.max(0, (wrap.clientHeight - m.cell) / 2);
+        const origin = grid.getBoundingClientRect().top - wrap.getBoundingClientRect().top + wrap.scrollTop;
+        const target = origin + row * m.rowH - Math.max(0, (wrap.clientHeight - m.cell) / 2);
         const limit = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
         wrap.scrollTop = Math.max(0, Math.min(target, limit));
     }
@@ -1476,11 +1528,11 @@ function flyFromCell(fromRect, src, aspect) {
             width = height * ratio;
         }
         flyGhost(fromRect, {
-            left: wrapRect.left + (wrapRect.width - width) / 2,
+            left: wrapRect.left + mediaHorizontalCenter(wrap, width) - width / 2,
             top: wrapRect.top + (wrapRect.height - height) / 2,
             width: width,
             height: height
-        }, src, { fadeOut: true, fromRadius: 6, toRadius: 4, duration: 180 });
+        }, src, { handoff: bridge.state.items[bridge.state.currentIndex]?.item, fromRadius: 6, toRadius: 4, duration: 180 });
     }
 
 function setGridMode(on) {
@@ -1538,6 +1590,10 @@ function setGridMode(on) {
         bridge.state.gridMode = enable;
         bridge.state.overlay.classList.toggle('ms-grid-mode', enable);
         if (enable) {
+            ++bridge.state.renderToken;
+            bridge.state.activeStageImageController?.abort();
+            bridge.state.activeStageImageController = null;
+            releasePlayback();
             const wrap = bridge.state.overlay.querySelector('.ms-media-wrap');
             if (wrap) {
                 const existingMedia = wrap.querySelectorAll('video, audio, iframe');
@@ -1555,7 +1611,17 @@ function setGridMode(on) {
             // repaint - and so re-pool - the cell a frame after the flight
             // had already started from it.
             bridge.state.gridLayoutSnapshot = null;
-            scrollGridToCurrent();
+            const gridWrap = bridge.state.overlay.querySelector('.ms-grid-wrap');
+            const gridMetricsNow = gridMetrics(gridWrap, bridge.state.overlay.querySelector('.ms-grid'));
+            const retained = bridge.state.gridReturn;
+            if (retained) {
+                ensureGridWindow(bridge.state.overlay.querySelector('.ms-grid'), gridWrap).style.height = Math.max(0, Math.ceil(bridge.state.items.length / gridMetricsNow.cols) * gridMetricsNow.rowH - gridMetricsNow.gap) + 'px';
+                gridWrap.scrollTop = retained.scrollTop;
+                const grid = bridge.state.overlay.querySelector('.ms-grid');
+                const origin = grid.getBoundingClientRect().top - gridWrap.getBoundingClientRect().top + gridWrap.scrollTop;
+                const y = origin + Math.floor(bridge.state.currentIndex / gridMetricsNow.cols) * gridMetricsNow.rowH;
+                if (y + gridMetricsNow.cell < gridWrap.scrollTop || y > gridWrap.scrollTop + gridWrap.clientHeight) scrollGridToCurrent();
+            } else scrollGridToCurrent();
             renderGrid();
             syncZoomSliderAvailability();
             const grid = bridge.state.overlay.querySelector('.ms-grid');
@@ -1566,12 +1632,15 @@ function setGridMode(on) {
                 });
             }
         } else {
+            bridge.state.gridReturn = { scrollTop: bridge.state.overlay.querySelector('.ms-grid-wrap').scrollTop };
             bridge.state.cameFromGrid = true;
+            bridge.state.overlay.classList.add('ms-grid-handoff');
+            if (bridge.state.tagsPanelWanted) bridge.applyTagsPanel(true);
             renderThumbs();
             bridge.renderCurrent();
             if (backRect && backSrc) flyFromCell(backRect, backSrc, backAspect);
-
-            if (bridge.state.tagsPanelWanted) bridge.applyTagsPanel(true);
+            const overlay = bridge.state.overlay;
+            requestAnimationFrame(() => overlay.classList.remove('ms-grid-handoff'));
         }
         updateButtons();
     }
@@ -3312,13 +3381,22 @@ function paintGridWindow() {
             seams.replaceChildren(); seams.dataset.signature = seamSignature;
             for (const boundary of boundaries) {
                 const seam = document.createElement('div'); seam.className = 'ms-grid-batch-seam';
-                seam.style.top = (Math.floor(boundary.index / m.cols) * m.rowH - m.gap / 2) + 'px';
+                const col = boundary.index % m.cols;
+                const rowTop = Math.floor(boundary.index / m.cols) * m.rowH;
+                seam.style.top = (rowTop - m.gap / 2) + 'px';
+                if (col) {
+                    seam.classList.add('ms-grid-batch-edge');
+                    seam.style.left = (col * (m.cell + m.gap) - m.gap / 2) + 'px';
+                    seam.style.top = rowTop + 'px';
+                    seam.style.height = m.cell + 'px';
+                }
                 const label = document.createElement('span'); label.textContent = boundary.label;
                 seam.title = 'Starts at item ' + (boundary.index + 1); seam.append(label); seams.append(seam);
             }
         }
         const pad = 2;
-        const startRow = Math.max(0, Math.floor(wrap.scrollTop / m.rowH) - pad);
+        const origin = grid.getBoundingClientRect().top - wrap.getBoundingClientRect().top + wrap.scrollTop;
+        const startRow = Math.max(0, Math.floor((wrap.scrollTop - origin) / m.rowH) - pad);
         const visRows = Math.ceil(Math.max(wrap.clientHeight, 1) / m.rowH) + pad * 2;
         const start = startRow * m.cols;
         const end = Math.min(n, (startRow + visRows) * m.cols);
@@ -3450,25 +3528,47 @@ function syncGridWindow() {
         if (!wrap || !grid) return;
         const previous = bridge.state.gridLayoutSnapshot;
         const metrics = gridMetrics(wrap, grid);
-        const changed = previous && (previous.items !== bridge.state.items || previous.cols !== metrics.cols || previous.rowH !== metrics.rowH);
-        if (changed && bridge.state.gridMode) {
-            const row = Math.max(0, Math.floor(wrap.scrollTop / previous.rowH));
-            const at = Math.min(previous.keys.length - 1, row * previous.cols);
-            const offset = wrap.scrollTop - row * previous.rowH;
-            const indexes = new Map(bridge.state.items.map((entry, index) => [thumbItemKey(entry), index]));
-            let found = indexes.get(previous.keys[at]);
-            for (let distance = 1; found == null && distance < previous.keys.length; distance++) {
-                found = indexes.get(previous.keys[at + distance]) ?? indexes.get(previous.keys[at - distance]);
+        const keys = bridge.state.items.map(thumbItemKey);
+        const unchangedPrefix = previous && previous.keys.every((key, index) => keys[index] === key);
+        const changed = previous && (previous.items !== bridge.state.items || previous.keys.length !== keys.length || !unchangedPrefix || previous.cols !== metrics.cols || previous.rowH !== metrics.rowH);
+        const tailAppend = previous && unchangedPrefix && previous.cols === metrics.cols && previous.rowH === metrics.rowH;
+        if (changed && bridge.state.gridMode && !tailAppend) {
+            const indexes = new Map(keys.map((key, index) => [key, index]));
+            const hostRect = wrap.getBoundingClientRect();
+            // The pooled cells still represent the old list. Capture now, at
+            // commit time, so scrolling during a network request is respected.
+            const visible = (bridge.state.gridPool || []).filter(cell => cell.style.display !== 'none')
+                .map(cell => ({ key: cell.dataset.msKey, rect: cell.getBoundingClientRect() }))
+                .filter(cell => cell.rect.bottom > hostRect.top && cell.rect.top < hostRect.bottom)
+                .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
+            let anchor = visible.find(cell => indexes.has(cell.key));
+            if (!anchor && previous.keys.length) {
+                const origin = grid.getBoundingClientRect().top - hostRect.top + wrap.scrollTop;
+                const at = Math.max(0, Math.min(previous.keys.length - 1, Math.floor((wrap.scrollTop - origin) / previous.rowH) * previous.cols));
+                for (let distance = 0; !anchor && distance < previous.keys.length; distance++) {
+                    for (const index of [at + distance, at - distance]) {
+                        const key = previous.keys[index];
+                        if (key && indexes.has(key)) {
+                            anchor = { key, rect: { top: hostRect.top + origin + Math.floor(index / previous.cols) * previous.rowH - wrap.scrollTop } };
+                            break;
+                        }
+                    }
+                }
             }
-            if (found != null) {
+            if (anchor) {
+                const found = indexes.get(anchor.key);
+                const origin = grid.getBoundingClientRect().top - hostRect.top + wrap.scrollTop;
+                const target = origin + Math.floor(found / metrics.cols) * metrics.rowH - (anchor.rect.top - hostRect.top);
                 const sizer = ensureGridWindow(grid, wrap);
                 sizer.style.height = Math.max(0, Math.ceil(bridge.state.items.length / metrics.cols) * metrics.rowH - metrics.gap) + 'px';
-                wrap.scrollTop = Math.max(0, Math.floor(found / metrics.cols) * metrics.rowH + offset);
+                // A pure append has zero displacement. Do not interrupt wheel
+                // momentum or write a rounded scrollTop for it.
+                if (Math.abs(target - wrap.scrollTop) > 0.5) wrap.scrollTop = Math.max(0, target);
             }
         }
         paintGridWindow();
         if (!previous || changed) bridge.state.gridLayoutSnapshot = {
-            items: bridge.state.items, keys: bridge.state.items.map(thumbItemKey), cols: metrics.cols, rowH: metrics.rowH
+            items: bridge.state.items, keys, cols: metrics.cols, rowH: metrics.rowH
         };
     }
 
@@ -3623,6 +3723,11 @@ function noteMediaDimensions(item, el) {
 
 function markItemMediaLoaded(item) {
         if (!item || !bridge.state.overlay) return;
+        const flight = bridge.state.flyGhost;
+        if (flight?.handoff === item && flight.token === bridge.state.renderToken) {
+            flight.ready = true;
+            if (flight.landed) flight.done();
+        }
         item._msMediaLoaded = true;
         item._msUnavailable = false;
         try {
@@ -4025,6 +4130,7 @@ function bindGlobalGalleryHandlers() {
 
         bridge.state.keyHandler = function (e) {
             if (!bridge.state.open) return;
+            if (e.key === 'Escape' && bridge.state.videoSaveDismiss) { e.preventDefault(); bridge.state.videoSaveDismiss(); return; }
             if (document.getElementById('ms-settings-root')) return;
             if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) {
                 e.preventDefault();
@@ -4493,6 +4599,7 @@ function renderCurrent() {
         bridge.state.hdUpgradeRun = null;
         updateHdButton('hidden');
         const token = ++bridge.state.renderToken;
+        if (bridge.state.flyGhost?.handoff) cancelFlyGhost();
         // Every render starts with the barrier down; the branch that actually
         // fetches something raises it again. Without this an item that fetches
         // nothing - an embed, an album cover - would leave the previous item's
@@ -5217,7 +5324,8 @@ function renderCurrent() {
                             return;
                         }
                         if (result && result.src) {
-                            activePlaybackDispose = result.dispose || null;
+                            const unbindSave = result.downloadName ? bindRecoveredVideoSave(video, result.src, result.downloadName) : null;
+                            activePlaybackDispose = () => { unbindSave?.(); result.dispose?.(); };
                             label.textContent = 'Preparing video…';
                             stats.textContent = 'Transfer complete · opening player';
                             track.removeAttribute('value');

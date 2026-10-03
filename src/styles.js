@@ -1435,7 +1435,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-reddit-title:hover {
             text-decoration: none;
             color: #ff4500;
-            background: var(--ms-hover);
+            background: transparent;
         }
         /* Same treatment the topbar gives its labels, so the two read as one UI. */
         .ms-reddit-meta {
@@ -1457,8 +1457,13 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-reddit-meta a:hover {
             color: #ff4500;
-            text-decoration: underline;
+            text-decoration: none;
         }
+        .ms-title-identity { display:inline-flex; align-items:center; gap:6px; vertical-align:middle; }
+        .ms-video-save-menu { position:absolute; z-index:30; max-width:min(420px,calc(100% - 16px)); padding:6px; border:1px solid var(--ms-line-strong); border-radius:10px; background:var(--ms-surface-1); box-shadow:0 8px 32px #0006; }
+        .ms-video-save-menu button { display:block; width:100%; padding:9px 10px; border:0; border-radius:6px; background:transparent; color:var(--ms-text); font:12px/1.4 var(--ms-font-mono,monospace); text-align:left; overflow-wrap:anywhere; cursor:pointer; }
+        .ms-video-save-menu button:hover,.ms-video-save-menu button:focus-visible { background:var(--ms-hover); }
+        .ms-video-save-menu small { display:block; padding:4px 10px; font-size:11px; color:var(--ms-text-3); }
         /* Anchored to the right edge, not to the card, so the controls stay
            put whatever the title does. */
         .ms-reddit-actions {
@@ -3259,6 +3264,8 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay.ms-tags-resizing .ms-media-wrap {
             transition: none !important;
         }
+        .ms-gallery-overlay.ms-grid-handoff .ms-tags-overlay,
+        .ms-gallery-overlay.ms-grid-handoff .ms-media-wrap { transition:none !important; }
         .ms-tags-resizer {
             position: absolute;
             top: 0;
@@ -4371,6 +4378,8 @@ export const OVERLAY_CSS = String.raw`
         .ms-grid-batch-layer{position:absolute;inset:0;pointer-events:none;z-index:3}
         .ms-grid-batch-seam{position:absolute;left:0;right:0;height:1px;background:var(--ms-line-strong)}
         .ms-grid-batch-seam span{position:absolute;right:4px;top:2px;background:var(--ms-surface-1);color:var(--ms-text-3);border-radius:4px;padding:2px 4px;font:10px/1.2 var(--ms-font-mono,monospace)}
+        .ms-grid-batch-seam.ms-grid-batch-edge{right:auto;width:1px}
+        .ms-grid-batch-edge span{right:auto;left:5px;top:3px;white-space:nowrap}
         .ms-load-mark[data-label]::after{content:attr(data-label);position:absolute;bottom:0;left:50%;transform:translateX(-50%);padding:2px 4px;border-radius:4px;background:var(--ms-surface-1);color:var(--ms-text-3);font:9px/1.2 monospace;white-space:nowrap}
         @media(max-width:540px){.ms-settings-sidebar{width:112px;padding:8px 4px}.ms-settings-layout>.ms-settings-body{padding:12px}.ms-settings-sidebar .ms-settings-tab{padding:0 8px}}
         .ms-settings-tabs {
@@ -4422,7 +4431,7 @@ export const OVERLAY_CSS = String.raw`
         /* Switching from a long page to a short one must not resize the dialog. */
         .ms-settings-page { min-height: 240px; }
         .ms-settings-page[hidden]{display:none!important}
-        .ms-r34-settings-modal button:not(:disabled):not([aria-selected="true"]):not(.is-success):not(.is-error):not(.ms-r34-save):not(:active):hover{background:var(--ms-hover)!important;color:var(--ms-text)!important}
+        .ms-r34-settings-modal button:not(:disabled):not([aria-selected="true"]):not(.is-success):not(.is-error):not(.ms-r34-save):not(.ms-list-group-head):not(:active):hover{background:var(--ms-hover)!important;color:var(--ms-text)!important}
         .ms-r34-settings-modal button:focus-visible{outline:2px solid var(--ms-accent);outline-offset:2px}
         .ms-r34-settings-modal button:disabled{opacity:.45;cursor:default}
         .ms-settings-row>button{padding:8px 12px;min-height:34px;border:1px solid var(--ms-line);border-radius:8px;background:var(--ms-surface-3);color:var(--ms-text);font:600 12px/1.25 var(--ms-font-ui);cursor:pointer;transition:background-color 140ms var(--ms-ease-out),border-color 140ms var(--ms-ease-out),color 140ms var(--ms-ease-out),opacity 140ms var(--ms-ease-out)}
