@@ -1,5 +1,6 @@
 import { renderPostPanel, revealOnNextFrame, relationshipButton } from './panels.js';
 import { XGALLERY_CORE_VERSION } from './contract.js';
+import { buildPagedGridLayout, pagedGridWindow } from './grid-layout.js';
 // Shared viewer behavior. Host operations and persisted preferences enter through the bridge.
 export function createViewerRuntime(bridge) {
 let activePlaybackAbort = null;
@@ -1494,13 +1495,13 @@ function scrollGridToCurrent() {
         if (!wrap || !grid) return;
         const sizer = ensureGridWindow(grid, wrap);
         const m = gridMetrics(wrap, grid);
-        const rows = Math.ceil(bridge.state.items.length / m.cols);
+        const layout = gridLayout(m);
         // scrollTop is clamped to the current scrollHeight, so the sizer has to
         // be tall before the scroll rather than when paintGridWindow gets to it.
-        sizer.style.height = Math.max(0, rows * m.rowH - m.gap) + 'px';
-        const row = Math.floor(Math.max(0, bridge.state.currentIndex) / m.cols);
+        sizer.style.height = layout.height + 'px';
+        const rect = layout.byIndex[bridge.state.currentIndex];
         const origin = grid.getBoundingClientRect().top - wrap.getBoundingClientRect().top + wrap.scrollTop;
-        const target = origin + row * m.rowH - Math.max(0, (wrap.clientHeight - m.cell) / 2);
+        const target = origin + (rect?.y || 0) - Math.max(0, (wrap.clientHeight - m.cell) / 2);
         const limit = Math.max(0, wrap.scrollHeight - wrap.clientHeight);
         wrap.scrollTop = Math.max(0, Math.min(target, limit));
     }
@@ -1613,13 +1614,14 @@ function setGridMode(on) {
             bridge.state.gridLayoutSnapshot = null;
             const gridWrap = bridge.state.overlay.querySelector('.ms-grid-wrap');
             const gridMetricsNow = gridMetrics(gridWrap, bridge.state.overlay.querySelector('.ms-grid'));
+            const layout = gridLayout(gridMetricsNow);
             const retained = bridge.state.gridReturn;
             if (retained) {
-                ensureGridWindow(bridge.state.overlay.querySelector('.ms-grid'), gridWrap).style.height = Math.max(0, Math.ceil(bridge.state.items.length / gridMetricsNow.cols) * gridMetricsNow.rowH - gridMetricsNow.gap) + 'px';
+                ensureGridWindow(bridge.state.overlay.querySelector('.ms-grid'), gridWrap).style.height = layout.height + 'px';
                 gridWrap.scrollTop = retained.scrollTop;
                 const grid = bridge.state.overlay.querySelector('.ms-grid');
                 const origin = grid.getBoundingClientRect().top - gridWrap.getBoundingClientRect().top + gridWrap.scrollTop;
-                const y = origin + Math.floor(bridge.state.currentIndex / gridMetricsNow.cols) * gridMetricsNow.rowH;
+                const y = origin + (layout.byIndex[bridge.state.currentIndex]?.y || 0);
                 if (y + gridMetricsNow.cell < gridWrap.scrollTop || y > gridWrap.scrollTop + gridWrap.clientHeight) scrollGridToCurrent();
             } else scrollGridToCurrent();
             renderGrid();
@@ -3319,10 +3321,61 @@ function gridMetrics(wrap, grid) {
             const cs = window.getComputedStyle(wrap);
             innerW = wrap.clientWidth - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
         }
-        innerW = Math.max(1, innerW || 1);
+        const gutter = 12;
+        innerW = Math.max(1, (innerW || 1) - gutter);
         const cols = Math.max(1, Math.floor((innerW + gap) / (size + gap)));
         const cell = (innerW - (cols - 1) * gap) / cols;
-        return { cols: cols, cell: cell, gap: gap, rowH: cell + gap };
+        return { cols: cols, cell: cell, gap: gap, gutter: gutter, rowH: cell + gap };
+    }
+
+function gridLayout(metrics) {
+        const state = bridge.state;
+        const marks = bridge.galleryLoadMarks || [];
+        const canonical = state.allItems || state.items;
+        const label = bridge.initialBatchLabel || 'Batch 1';
+        const signature = label + '|' + marks.map(mark => typeof mark === 'string' ? mark : (mark.label || '') + ':' + (mark.members || []).length).join('|');
+        const cached = state.pagedGridCache;
+        if (cached && cached.items === state.items && cached.count === state.items.length && cached.canonical === canonical && cached.total === canonical.length && cached.signature === signature && cached.cols === metrics.cols && cached.cell === metrics.cell) return cached.layout;
+        const owners = new Map();
+        const groups = new Map();
+        const batches = [{ id: 'initial', label, ids: [] }];
+        for (const entry of state.gridInitialMembers || []) {
+            const item = entry.item || entry;
+            owners.set(item, 'initial');
+            owners.set(thumbItemKey(entry), 'initial');
+            if (item.groupId || item.postId) groups.set(item.groupId || item.postId, 'initial');
+        }
+        marks.forEach((mark, index) => {
+            const id = 'batch-' + index;
+            batches.push({ id, label: mark.label || 'Batch ' + (index + 2), ids: [] });
+            if (typeof mark === 'string') owners.set(mark, id);
+            else for (const member of mark.members || []) {
+                owners.set(member.item, id);
+                owners.set(member.key, id);
+                const item = member.item;
+                const group = item && (item.groupId || item.postId);
+                if (group) groups.set(group, id);
+            }
+        });
+        // Hydrated media inherits its post's owner, never the latest fetched page.
+        let inherited = 'initial';
+        for (const entry of canonical) {
+            const item = entry.item || entry;
+            const key = thumbItemKey(entry);
+            const owner = owners.get(item) || owners.get(key) || groups.get(item.groupId || item.postId) || inherited;
+            owners.set(item, owner);
+            owners.set(key, owner);
+            inherited = owner;
+        }
+        const batchById = new Map(batches.map(batch => [batch.id, batch]));
+        const items = state.items.map((entry, index) => {
+            const id = thumbItemKey(entry);
+            batchById.get(owners.get(entry.item || entry) || owners.get(id) || 'initial').ids.push(id);
+            return { id, index };
+        });
+        const layout = buildPagedGridLayout({ items, batches, ...metrics });
+        state.pagedGridCache = { items: state.items, count: state.items.length, canonical, total: canonical.length, signature, cols: metrics.cols, cell: metrics.cell, layout };
+        return layout;
     }
 
 function ensureGridWindow(grid, wrap) {
@@ -3369,47 +3422,34 @@ function paintGridWindow() {
         const wrap = bridge.state.overlay.querySelector('.ms-grid-wrap');
         if (!grid || !wrap) return;
         const sizer = ensureGridWindow(grid, wrap);
-        const n = bridge.state.items.length;
         const m = gridMetrics(wrap, grid);
-        const rows = Math.ceil(n / m.cols);
-        sizer.style.height = Math.max(0, rows * m.rowH - m.gap) + 'px';
+        const layout = gridLayout(m);
+        sizer.style.height = layout.height + 'px';
         let seams = grid.querySelector('.ms-grid-batch-layer');
         if (!seams) { seams = document.createElement('div'); seams.className = 'ms-grid-batch-layer'; grid.append(seams); }
-        const boundaries = galleryBoundaries();
-        const seamSignature = m.cols + ':' + m.rowH + ':' + boundaries.map(mark => mark.index + ':' + mark.label).join('|');
+        const origin = grid.getBoundingClientRect().top - wrap.getBoundingClientRect().top + wrap.scrollTop;
+        const viewportTop = wrap.scrollTop - origin;
+        const sections = layout.sections.filter(section => section.top + section.height >= viewportTop - m.rowH * 2 && section.top <= viewportTop + wrap.clientHeight + m.rowH * 2);
+        const seamSignature = sections.map(section => section.id + ':' + section.top + ':' + section.height + ':' + section.label).join('|');
         if (seams.dataset.signature !== seamSignature) {
             seams.replaceChildren(); seams.dataset.signature = seamSignature;
-            for (const boundary of boundaries) {
-                const seam = document.createElement('div'); seam.className = 'ms-grid-batch-seam';
-                const col = boundary.index % m.cols;
-                const rowTop = Math.floor(boundary.index / m.cols) * m.rowH;
-                seam.style.top = (rowTop - m.gap / 2) + 'px';
-                if (col) {
-                    seam.classList.add('ms-grid-batch-edge');
-                    seam.style.left = (col * (m.cell + m.gap) - m.gap / 2) + 'px';
-                    seam.style.top = rowTop + 'px';
-                    seam.style.height = m.cell + 'px';
-                }
-                const label = document.createElement('span'); label.textContent = boundary.label;
-                seam.title = 'Starts at item ' + (boundary.index + 1); seam.append(label); seams.append(seam);
+            for (const section of sections) {
+                const seam = document.createElement('div'); seam.className = 'ms-grid-page-rail';
+                seam.style.top = section.top + 'px';
+                seam.style.height = section.height + 'px';
+                const label = document.createElement('span'); label.textContent = section.label;
+                seam.append(label); seams.append(seam);
             }
         }
-        const pad = 2;
-        const origin = grid.getBoundingClientRect().top - wrap.getBoundingClientRect().top + wrap.scrollTop;
-        const startRow = Math.max(0, Math.floor((wrap.scrollTop - origin) / m.rowH) - pad);
-        const visRows = Math.ceil(Math.max(wrap.clientHeight, 1) / m.rowH) + pad * 2;
-        const start = startRow * m.cols;
-        const end = Math.min(n, (startRow + visRows) * m.cols);
-        const want = Math.max(0, end - start);
+        const indices = pagedGridWindow(layout, viewportTop, wrap.clientHeight);
         if (!bridge.state.gridPool) bridge.state.gridPool = [];
         const pool = bridge.state.gridPool;
         const used = new Set();
-        const reservedKeys = new Set(bridge.state.items.slice(start,end).map(thumbItemKey));
-        for (let index = start; index < end; index++) {
+        const reservedKeys = new Set(indices.map(index => thumbItemKey(bridge.state.items[index])));
+        for (const index of indices) {
             const entry = bridge.state.items[index];
             const key = thumbItemKey(entry);
-            const col = index % m.cols;
-            const row = Math.floor(index / m.cols);
+            const rect = layout.byIndex[index];
             let cell = takePoolCell(pool, used, key, reservedKeys);
             if (!cell) {
                 cell = document.createElement('button');
@@ -3423,8 +3463,8 @@ function paintGridWindow() {
             cell.style.display = '';
             cell.style.width = m.cell + 'px';
             cell.style.height = m.cell + 'px';
-            cell.style.left = (col * (m.cell + m.gap)) + 'px';
-            cell.style.top = (row * m.rowH) + 'px';
+            cell.style.left = rect.x + 'px';
+            cell.style.top = rect.y + 'px';
             if (cell.dataset.msKey === key) {
                 cell.setAttribute('data-grid-index', String(index));
                 cell.classList.toggle('active', index === bridge.state.currentIndex);
@@ -3528,10 +3568,13 @@ function syncGridWindow() {
         if (!wrap || !grid) return;
         const previous = bridge.state.gridLayoutSnapshot;
         const metrics = gridMetrics(wrap, grid);
+        const layout = gridLayout(metrics);
         const keys = bridge.state.items.map(thumbItemKey);
-        const unchangedPrefix = previous && previous.keys.every((key, index) => keys[index] === key);
-        const changed = previous && (previous.items !== bridge.state.items || previous.keys.length !== keys.length || !unchangedPrefix || previous.cols !== metrics.cols || previous.rowH !== metrics.rowH);
-        const tailAppend = previous && unchangedPrefix && previous.cols === metrics.cols && previous.rowH === metrics.rowH;
+        const changed = previous && previous.layout !== layout;
+        const tailAppend = previous && previous.keys.every((key, index) => {
+            const before = previous.layout.byId.get(key), after = layout.byId.get(key);
+            return keys[index] === key && before && after && before.x === after.x && before.y === after.y && before.width === after.width;
+        });
         if (changed && bridge.state.gridMode && !tailAppend) {
             const indexes = new Map(keys.map((key, index) => [key, index]));
             const hostRect = wrap.getBoundingClientRect();
@@ -3544,23 +3587,22 @@ function syncGridWindow() {
             let anchor = visible.find(cell => indexes.has(cell.key));
             if (!anchor && previous.keys.length) {
                 const origin = grid.getBoundingClientRect().top - hostRect.top + wrap.scrollTop;
-                const at = Math.max(0, Math.min(previous.keys.length - 1, Math.floor((wrap.scrollTop - origin) / previous.rowH) * previous.cols));
+                const at = pagedGridWindow(previous.layout, wrap.scrollTop - origin, 1, 0)[0] ?? previous.keys.length - 1;
                 for (let distance = 0; !anchor && distance < previous.keys.length; distance++) {
                     for (const index of [at + distance, at - distance]) {
                         const key = previous.keys[index];
                         if (key && indexes.has(key)) {
-                            anchor = { key, rect: { top: hostRect.top + origin + Math.floor(index / previous.cols) * previous.rowH - wrap.scrollTop } };
+                            anchor = { key, rect: { top: hostRect.top + origin + previous.layout.byId.get(key).y - wrap.scrollTop } };
                             break;
                         }
                     }
                 }
             }
             if (anchor) {
-                const found = indexes.get(anchor.key);
                 const origin = grid.getBoundingClientRect().top - hostRect.top + wrap.scrollTop;
-                const target = origin + Math.floor(found / metrics.cols) * metrics.rowH - (anchor.rect.top - hostRect.top);
+                const target = origin + layout.byId.get(anchor.key).y - (anchor.rect.top - hostRect.top);
                 const sizer = ensureGridWindow(grid, wrap);
-                sizer.style.height = Math.max(0, Math.ceil(bridge.state.items.length / metrics.cols) * metrics.rowH - metrics.gap) + 'px';
+                sizer.style.height = layout.height + 'px';
                 // A pure append has zero displacement. Do not interrupt wheel
                 // momentum or write a rounded scrollTop for it.
                 if (Math.abs(target - wrap.scrollTop) > 0.5) wrap.scrollTop = Math.max(0, target);
@@ -3568,7 +3610,7 @@ function syncGridWindow() {
         }
         paintGridWindow();
         if (!previous || changed) bridge.state.gridLayoutSnapshot = {
-            items: bridge.state.items, keys, cols: metrics.cols, rowH: metrics.rowH
+            items: bridge.state.items, keys, layout
         };
     }
 

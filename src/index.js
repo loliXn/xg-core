@@ -10,6 +10,7 @@ export {
     verifiedCoreRecord
 } from './update.js';
 export { GalleryController } from './controller.js';
+export { buildPagedGridLayout, pagedGridWindow } from './grid-layout.js';
 export { inspectImageFormat } from './media-format.js';
 export {
     PLACEHOLDER_DATA_URI_MAX,

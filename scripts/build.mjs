@@ -35,6 +35,7 @@ const body = [
     moduleBody('renderers.js'),
     moduleBody('update.js'),
     moduleBody('panels.js'),
+    moduleBody('grid-layout.js'),
     moduleBody('runtime.js')
 ].join('\n\n');
 
@@ -50,6 +51,8 @@ const bundle = [
     '        CORE_MANIFEST_URL,',
     '        CORE_UPDATE_INTERVAL_MS,',
     '        GalleryController,',
+    '        buildPagedGridLayout,',
+    '        pagedGridWindow,',
     '        inspectImageFormat,',
     '        PLACEHOLDER_DATA_URI_MAX,',
     '        ensureHttpsUrl,',
