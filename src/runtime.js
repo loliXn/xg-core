@@ -182,6 +182,8 @@ function finishOpen() {
 }
 function clearViewerMedia() {
     releasePlayback();
+    if (bridge.state.gridLoadMoreTimer) clearTimeout(bridge.state.gridLoadMoreTimer);
+    bridge.state.gridLoadMoreTimer = null;
     if (bridge.state.activeStageImageController) {
         bridge.state.activeStageImageController.abort();
         bridge.state.activeStageImageController = null;
@@ -691,6 +693,7 @@ function ensureOverlay() {
                 if (!bridge.state.gridMode) return;
                 if (gridWrap.scrollTop + gridWrap.clientHeight >= gridWrap.scrollHeight - 600) {
                     bridge.checkTriggerInfiniteScroll(true);
+                    syncGridLoadMore();
                 }
             }, { passive: true });
 
@@ -711,14 +714,14 @@ function ensureOverlay() {
 
             const loadMoreBtn = gridWrap.querySelector('.ms-grid-loadmore');
             if (loadMoreBtn) {
-                if (!bridge.categorizedTags && !bridge.remotePhotoAlbums && !bridge.timelineFeed && !bridge.folderFavorites && !bridge.reservedPostHeader) loadMoreBtn.classList.add('ms-hidden');
                 loadMoreBtn.addEventListener('click', (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    loadMoreBtn.textContent = 'Loading...';
-                    setTimeout(() => { loadMoreBtn.textContent = 'Load more'; }, 5000);
+                    if (loadMoreBtn.disabled) return;
                     bridge.requestMoreAtGalleryEnd();
+                    syncGridLoadMore();
                 });
+                syncGridLoadMore();
             }
         }
 
@@ -1664,9 +1667,23 @@ function renderGrid(options) {
         const grid = bridge.state.overlay.querySelector('.ms-grid');
         const gridWrap = bridge.state.overlay.querySelector('.ms-grid-wrap');
         if (!grid) return;
-        const loadMoreBtn = gridWrap ? gridWrap.querySelector('.ms-grid-loadmore') : null;
-        if (loadMoreBtn) loadMoreBtn.textContent = 'Load more';
+        syncGridLoadMore();
         syncGridWindow();
+    }
+
+function syncGridLoadMore() {
+        if (bridge.state.gridLoadMoreTimer) clearTimeout(bridge.state.gridLoadMoreTimer);
+        bridge.state.gridLoadMoreTimer = null;
+        const button = bridge.state.overlay?.querySelector('.ms-grid-loadmore');
+        if (!button) return;
+        const status = bridge.gridLoadState || { available: false, busy: false };
+        button.classList.toggle('ms-hidden', !status.available);
+        button.disabled = !!status.busy;
+        button.setAttribute('aria-busy', String(!!status.busy));
+        button.textContent = status.busy ? 'Loading…' : 'Load more';
+        if (status.available && status.busy && bridge.state.gridMode && bridge.state.open) {
+            bridge.state.gridLoadMoreTimer = setTimeout(syncGridLoadMore, 350);
+        }
     }
 
     // ms-zoom-idle means "zoom does not apply to what is on the stage" - a
@@ -3421,7 +3438,7 @@ function onGridWindowScroll() {
         bridge.state.gridWindowRaf = requestAnimationFrame(() => {
             bridge.state.gridWindowRaf = null;
             if (!bridge.state.overlay || !bridge.state.gridMode) return;
-            paintGridWindow();
+            syncGridWindow();
         });
     }
 
@@ -3577,6 +3594,7 @@ function syncGridWindow() {
         const previous = bridge.state.gridLayoutSnapshot;
         const metrics = gridMetrics(wrap, grid);
         const layout = gridLayout(metrics);
+        if (previous?.layout === layout) { paintGridWindow(); return; }
         const keys = bridge.state.items.map(thumbItemKey);
         const changed = previous && previous.layout !== layout;
         const tailAppend = previous && previous.keys.every((key, index) => {
@@ -3588,14 +3606,16 @@ function syncGridWindow() {
             const hostRect = wrap.getBoundingClientRect();
             // The pooled cells still represent the old list. Capture now, at
             // commit time, so scrolling during a network request is respected.
-            const visible = (bridge.state.gridPool || []).filter(cell => cell.style.display !== 'none')
-                .map(cell => ({ key: cell.dataset.msKey, rect: cell.getBoundingClientRect() }))
-                .filter(cell => cell.rect.bottom > hostRect.top && cell.rect.top < hostRect.bottom)
-                .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
-            let anchor = visible.find(cell => indexes.has(cell.key));
+            const origin = grid.getBoundingClientRect().top - hostRect.top + wrap.scrollTop;
+            // Pooled cells may already have been recycled by a scroll frame.
+            // Anchor against the committed geometry at the CURRENT viewport.
+            const visible = pagedGridWindow(previous.layout, wrap.scrollTop - origin, wrap.clientHeight, 0)
+                .map(index => previous.keys[index]).filter(key => indexes.has(key));
+            let anchor = visible.length ? { key: visible[0], rect: {
+                top: hostRect.top + origin + previous.layout.byId.get(visible[0]).y - wrap.scrollTop
+            } } : null;
             if (!anchor && previous.keys.length) {
-                const origin = grid.getBoundingClientRect().top - hostRect.top + wrap.scrollTop;
-                const at = pagedGridWindow(previous.layout, wrap.scrollTop - origin, 1, 0)[0] ?? previous.keys.length - 1;
+                const at = pagedGridWindow(previous.layout, wrap.scrollTop - origin, wrap.clientHeight, 1)[0] ?? 0;
                 for (let distance = 0; !anchor && distance < previous.keys.length; distance++) {
                     for (const index of [at + distance, at - distance]) {
                         const key = previous.keys[index];

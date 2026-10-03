@@ -2895,17 +2895,19 @@ export const OVERLAY_CSS = String.raw`
         .ms-grid-loadmore {
             display: block;
             margin: 18px auto 60px;
-            padding: 10px 32px;
+            padding: 8px 24px;
+            min-width: 132px;
+            height: 34px;
             background: var(--ms-surface-1);
             border: 1px solid var(--ms-line);
-            border-radius: 20px;
+            border-radius: 8px;
             color: var(--ms-text-3);
             font-size: 12px;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
             cursor: pointer;
-            transition: all 120ms ease;
+            transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
         }
         .ms-grid-loadmore:hover {
             background: var(--ms-surface-3);
@@ -2913,6 +2915,7 @@ export const OVERLAY_CSS = String.raw`
             color: var(--ms-text);
         }
         .ms-grid-loadmore.ms-hidden { display: none; }
+        .ms-grid-loadmore:disabled{opacity:.65;cursor:wait}
         /* A normal member of the centre cluster's flex row. It used to be
            absolutely positioned at a hardcoded "left: calc(50% - 145px)",
            which drifted into whatever else occupied that spot as the viewport
