@@ -4790,6 +4790,26 @@ function renderCurrent() {
                 stopMegaProgress();
 
                 if (resolved === bridge.RESOLVE_CANCELLED) return;
+                if (resolved?.retryable && typeof bridge.deferResolveRetry === 'function') {
+                    const automatic = bridge.deferResolveRetry(entry, resolved);
+                    if (token !== bridge.state.renderToken) return;
+                    loadingOverlay.remove();
+                    setTopbarLoading(false);
+                    showStageNotice(wrap, automatic ? 'Temporarily rate limited - retrying shortly.' : 'Requests are still rate limited.');
+                    if (!automatic && typeof bridge.retryResolve === 'function') {
+                        const retry = document.createElement('button');
+                        retry.type = 'button';
+                        retry.className = 'ms-btn';
+                        retry.textContent = 'Retry';
+                        retry.addEventListener('click', event => {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            bridge.retryResolve(entry);
+                        });
+                        wrap.querySelector('.ms-stage-notice')?.appendChild(retry);
+                    }
+                    return;
+                }
                 let splicedExtras = false;
                 if (resolved && resolved.src) {
                     item.src = resolved.src;
@@ -4802,6 +4822,9 @@ function renderCurrent() {
                         item.isFavorited = resolved.isFavorited;
                     }
                     item.error = resolved.error || null;
+                    item.resolveRetryAt = 0;
+                    item.resolveRetryCount = 0;
+                    delete item._lastResolveRetry;
                     if (item.type === 'video') {
                         item.fallbackSrc = resolved.src;
 
