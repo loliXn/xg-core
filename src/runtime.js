@@ -4795,6 +4795,8 @@ function renderCurrent() {
                     item.src = resolved.src;
                     item.type = resolved.type || (resolved.isVideo ? 'video' : 'img');
                     if (resolved.thumbSrc) item.thumbSrc = resolved.thumbSrc;
+                    if (Array.isArray(resolved.altSrcs)) item.altSrcs = resolved.altSrcs.slice();
+                    if (resolved.upgradeSrcs !== undefined) item.upgradeSrcs = Array.isArray(resolved.upgradeSrcs) ? resolved.upgradeSrcs.slice() : null;
                     item.embedSrc = resolved.embedSrc || item.embedSrc;
                     if (typeof resolved.isFavorited === 'boolean') {
                         item.isFavorited = resolved.isFavorited;
@@ -4941,7 +4943,7 @@ function renderCurrent() {
                         return;
                     }
                     if (token !== bridge.state.renderToken || imageController.signal.aborted) return;
-                    bridge.loadImageFully(upgrades[i], 15000, { signal: imageController.signal })
+                    bridge.loadImageFully(upgrades[i], 120000, { signal: imageController.signal, item, fullResolution: true, validate: true })
                         .then((readyImage) => {
                             if (token !== bridge.state.renderToken || imageController.signal.aborted || !img.isConnected) return;
                             const finishHandoff = imageHandoff(wrap, img);
