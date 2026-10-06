@@ -42,6 +42,17 @@ The injected bridge is the only route back to a handler:
 - `close`
 - `settingsChanged`
 
+The optional viewer bridge `galleryPageSnapshot()` returns `null` when source
+pagination is unavailable, otherwise `{ current, total, busy, requested, message }`.
+`total` may be unknown. `navigateGalleryPage(page)` requests a one-based source
+page without blocking media navigation. The adapter owns URL parsing, page
+caching, item reconciliation and native-page restoration. Page feedback updates
+through the existing position-control refresh without replacing viewer media.
+
+Album type actions select loaded playable entries in the current preview folder
+and use the same `addAlbumEntries` / `isAlbumEntryAdded` bridge as individual
+tiles. They do not recursively enumerate folders or remove the album item.
+
 `npm run build` writes:
 
 - `dist/xgallery-core.iife.js`

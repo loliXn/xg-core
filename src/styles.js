@@ -2547,6 +2547,35 @@ export const OVERLAY_CSS = String.raw`
            division, square inner corners. The group owns the border so the
            two halves cannot drift apart, and Grid can never be separated
            from the counter by a button appearing or disappearing next to it. */
+        .ms-page-control {
+            position: relative; height: 32px; flex-shrink: 0; align-items: center;
+            border: 1px solid var(--ms-line); border-radius: 8px;
+            background: var(--ms-surface-2); color: var(--ms-text);
+            font: 11px var(--ms-font-data); font-variant-numeric: tabular-nums;
+        }
+        .ms-page-control > button {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 30px; padding: 0; border: 0; border-radius: 7px;
+            background: transparent; color: var(--ms-text-3); cursor: pointer;
+        }
+        .ms-page-control > button:hover:not(:disabled) { background: var(--ms-hover); color: var(--ms-text); }
+        .ms-page-control > button:disabled { opacity: .35; cursor: default; }
+        .ms-page-control svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+        .ms-page-label { display: inline-flex; align-items: center; gap: 4px; padding: 0 4px; white-space: nowrap; }
+        .ms-page-input {
+            appearance: none; box-sizing: content-box; min-width: 1ch; max-width: 8ch;
+            height: 24px; margin: 0; padding: 0 2px; border: 0; border-radius: 4px;
+            background: transparent; color: inherit; text-align: center; font: inherit;
+        }
+        .ms-page-input:hover:not(:disabled), .ms-page-input:focus-visible { background: var(--ms-hover); }
+        .ms-page-control[aria-busy="true"] { color: var(--ms-text-3); }
+        .ms-page-message {
+            position: absolute; top: calc(100% + 8px); left: 0; z-index: 4;
+            width: max-content; max-width: min(280px, 70vw); padding: 8px 12px;
+            border: 1px solid var(--ms-line); border-radius: 8px; white-space: normal;
+            background: var(--ms-surface-2); color: var(--ms-text-3); font: 12px/1.4 var(--ms-font-ui);
+        }
+        .ms-page-message[hidden] { display: none !important; }
         .ms-position-group {
             display: inline-flex;
             align-items: stretch;

@@ -1151,6 +1151,7 @@ function bindTopbarCompactObserver() {
 
 function updateButtons() {
         if (!bridge.state.overlay) return;
+        updatePageControl();
         const triggerFilter = bridge.state.overlay.querySelector('[data-act="filter-trigger"]');
         const triggerFit = bridge.state.overlay.querySelector('[data-act="fit-trigger"]');
         const triggerThumbs = bridge.state.overlay.querySelector('[data-act="thumbs-trigger"], [data-act="thumbs-toggle"]');
@@ -1194,6 +1195,7 @@ function updateButtons() {
     }
 
 function updatePositionControl(force) {
+        updatePageControl();
         if (!bridge.state.overlay) return;
         const input = bridge.state.overlay.querySelector('.ms-position-control .ms-index-input');
         const total = bridge.state.overlay.querySelector('.ms-position-total');
@@ -1233,6 +1235,7 @@ function commitPositionInput(input) {
     }
 
 function bindPositionControl() {
+        bindPageControl();
         if (!bridge.state.overlay) return;
         const control = bridge.state.overlay.querySelector('.ms-position-control');
         const input = control && control.querySelector('.ms-index-input');
@@ -1263,6 +1266,69 @@ function bindPositionControl() {
         });
         updatePositionControl(true);
     }
+
+function updatePageControl() {
+    const control = bridge.state.overlay?.querySelector('.ms-page-control');
+    if (!control) return;
+    const page = typeof bridge.galleryPageSnapshot === 'function' ? bridge.galleryPageSnapshot() : null;
+    const visible = !!page;
+    const changed = (control.style.display !== 'none') !== visible;
+    control.style.display = visible ? 'inline-flex' : 'none';
+    if (!page) { if (changed) updateTopbarCompact(); return; }
+    const input = control.querySelector('.ms-page-input');
+    const root = input.getRootNode();
+    const editing = (document.activeElement === input || root.activeElement === input) && input.dataset.dirty === '1';
+    if (!editing) input.value = String(page.current);
+    const width = String(page.total || Math.max(page.current, 99)).length;
+    input.style.setProperty('width', Math.max(1, width) + 'ch', 'important');
+    input.disabled = !!page.busy;
+    input.setAttribute('aria-label', 'Go to page, currently ' + page.current + (page.total ? ' of ' + page.total : ''));
+    control.querySelector('.ms-page-total').textContent = page.total ? '/' + page.total : '';
+    control.querySelector('.ms-page-prev').disabled = !!page.busy || page.current <= 1;
+    control.querySelector('.ms-page-next').disabled = !!page.busy || (!!page.total && page.current >= page.total);
+    control.setAttribute('aria-busy', String(!!page.busy));
+    control.title = page.busy ? 'Loading page ' + page.requested : 'Browse source pages';
+    const message = control.querySelector('.ms-page-message');
+    message.textContent = page.message || '';
+    message.hidden = !page.message;
+    if (changed || control.dataset.size !== String(width) + ':' + page.total) {
+        control.dataset.size = String(width) + ':' + page.total;
+        updateTopbarCompact();
+    }
+}
+
+function bindPageControl() {
+    const control = bridge.state.overlay?.querySelector('.ms-page-control');
+    if (!control || control.dataset.bound) return;
+    control.dataset.bound = '1';
+    const input = control.querySelector('.ms-page-input');
+    control.addEventListener('click', event => event.stopPropagation());
+    const navigate = page => {
+        input.dataset.dirty = '0';
+        if (typeof bridge.navigateGalleryPage === 'function') {
+            Promise.resolve(bridge.navigateGalleryPage(page)).catch(() => updatePageControl());
+        }
+    };
+    control.querySelector('.ms-page-prev').addEventListener('click', () => navigate(bridge.galleryPageSnapshot().current - 1));
+    control.querySelector('.ms-page-next').addEventListener('click', () => navigate(bridge.galleryPageSnapshot().current + 1));
+    input.addEventListener('focus', () => input.select());
+    input.addEventListener('input', () => { input.dataset.dirty = '1'; });
+    input.addEventListener('blur', () => {
+        if (input.dataset.dirty === '1') {
+            const value = /^\d+$/.test(input.value.trim()) ? Number(input.value) : NaN;
+            if (Number.isSafeInteger(value) && value > 0) navigate(value);
+            else { input.dataset.dirty = '0'; updatePageControl(); }
+        }
+    });
+    input.addEventListener('keydown', event => {
+        event.stopPropagation();
+        if (event.key === 'Enter') { event.preventDefault(); input.blur(); }
+        else if (event.key === 'Escape') {
+            event.preventDefault(); input.dataset.dirty = '0'; updatePageControl(); input.blur();
+        }
+    });
+    updatePageControl();
+}
 
 function ensureMediaBox(wrap) {
         return globalThis.XGalleryCore.ensureMediaBox(document, wrap);
@@ -4383,13 +4449,21 @@ function renderAlbumPreview(wrap, item, token) {
     addAll.className = 'ms-album-preview-action';
     addAll.textContent = 'Add shown';
     addAll.disabled = true;
+    const addPhotos = document.createElement('button');
+    addPhotos.type = 'button';
+    addPhotos.className = 'ms-album-preview-action';
+    addPhotos.textContent = 'Add photos';
+    const addVideos = document.createElement('button');
+    addVideos.type = 'button';
+    addVideos.className = 'ms-album-preview-action';
+    addVideos.textContent = 'Add videos';
     const original = document.createElement('a');
     original.className = 'ms-album-preview-action';
     original.textContent = 'Open original';
     original.href = item.resolveUrl || item.src;
     original.target = '_blank';
     original.rel = 'noopener noreferrer';
-    actions.append(back, addAll, original);
+    actions.append(back, addAll, addPhotos, addVideos, original);
     header.append(heading, actions);
     const body = document.createElement('div');
     body.className = 'ms-album-preview-body';
@@ -4409,11 +4483,23 @@ function renderAlbumPreview(wrap, item, token) {
     path.textContent = folderNames.length ? 'Album / ' + folderNames.join(' / ') : 'Browse files';
     let currentPreview = null;
     let busy = false;
+    let loading = false;
     let loadSequence = 0;
     const tileUpdates = new Map();
     const alive = () => card.isConnected && bridge.state.renderToken === token;
+    const playableEntries = type => (currentPreview?.entries || []).filter(entry =>
+        entry.kind === 'file' && entry.item && ['img', 'video'].includes(entry.item.type)
+        && (!type || entry.item.type === type));
+    const refreshActions = () => {
+        for (const [button, type] of [[addAll, null], [addPhotos, 'img'], [addVideos, 'video']]) {
+            button.disabled = busy || loading || !playableEntries(type).some(entry =>
+                !bridge.isAlbumEntryAdded || !bridge.isAlbumEntryAdded(item, entry));
+        }
+    };
     const load = async (folderRef, cursor = null) => {
         const sequence = ++loadSequence;
+        loading = true;
+        refreshActions();
         setIndeterminateProgress(status, false, 'Album loading');
         meta.textContent = 'Loading album details…';
         status.hidden = cursor != null;
@@ -4453,7 +4539,6 @@ function renderAlbumPreview(wrap, item, token) {
             }
             path.textContent = folderNames.length ? 'Album / ' + folderNames.join(' / ') : 'Browse files';
             back.hidden = !folderStack.length;
-            addAll.disabled = !entries.some(entry => entry.kind === 'file');
             paintTiles(append ? preview.entries : entries, append);
             status.hidden = entries.length > 0;
             status.textContent = preview ? 'No playable files in this folder' : 'Album preview unavailable';
@@ -4461,7 +4546,7 @@ function renderAlbumPreview(wrap, item, token) {
             more.disabled = false;
             if (!append) body.scrollTop = saved.scrollTop;
             if (!folderStack.length && bridge.mediaPresentation(item).autoAddAlbum && entries.length) {
-                bridge.addAlbumEntries(item, entries.filter(entry => entry.kind === 'file'), false);
+                bridge.addAlbumEntries(item, playableEntries(), false);
             }
         } catch (error) {
             clearTimeout(progressTimer);
@@ -4471,6 +4556,7 @@ function renderAlbumPreview(wrap, item, token) {
                 more.hidden = true;
                 more.disabled = false;
                 if (!cursor) grid.replaceChildren();
+                if (!cursor) currentPreview = null;
                 status.hidden = false;
                 if (error && error.code === 'rateLimited') {
                     meta.textContent = 'Temporarily rate limited';
@@ -4535,6 +4621,8 @@ function renderAlbumPreview(wrap, item, token) {
                         : 'Could not load this album. Open the original page to try there.';
                 }
             }
+        } finally {
+            if (sequence === loadSequence) { loading = false; if (alive()) refreshActions(); }
         }
     };
     const paintTiles = (entries, append) => {
@@ -4599,7 +4687,7 @@ function renderAlbumPreview(wrap, item, token) {
             tile.title = entry.name || 'Untitled';
             tile.addEventListener('click', async event => {
                 event.stopPropagation();
-                if (busy || !alive()) return;
+                if (busy || loading || !alive()) return;
                 if (entry.kind === 'folder') {
                     folderStack.push(currentPreview && currentPreview.folderRef || '');
                     folderNames.push(entry.name || 'Folder');
@@ -4611,9 +4699,10 @@ function renderAlbumPreview(wrap, item, token) {
                     return;
                 }
                 busy = true;
+                refreshActions();
                 tile.disabled = true;
                 try { await bridge.addAlbumEntries(item, [entry], true); updateAdded(); }
-                finally { busy = false; if (alive()) tile.disabled = false; }
+                finally { busy = false; if (alive()) { tile.disabled = false; refreshActions(); } }
             });
             grid.appendChild(tile);
         }
@@ -4634,17 +4723,21 @@ function renderAlbumPreview(wrap, item, token) {
         event.stopPropagation();
         if (currentPreview && currentPreview.nextCursor) load(currentPreview.folderRef, currentPreview.nextCursor);
     });
-    addAll.addEventListener('click', async event => {
+    const addSelected = async (event, type) => {
         event.stopPropagation();
-        if (busy || !currentPreview) return;
+        if (busy || loading || !currentPreview || !alive()) return;
         busy = true;
-        addAll.disabled = true;
+        refreshActions();
         try {
-            await bridge.addAlbumEntries(item, currentPreview.entries.filter(entry => entry.kind === 'file'), false);
+            await bridge.addAlbumEntries(item, playableEntries(type), false);
             tileUpdates.forEach(update => update());
         }
-        finally { busy = false; if (alive()) addAll.disabled = false; }
-    });
+        finally { busy = false; if (alive()) refreshActions(); }
+    };
+    addAll.addEventListener('click', event => addSelected(event, null));
+    addPhotos.addEventListener('click', event => addSelected(event, 'img'));
+    addVideos.addEventListener('click', event => addSelected(event, 'video'));
+    refreshActions();
     body.append(status, grid, more);
     card.append(header, body);
     wrap.appendChild(card);
