@@ -156,11 +156,24 @@ export function renderPostPanel(options) {
         if (info.time) date.title = info.time;
         byline.append(date);
         head.append(byline);
-        if (info.repostedFrom) {
+        if (info.repostedFrom || info.repostCommunity) {
             const repost = panelElement(doc, 'div', 'ms-post-repost');
             const icon = panelElement(doc, 'span', 'ms-post-repost-icon');
             icon.innerHTML = REPOST_ICON;
-            repost.append(icon, panelElement(doc, 'span', 'ms-post-repost-label', 'reposted from'), user(info.repostedFrom, true));
+            repost.append(icon, panelElement(doc, 'span', 'ms-post-repost-label', 'reposted from'));
+            if (info.repostCommunity?.label) {
+                repost.append(user({ username: info.repostCommunity.label, profileUrl: info.repostCommunity.href }, true));
+            }
+            if (info.repostedFrom) {
+                if (info.repostCommunity?.label) repost.append(panelElement(doc, 'span', '', '\u00b7'));
+                repost.append(user(info.repostedFrom, true));
+            }
+            if (info.repostUrl) {
+                const link = panelElement(doc, 'a', 'ms-post-repost-link', 'Original post');
+                link.href = info.repostUrl;
+                repost.append(link);
+            }
+            panelLinks(repost);
             head.append(repost);
         }
         panel.insertBefore(head, body);

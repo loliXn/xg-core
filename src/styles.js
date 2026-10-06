@@ -3746,6 +3746,7 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-post-repost {
             display: flex;
+            flex-wrap: wrap;
             align-items: center;
             gap: 6px;
             min-width: 0;
@@ -3766,6 +3767,14 @@ export const OVERLAY_CSS = String.raw`
         .ms-post-repost .ms-info-user-sm .ms-info-desc-username {
             color: var(--ms-text-2);
             font-weight: 500;
+        }
+        .ms-post-repost-link {
+            color: var(--ms-text-3);
+            text-decoration: none;
+        }
+        .ms-post-repost-link:hover {
+            color: var(--ms-text-1);
+            text-decoration: none;
         }
         .ms-info-user {
             display: flex;
@@ -4264,6 +4273,23 @@ export const OVERLAY_CSS = String.raw`
         .ms-zoom-slider-wrap.ms-zoom-idle {
             visibility: hidden;
             pointer-events: none;
+        }
+        .ms-gallery-topbar .ms-zoom-slider-wrap .ms-zoom-toggle {
+            width: 24px;
+            min-width: 24px;
+            height: 24px;
+            padding: 0 !important;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+        }
+        .ms-gallery-overlay .ms-gallery-topbar .ms-zoom-toggle svg {
+            width: 14px;
+            height: 14px;
+        }
+        .ms-gallery-topbar .ms-zoom-slider-wrap .ms-zoom-toggle:hover,
+        .ms-gallery-topbar .ms-zoom-slider-wrap .ms-zoom-toggle:focus-visible {
+            background: var(--ms-hover);
         }
         /* Zoom mode is off but the current item is still zoomable. The slider
            keeps its place and stays live - dragging it re-enters zoom on its

@@ -1173,6 +1173,7 @@ function updateButtons() {
         if (triggerPan) {
             const panActive = !!(bridge.state.pan && bridge.state.pan.active);
             triggerPan.classList.toggle('active', panActive);
+            triggerPan.setAttribute('aria-pressed', String(panActive));
         }
         const triggerFullscreen = bridge.state.overlay.querySelector('[data-act="fullscreen-toggle"]');
         if (triggerFullscreen) {
