@@ -2951,7 +2951,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-info-dock-handle { position: absolute; top: 0; left: 35%; right: 35%; height: 12px; cursor: grab; touch-action: none; }
         .ms-info-dock-handle::after { content: ''; position: absolute; width: 28px; height: 3px; left: calc(50% - 14px); top: 4px; border-radius: 2px; background: var(--ms-line-strong); }
         .ms-info-dock-handle:hover::after, .ms-info-dock-handle:focus-visible::after { background: var(--ms-text-muted); }
-        .ms-post-community { margin-bottom: 8px; }
+        .ms-post-community { margin: 0; }
         .ms-post-community .ms-info-desc-username { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .ms-post-votes { display: inline-flex; align-items: center; flex: none; height: 30px; border: 1px solid var(--ms-line); border-radius: 999px; overflow: hidden; background: var(--ms-surface-2); }
         .ms-post-vote { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--ms-text-2); cursor: pointer; }
@@ -3677,16 +3677,18 @@ export const OVERLAY_CSS = String.raw`
            separated by a short fade rather than a rule, so it reads as the
            top of the post and not as a toolbar. */
         .ms-info-posthead {
+            --ms-post-avatar-size: 24px;
+            --ms-post-identity-gap: 8px;
             position: sticky;
             top: 0;
             z-index: 2;
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 8px;
             width: 100%;
             min-height: 32px;
             margin: 0;
-            padding: 14px 18px 10px;
+            padding: 12px 16px;
             background: var(--ms-surface-2);
             box-sizing: border-box;
         }
@@ -3700,21 +3702,38 @@ export const OVERLAY_CSS = String.raw`
             background: linear-gradient(var(--ms-surface-2), transparent);
             pointer-events: none;
         }
+        .ms-post-identities {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-start;
+            gap: 8px 16px;
+            min-width: 0;
+        }
+        .ms-post-identities > .ms-post-community,
+        .ms-post-identities > .ms-post-byline {
+            flex: 0 1 auto;
+            max-width: 100%;
+            min-width: 0;
+        }
         .ms-post-byline {
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
             min-width: 0;
+        }
+        .ms-post-byline-avatar > .ms-info-postmeta {
+            padding-left: calc(var(--ms-post-avatar-size) + var(--ms-post-identity-gap));
         }
         .ms-post-byline > .ms-info-user,
         .ms-post-byline > .ms-post-who {
             min-width: 0;
+            max-width: 100%;
         }
         .ms-post-who {
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
             min-width: 0;
         }
         /* A compact ghost beside the name: outline at rest, accent-tinted once
@@ -3745,36 +3764,85 @@ export const OVERLAY_CSS = String.raw`
             white-space: nowrap;
         }
         .ms-post-repost {
+            --ms-repost-icon-size: 12px;
+            --ms-repost-gap: 8px;
             display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            gap: 6px;
+            flex-direction: column;
+            gap: 4px;
             min-width: 0;
-            padding-left: 32px; /* avatar 24px + gap 8px: aligns under the name */
-            color: var(--ms-text-4);
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--ms-line);
+            border-radius: 8px;
+            background: var(--ms-surface-1);
+            box-sizing: border-box;
+            color: var(--ms-text-3);
             font-size: 12px;
-            line-height: 1.4;
+            line-height: 1.5;
+        }
+        .ms-post-repost-head {
+            display: flex;
+            align-items: center;
+            gap: var(--ms-repost-gap);
+            min-width: 0;
+        }
+        .ms-post-repost-origin {
+            display: flex;
+            flex: 1;
+            flex-wrap: wrap;
+            align-items: baseline;
+            gap: 4px 8px;
+            min-width: 0;
+        }
+        .ms-post-repost-origin > .ms-info-user-sm,
+        .ms-post-repost-author > .ms-info-user-sm {
+            max-width: 100%;
+        }
+        .ms-post-repost-author {
+            display: flex;
+            min-width: 0;
+            padding-left: calc(var(--ms-repost-icon-size) + var(--ms-repost-gap));
+        }
+        .ms-post-repost .ms-info-desc-username {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .ms-post-repost-icon {
             display: inline-flex;
             flex-shrink: 0;
-            color: var(--ms-text-4);
+            color: var(--ms-text-3);
         }
         .ms-post-repost-icon svg {
-            width: 13px;
-            height: 13px;
-        }
-        .ms-post-repost .ms-info-user-sm .ms-info-desc-username {
-            color: var(--ms-text-2);
-            font-weight: 500;
+            width: var(--ms-repost-icon-size);
+            height: var(--ms-repost-icon-size);
         }
         .ms-post-repost-link {
+            display: inline-flex;
+            flex: none;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
             color: var(--ms-text-3);
+            background: transparent;
+            text-decoration: none;
+            transition: background-color 150ms var(--ms-ease), color 150ms var(--ms-ease);
+        }
+        .ms-post-repost-link svg {
+            width: 14px;
+            height: 14px;
+        }
+        .ms-post-repost-link:hover,
+        .ms-post-repost-link:focus-visible {
+            color: var(--ms-text-1);
+            background: var(--ms-hover);
             text-decoration: none;
         }
-        .ms-post-repost-link:hover {
-            color: var(--ms-text-1);
-            text-decoration: none;
+        .ms-post-repost-link:focus-visible {
+            outline: 2px solid var(--ms-accent);
+            outline-offset: 2px;
         }
         .ms-info-user {
             display: flex;
@@ -3798,7 +3866,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-info-postmeta {
             flex-shrink: 0;
             font-size: 12px;
-            color: var(--ms-text-4);
+            color: var(--ms-text-3);
             line-height: 1.5;
             white-space: nowrap;
         }
@@ -3988,13 +4056,28 @@ export const OVERLAY_CSS = String.raw`
         .ms-tags-like-btn.active .ms-tags-like-count {
             color: inherit;
         }
-        .ms-gallery-overlay .ms-info-posthead .ms-info-desc-avatar {
-            width: 24px;
-            height: 24px;
+        .ms-gallery-overlay .ms-info-posthead .ms-post-identities .ms-info-desc-avatar {
+            width: var(--ms-post-avatar-size);
+            height: var(--ms-post-avatar-size);
         }
-        .ms-gallery-overlay .ms-info-posthead .ms-info-desc-username {
+        .ms-gallery-overlay .ms-info-posthead .ms-post-identities .ms-info-desc-username {
             font-size: 14px;
+            font-weight: 650;
+            line-height: 24px;
+        }
+        .ms-gallery-overlay .ms-info-posthead .ms-post-repost .ms-info-desc-avatar {
+            width: 20px;
+            height: 20px;
+        }
+        .ms-gallery-overlay .ms-info-posthead .ms-post-repost .ms-info-desc-username {
+            font-size: 13px;
             font-weight: 600;
+            line-height: 20px;
+            color: var(--ms-text-2);
+        }
+        .ms-gallery-overlay .ms-info-posthead .ms-post-repost a.ms-info-user-link:hover .ms-info-desc-username,
+        .ms-gallery-overlay .ms-info-posthead .ms-post-repost a.ms-info-user-link:focus-visible .ms-info-desc-username {
+            color: var(--ms-accent);
         }
 
         .ms-gallery-overlay .ms-tags-content {

@@ -126,10 +126,15 @@ export function renderPostPanel(options) {
     // One link covers avatar and name, so both react together, both open the
     // profile, and it is a single tab stop. A user without a profile URL gets
     // no link at all and does not react.
-    const user = (data, small = false) => {
+    const user = (data, small = false, action = '') => {
         const row = panelElement(doc, small ? 'span' : 'div', 'ms-info-user' + (small ? ' ms-info-user-sm' : ''));
         const target = data.profileUrl ? panelElement(doc, 'a', 'ms-info-user-link') : row;
-        if (data.profileUrl) { target.href = data.profileUrl; row.append(target); }
+        if (data.profileUrl) {
+            target.href = data.profileUrl;
+            target.title = data.username || data.name || '';
+            if (action) target.dataset.msPostAction = action;
+            row.append(target);
+        }
         if (data.avatarUrl) {
             const avatar = panelElement(doc, 'img', 'ms-info-desc-avatar');
             avatar.src = data.avatarUrl;
@@ -142,50 +147,66 @@ export function renderPostPanel(options) {
         return row;
     };
     const info = model.postInfo || {};
-    if (info.author || model.reserveHeader) {
-        // Read like a message header: who, when, and where it came from.
+    if (info.author || info.time || model.reserveHeader || model.community?.href
+        || info.repostedFrom || info.repostCommunity || info.repostUrl) {
         const head = panelElement(doc, 'div', 'ms-info-posthead');
-        const byline = panelElement(doc, 'div', 'ms-post-byline');
-        const who = panelElement(doc, 'div', 'ms-post-who');
-        who.append(user(info.author || {}));
-        if (model.follow && model.follow.available) {
-            who.append(relationshipButton(doc, model.follow));
+        const identities = panelElement(doc, 'div', 'ms-post-identities');
+        if (model.community?.href) {
+            const community = panelElement(doc, 'div', 'ms-post-community ms-post-who');
+            community.append(user({ username: model.community.label, profileUrl: model.community.href }, false, 'post-community'));
+            if (model.community.join?.available) community.append(relationshipButton(doc, model.community.join,
+                { on: 'Joined', off: 'Join', undo: 'Leave' }));
+            identities.append(community);
         }
-        byline.append(who);
-        const date = panelElement(doc, 'span', 'ms-info-postmeta', info.time || (model.reserveHeader ? '\u00a0' : ''));
-        if (info.time) date.title = info.time;
-        byline.append(date);
-        head.append(byline);
-        if (info.repostedFrom || info.repostCommunity) {
+        if (info.author || info.time || model.reserveHeader) {
+            const byline = panelElement(doc, 'div', 'ms-post-byline');
+            if (info.author || model.reserveHeader) {
+                const who = panelElement(doc, 'div', 'ms-post-who');
+                who.append(user(info.author || {}, false, 'post-author'));
+                if (model.follow?.available) who.append(relationshipButton(doc, model.follow));
+                byline.append(who);
+            }
+            if (info.author?.avatarUrl) byline.classList.add('ms-post-byline-avatar');
+            if (info.time || model.reserveHeader) {
+                const date = panelElement(doc, 'span', 'ms-info-postmeta', info.time || '\u00a0');
+                if (info.time) date.title = info.time;
+                byline.append(date);
+            }
+            identities.append(byline);
+        }
+        if (identities.childNodes.length) head.append(identities);
+        if (info.repostedFrom || info.repostCommunity || info.repostUrl) {
             const repost = panelElement(doc, 'div', 'ms-post-repost');
+            repost.setAttribute('role', 'group');
+            repost.setAttribute('aria-label', 'Repost source');
+            const sourceHead = panelElement(doc, 'div', 'ms-post-repost-head');
             const icon = panelElement(doc, 'span', 'ms-post-repost-icon');
             icon.innerHTML = REPOST_ICON;
-            repost.append(icon, panelElement(doc, 'span', 'ms-post-repost-label', 'reposted from'));
+            const origin = panelElement(doc, 'div', 'ms-post-repost-origin');
+            origin.append(panelElement(doc, 'span', 'ms-post-repost-label', 'Reposted from'));
             if (info.repostCommunity?.label) {
-                repost.append(user({ username: info.repostCommunity.label, profileUrl: info.repostCommunity.href }, true));
+                origin.append(user({ username: info.repostCommunity.label, profileUrl: info.repostCommunity.href }, true, 'repost-community'));
             }
-            if (info.repostedFrom) {
-                if (info.repostCommunity?.label) repost.append(panelElement(doc, 'span', '', '\u00b7'));
-                repost.append(user(info.repostedFrom, true));
-            }
+            sourceHead.append(icon, origin);
             if (info.repostUrl) {
-                const link = panelElement(doc, 'a', 'ms-post-repost-link', 'Original post');
+                const link = panelElement(doc, 'a', 'ms-post-repost-link');
                 link.href = info.repostUrl;
-                repost.append(link);
+                link.title = 'Open original post';
+                link.setAttribute('aria-label', 'Open original post');
+                link.dataset.msPostAction = 'repost-source';
+                link.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3h7v7M21 3 10 14"/><path d="M10 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5"/></svg>';
+                sourceHead.append(link);
+            }
+            repost.append(sourceHead);
+            if (info.repostedFrom?.username || info.repostedFrom?.name) {
+                const author = panelElement(doc, 'div', 'ms-post-repost-author');
+                author.append(user(info.repostedFrom, true, 'repost-author'));
+                repost.append(author);
             }
             panelLinks(repost);
             head.append(repost);
         }
         panel.insertBefore(head, body);
-    }
-    if (model.community?.href) {
-        const row = panelElement(doc, 'div', 'ms-post-community ms-post-who');
-        row.append(user({ username: model.community.label, profileUrl: model.community.href }));
-        if (model.community.join?.available) row.append(relationshipButton(doc, model.community.join,
-            { on: 'Joined', off: 'Join', undo: 'Leave' }));
-        const header = panel.querySelector('.ms-info-posthead');
-        if (header) header.prepend(row);
-        else panel.insertBefore(row, body);
     }
     const captions = Array.isArray(info.captions) && info.captions.length ? info.captions : [{ html: model.description }];
     if (model.postTitle) body.append(panelElement(doc, 'h4', 'ms-info-post-title', model.postTitle));
