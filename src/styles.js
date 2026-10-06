@@ -1082,6 +1082,24 @@ export const OVERLAY_CSS = String.raw`
             padding-left: 8px;
         }
 
+        /* Albums are chrome-sized browsers, not fitted media. Share the
+           topbar inset instead of inheriting image/panel compensation. */
+        .ms-gallery-overlay:not(.ms-stage-fullscreen) .ms-gallery-stage:has(.ms-album-preview) {
+            padding-left: var(--ms-chrome-inset);
+            padding-right: var(--ms-chrome-inset);
+        }
+        .ms-gallery-overlay:not(.ms-grid-mode) .ms-media-wrap:has(.ms-album-preview) {
+            max-width: none;
+            flex: 1 1 auto;
+            align-self: stretch;
+        }
+        .ms-gallery-overlay[data-info-layout="edge-left"]:not(.ms-stage-fullscreen) .ms-gallery-stage:has(.ms-album-preview):has(.ms-tags-overlay.active) {
+            padding-left: calc(var(--ms-tags-w) + var(--ms-chrome-inset) + 16px);
+        }
+        .ms-gallery-overlay[data-info-layout="edge-right"]:not(.ms-stage-fullscreen) .ms-gallery-stage:has(.ms-album-preview):has(.ms-tags-overlay.active) {
+            padding-right: calc(var(--ms-tags-w) + var(--ms-chrome-inset) + 16px);
+        }
+
         .ms-media-wrap > .ms-media,
         .ms-media-wrap > img,
         .ms-media-wrap > video,
