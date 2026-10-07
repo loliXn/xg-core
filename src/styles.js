@@ -1277,10 +1277,11 @@ export const OVERLAY_CSS = String.raw`
 
         .ms-nav {
             position: absolute;
-            top: calc(var(--ms-topbar-h) + (100% - var(--ms-topbar-h) - var(--ms-thumbs-h)) / 4);
+            top: calc(var(--ms-topbar-h) + (100% - var(--ms-topbar-h) - var(--ms-thumbs-h)) / 2);
             bottom: auto;
-            height: calc((100% - var(--ms-topbar-h) - var(--ms-thumbs-h)) / 2);
-            width: clamp(76px, 10vw, 128px);
+            transform: translateY(-50%);
+            height: 96px;
+            width: 56px;
             border: 0;
             border-radius: 0;
             background: transparent;
@@ -1331,7 +1332,7 @@ export const OVERLAY_CSS = String.raw`
         }
 
         @media (hover: none), (pointer: coarse) {
-            .ms-nav { width: 68px; }
+            .ms-nav { height: 64px; }
             .ms-nav svg { opacity: 0.78; transform: none; }
         }
 
