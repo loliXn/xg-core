@@ -7,6 +7,8 @@ export function createViewerRuntime(bridge) {
 bridge = createRuntimeFacade(bridge);
 let activePlaybackAbort = null;
 let activePlaybackDispose = null;
+let activeImageArrival = null;
+let imageEntranceBlockedUntil = 0;
 const albumBrowserState = new WeakMap();
 function releasePlayback() {
     if (activePlaybackAbort) activePlaybackAbort.abort();
@@ -164,6 +166,7 @@ function createLauncher(options) {
     placeInCluster(cluster,button,options.slot);return button;
 }
 function beginOpen() {
+    imageEntranceBlockedUntil = performance.now() + 200;
     const overlay=ensureOverlay();
     overlay.style.display='block';overlay.style.pointerEvents='none';overlay.style.removeProperty('visibility');overlay.style.removeProperty('opacity');
     overlay.classList.remove('ms-closing','active','ms-open');overlay.classList.add('ms-opening');
@@ -177,10 +180,12 @@ function resetLayout() {
 }
 function finishOpen() {
     const overlay=bridge.state.overlay;if(!overlay || !bridge.state.open)return;
+    imageEntranceBlockedUntil = performance.now() + 180;
     overlay.classList.add('ms-open');overlay.classList.remove('ms-opening');overlay.style.pointerEvents='';
     syncVerticalFitMediaBox();
 }
 function clearViewerMedia() {
+    activeImageArrival?.cancel();
     releasePlayback();
     if (bridge.state.gridLoadMoreTimer) clearTimeout(bridge.state.gridLoadMoreTimer);
     bridge.state.gridLoadMoreTimer = null;
@@ -1612,6 +1617,8 @@ function setGridMode(on) {
         if (!bridge.state.overlay) return;
         const enable = !!on;
         if (enable === !!bridge.state.gridMode) return;
+        activeImageArrival?.cancel();
+        if (!enable) imageEntranceBlockedUntil = performance.now() + 220;
 
         let flyRect = null;
         let flySrc = '';
@@ -4126,6 +4133,72 @@ function prepareMediaWrap(wrap, item) {
         });
     }
 
+function beginImageArrival(wrap, item, token, previous) {
+    // Observe an empty painted frame, not elapsed network time. A cached image
+    // resolving in this turn never waits for a frame or receives an entrance.
+    const arrival = {
+        item,
+        emptyPainted: !!(previous && previous.item === item && previous.emptyPainted && !previous.revealed),
+        revealed: false,
+        cancel: null,
+        reveal: null
+    };
+    let frame = 0, animation = null, timer = 0, motionObserver = null, motionQuery = null;
+    let cancelled = false;
+    const current = () => !cancelled && token === bridge.state.renderToken
+        && bridge.state.open && !bridge.state.gridMode && wrap.isConnected;
+    const hasImage = except => Array.from(wrap.querySelectorAll('img.ms-media, img.ms-loading-thumb'))
+        .some(image => image !== except && image.complete && image.naturalWidth > 0);
+    const cancelFrame = () => { cancelAnimationFrame(frame); frame = 0; };
+    const motionChanged = () => { if (prefersReducedMotion()) arrival.cancel(); };
+    const visibilityChanged = () => { if (document.visibilityState !== 'visible') arrival.cancel(); };
+    arrival.cancel = () => {
+        cancelled = true;
+        cancelFrame();
+        clearTimeout(timer);
+        motionObserver?.disconnect();
+        motionQuery?.removeEventListener('change', motionChanged);
+        document.removeEventListener('visibilitychange', visibilityChanged);
+        // No inline opacity or fill mode: cancelling always restores the
+        // normal visible style, including on cached elements reused later.
+        if (animation) { animation.onfinish = null; animation.cancel(); animation = null; }
+        if (activeImageArrival === arrival) activeImageArrival = null;
+    };
+    arrival.reveal = (image, hadPreview = false) => {
+        if (!current() || !image.isConnected || !image.complete || !image.naturalWidth || arrival.revealed) return;
+        arrival.revealed = true;
+        cancelFrame();
+        if (!arrival.emptyPainted || hadPreview || hasImage(image) || prefersReducedMotion()
+            || document.visibilityState !== 'visible' || performance.now() < imageEntranceBlockedUntil
+            || bridge.state.flyGhost || bridge.state.overlay.classList.contains('ms-opening')
+            || typeof image.animate !== 'function') { arrival.cancel(); return; }
+        try {
+            animation = image.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 500, easing: 'ease-out' });
+            animation.onfinish = arrival.cancel;
+            timer = setTimeout(arrival.cancel, 550);
+        } catch (error) { arrival.cancel(); }
+    };
+    activeImageArrival = arrival;
+    if (!prefersReducedMotion() && document.visibilityState === 'visible') {
+        motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+        motionQuery?.addEventListener('change', motionChanged);
+        motionObserver = new MutationObserver(motionChanged);
+        motionObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-xg-minimal-motion'] });
+        document.addEventListener('visibilitychange', visibilityChanged);
+        // The second callback runs after the first frame had a chance to paint.
+        // This never gates insertion, decoding, zoom or navigation.
+        frame = requestAnimationFrame(() => {
+            if (!current()) { arrival.cancel(); return; }
+            frame = requestAnimationFrame(() => {
+                frame = 0;
+                if (!current()) { arrival.cancel(); return; }
+                arrival.emptyPainted = !hasImage();
+            });
+        });
+    } else arrival.cancel();
+    return arrival;
+}
+
 // Keep the already-painted preview above its decoded replacement, never above
 // an empty stage. This layer is noninteractive and owns no layout or media URL.
 function imageHandoff(wrap, previous) {
@@ -4748,6 +4821,8 @@ function renderAlbumPreview(wrap, item, token) {
 function renderCurrent() {
         if (!bridge.state.overlay || !bridge.state.items.length) return;
         if (bridge.state.gridMode) return;
+        const previousImageArrival = activeImageArrival;
+        activeImageArrival?.cancel();
         if (bridge.state.activeStageImageController) {
             bridge.state.activeStageImageController.abort();
             bridge.state.activeStageImageController = null;
@@ -4786,6 +4861,7 @@ function renderCurrent() {
         const nextBtn = bridge.state.overlay.querySelector('.ms-nav.next');
         const thumbs = bridge.state.overlay.querySelectorAll('.ms-thumb');
         prepareMediaWrap(wrap, item);
+        const imageArrival = item.type === 'img' ? beginImageArrival(wrap, item, token, previousImageArrival) : null;
         // Every value here goes into innerHTML, and URLs and error text come from
         // the page or a remote host - escape all of them, not only the byline.
         const escInfo = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;')
@@ -4853,7 +4929,10 @@ function renderCurrent() {
                     document: document,
                     src: validatePreview ? '' : item.thumbSrc,
                     onLoad: (image) => {
-                        if (image.isConnected) syncVerticalFitMediaBox(image);
+                        if (token === bridge.state.renderToken && image.isConnected) {
+                            syncVerticalFitMediaBox(image);
+                            imageArrival?.reveal(image);
+                        }
                     }
                 });
                 if (validatePreview) bridge.setCachedImgSrc(thumbImg, item.thumbSrc, item);
@@ -5063,6 +5142,7 @@ function renderCurrent() {
                     bridge.loadImageFully(upgrades[i], 120000, { signal: imageController.signal, item, fullResolution: true, validate: true })
                         .then((readyImage) => {
                             if (token !== bridge.state.renderToken || imageController.signal.aborted || !img.isConnected) return;
+                            imageArrival?.cancel();
                             const finishHandoff = imageHandoff(wrap, img);
                             const pan = bridge.state.pan && bridge.state.pan.img === img ? bridge.state.pan : null;
                             const v = pan && pan.view ? pan.view() : null;
@@ -5110,13 +5190,17 @@ function renderCurrent() {
             };
 
             const showLoadedImage = (img, winnerSrc) => {
-                if (token !== bridge.state.renderToken) return;
+                if (token !== bridge.state.renderToken || imageController.signal.aborted) return;
                 clearTimeout(imageProgressTimer);
                 if (winnerSrc && winnerSrc !== item.src && winnerSrc !== wrappedSrc) {
                     item.src = winnerSrc;
                 }
 
                 const box = ensureMediaBox(wrap);
+                // markItemMediaLoaded can retire a landed grid ghost below.
+                // Remember its visible preview before deciding on an entrance.
+                const hadPreview = !!bridge.state.flyGhost || Array.from(box.querySelectorAll('img'))
+                    .some(image => image.complete && image.naturalWidth > 0);
                 const finishHandoff = imageHandoff(wrap, box.querySelector('img.ms-loading-thumb'));
                 box.querySelectorAll('video').forEach((element) => { if (element._msPooled) parkStageVideo(element); });
                 box.replaceChildren(img);
@@ -5157,6 +5241,7 @@ function renderCurrent() {
                     handleImageZoomClick(wrap, img, item, clickEvent);
                 });
                 finishHandoff();
+                imageArrival?.reveal(img, hadPreview);
                 startUpgrade(img);
             };
 
@@ -5214,6 +5299,7 @@ function renderCurrent() {
                                     setTopbarLoading(false);
                                     setStageFetching(false);
                                     noteStageFailure(candidate, { status: probe.status, timeout: timedOut });
+                                    imageArrival?.cancel();
                                     renderErrorStage(wrap, (item.error || 'Failed to load media') + ' (' + lastFailure + ')', item.src, item);
                                 }
                             });
