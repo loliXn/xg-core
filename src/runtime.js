@@ -186,6 +186,8 @@ function finishOpen() {
 }
 function clearViewerMedia() {
     activeImageArrival?.cancel();
+    bridge.state.activeAlbumResourceController?.abort();
+    bridge.state.activeAlbumResourceController = null;
     releasePlayback();
     if (bridge.state.gridLoadMoreTimer) clearTimeout(bridge.state.gridLoadMoreTimer);
     bridge.state.gridLoadMoreTimer = null;
@@ -1673,6 +1675,8 @@ function setGridMode(on) {
             ++bridge.state.renderToken;
             bridge.state.activeStageImageController?.abort();
             bridge.state.activeStageImageController = null;
+            bridge.state.activeAlbumResourceController?.abort();
+            bridge.state.activeAlbumResourceController = null;
             releasePlayback();
             const wrap = bridge.state.overlay.querySelector('.ms-media-wrap');
             if (wrap) {
@@ -3000,6 +3004,51 @@ function resetMediaThumbEl(el) {
         delete el.dataset.msThumbRevision;
     }
 
+// Managed resources are resolved only for mounted, visible cells. A pooled
+// cell owns its lease, not the item: recycling it cannot revoke stage media.
+function loadManagedThumbnail(img, item, visible = true, parentSignal = null, root = null) {
+    if (!item.resourceRef || typeof bridge.resolveMediaResource !== 'function') return false;
+    const controller = new AbortController();
+    let lease = null;
+    let observer = null;
+    let started = false;
+    let cancelled = false;
+    const cancel = () => {
+        if (cancelled) return;
+        cancelled = true;
+        observer?.disconnect();
+        parentSignal?.removeEventListener('abort', cancel);
+        // A repaint may immediately subscribe the replacement cell to the
+        // same extraction. Let it attach before cancelling this subscriber.
+        setTimeout(() => { controller.abort(); lease?.release(); lease = null; }, 0);
+    };
+    img._msCancelThumb = cancel;
+    if (parentSignal?.aborted) { cancel(); return true; }
+    parentSignal?.addEventListener('abort', cancel, { once: true });
+    const start = () => {
+        if (started || cancelled) return;
+        started = true;
+        observer?.disconnect();
+        Promise.resolve().then(() => bridge.resolveMediaResource(item, {
+            purpose: 'thumb', signal: controller.signal
+        })).then(resource => {
+            if (!resource) throw new Error('Thumbnail resource is unavailable');
+            if (cancelled || controller.signal.aborted || !img.isConnected) { resource.release(); return; }
+            lease = resource;
+            img.src = resource.url;
+        }).catch(() => { /* Keep the existing quiet placeholder. */ });
+    };
+    if (typeof IntersectionObserver === 'function') {
+        observer = new IntersectionObserver(entries => {
+            if (entries.some(entry => entry.isIntersecting)) start();
+        }, { root, rootMargin: '80px' });
+        observer.observe(img);
+    } else if (visible) {
+        queueMicrotask(start);
+    }
+    return true;
+}
+
 function onWindowedThumbClick(e) {
         if (bridge.state.dragData && bridge.state.dragData.justDragged) {
             bridge.state.dragData.justDragged = false;
@@ -3073,6 +3122,7 @@ function fillThumbButton(btn, entry, index, groupCounts, visible) {
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-placeholder'),
             loadImage: (img) => {
                 img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
+                if (loadManagedThumbnail(img, item, visible !== false)) return;
                 // Freezing takes an adapter that can read the bytes. Where
                 // there is none the cell still says GIF, but the picture is
                 // loaded the ordinary way: a thumbnail that moves is a far
@@ -3645,6 +3695,7 @@ function fillGridCell(cell, entry, index) {
             appendVideo: (host) => appendVideoThumbMedia(host, item, thumbSrc, isVideo, 'ms-grid-placeholder'),
             loadImage: (img) => {
                 img._msThumbDistance = Math.abs(index - bridge.state.currentIndex);
+                if (loadManagedThumbnail(img, item)) return;
                 // Freezing takes an adapter that can read the bytes. Where
                 // there is none the cell still says GIF, but the picture is
                 // loaded the ordinary way: a thumbnail that moves is a far
@@ -4489,6 +4540,8 @@ function createOpenInGalleryButton(startNode, variant) {
         return btn;
     }
 function renderAlbumPreview(wrap, item, token) {
+    const resourceController = new AbortController();
+    bridge.state.activeAlbumResourceController = resourceController;
     const saved = albumBrowserState.get(item) || { folderRef: '', folderStack: [], scrollTop: 0 };
     albumBrowserState.set(item, saved);
     const card = document.createElement('section');
@@ -4585,7 +4638,15 @@ function renderAlbumPreview(wrap, item, token) {
         addAll.disabled = true;
         more.disabled = true;
         try {
-            const preview = await bridge.loadAlbumPreview(item, folderRef, cursor);
+            const preview = await bridge.loadAlbumPreview(item, folderRef, cursor, {
+                signal: resourceController.signal,
+                onProgress: progress => {
+                    if (!alive() || sequence !== loadSequence || !progress) return;
+                    if (progress.total > 0) setMeasuredProgress(status, progress.loaded / progress.total,
+                        (progress.phase || 'Archive transfer') + ' ' + Math.floor(progress.loaded / progress.total * 100) + '%', progress.phase || 'Archive transfer');
+                    else setIndeterminateProgress(status, true, progress.phase || 'Opening archive');
+                }
+            });
             clearTimeout(progressTimer);
             if (!alive() || sequence !== loadSequence) return;
             setIndeterminateProgress(status, false, 'Album loading');
@@ -4631,7 +4692,22 @@ function renderAlbumPreview(wrap, item, token) {
                 if (!cursor) grid.replaceChildren();
                 if (!cursor) currentPreview = null;
                 status.hidden = false;
-                if (error && error.code === 'rateLimited') {
+                if (error && error.code === 'actionRequired' && typeof bridge.confirmAlbumAccess === 'function') {
+                    meta.textContent = 'Archive';
+                    const copy = document.createElement('span');
+                    copy.textContent = error.safeMessage || 'Open this archive to read its pages.';
+                    const start = document.createElement('button');
+                    start.type = 'button';
+                    start.className = 'ms-album-preview-action';
+                    start.textContent = error.actionLabel || 'Open archive';
+                    start.addEventListener('click', async event => {
+                        event.stopPropagation();
+                        start.disabled = true;
+                        try { await bridge.confirmAlbumAccess(item); if (alive()) load(folderRef, cursor); }
+                        catch (failure) { if (alive()) { copy.textContent = failure.message || 'Could not open archive'; start.disabled = false; } }
+                    });
+                    status.replaceChildren(copy, start);
+                } else if (error && error.code === 'rateLimited') {
                     meta.textContent = 'Temporarily rate limited';
                     const copy = document.createElement('span');
                     copy.textContent = 'Slow down a moment. The service is rate-limiting requests from this device.';
@@ -4688,6 +4764,15 @@ function renderAlbumPreview(wrap, item, token) {
                     status.append(copy, form);
                 } else if (error && error.code === 'megaError') {
                     status.textContent = error.safeMessage || 'MEGA folder could not be opened.';
+                } else if (item.archiveInfo) {
+                    const copy = document.createElement('span');
+                    copy.textContent = error?.safeMessage || error?.message || 'Could not open archive';
+                    const retry = document.createElement('button');
+                    retry.type = 'button';
+                    retry.className = 'ms-album-preview-action';
+                    retry.textContent = 'Retry';
+                    retry.addEventListener('click', event => { event.stopPropagation(); load(folderRef, cursor); });
+                    status.replaceChildren(copy, retry);
                 } else {
                     status.textContent = error && error.code === 'notFound'
                         ? 'This content does not exist. It may have been removed or the link is incorrect.'
@@ -4716,9 +4801,8 @@ function renderAlbumPreview(wrap, item, token) {
             }
             cover.appendChild(fallback);
             const src = entry.thumbSrc;
-            if (src) {
+            if (src || entry.item?.resourceRef) {
                 const img = document.createElement('img');
-                img.src = bridge.wrapMediaUrl(src);
                 img.className = 'ms-album-preview-image';
                 img.alt = '';
                 img.loading = 'lazy';
@@ -4726,6 +4810,9 @@ function renderAlbumPreview(wrap, item, token) {
                 img.addEventListener('load', () => img.classList.add('is-loaded'), { once: true });
                 if (img.complete && img.naturalWidth) img.classList.add('is-loaded');
                 cover.appendChild(img);
+                if (!loadManagedThumbnail(img, entry.item || {}, true, resourceController.signal, body)) {
+                    img.src = bridge.wrapMediaUrl(src);
+                }
             }
             const badge = document.createElement('span');
             badge.className = 'ms-album-preview-badge';
@@ -4821,6 +4908,8 @@ function renderAlbumPreview(wrap, item, token) {
 function renderCurrent() {
         if (!bridge.state.overlay || !bridge.state.items.length) return;
         if (bridge.state.gridMode) return;
+        bridge.state.activeAlbumResourceController?.abort();
+        bridge.state.activeAlbumResourceController = null;
         const previousImageArrival = activeImageArrival;
         activeImageArrival?.cancel();
         if (bridge.state.activeStageImageController) {
@@ -5078,6 +5167,7 @@ function renderCurrent() {
                     }
                 }
             }, 1200);
+            imageController.signal.addEventListener('abort', () => clearTimeout(imageProgressTimer), { once: true });
 
             const candidates = [item.src];
             if (Array.isArray(item.altSrcs)) {
@@ -5192,7 +5282,7 @@ function renderCurrent() {
             const showLoadedImage = (img, winnerSrc) => {
                 if (token !== bridge.state.renderToken || imageController.signal.aborted) return;
                 clearTimeout(imageProgressTimer);
-                if (winnerSrc && winnerSrc !== item.src && winnerSrc !== wrappedSrc) {
+                if (!item.resourceRef && winnerSrc && winnerSrc !== item.src && winnerSrc !== wrappedSrc) {
                     item.src = winnerSrc;
                 }
 
@@ -5255,7 +5345,7 @@ function renderCurrent() {
                 const candidate = candidates[idx];
                 const startLoad = () => {
                     if (token !== bridge.state.renderToken) return;
-                    bridge.loadImageFully(candidate, 10000, { signal: imageController.signal, onProgress: progress => {
+                    bridge.loadImageFully(candidate, 10000, { item, signal: imageController.signal, onProgress: progress => {
                         if (token !== bridge.state.renderToken) return;
                         if (!progress || !(progress.totalBytes > 0)) {
                             imageTransfer = null;
@@ -5320,7 +5410,39 @@ function renderCurrent() {
             };
             setTopbarLoading(true);
             setStageFetching(true);
-            tryCandidate(0, 0);
+            if (item.resourceRef) {
+                Promise.resolve().then(() => {
+                    if (typeof bridge.resolveMediaResource !== 'function') throw new Error('Managed media is not supported by this adapter');
+                    return bridge.resolveMediaResource(item, {
+                        purpose: 'stage', signal: imageController.signal,
+                        onProgress: progress => {
+                            if (token !== bridge.state.renderToken || imageController.signal.aborted) return;
+                            const notice = wrap.querySelector('.ms-stage-notice');
+                            if (!notice) return;
+                            if (progress?.total > 0) setMeasuredProgress(notice, progress.loaded / progress.total,
+                                (progress.phase || 'Extracting page') + ' ' + Math.floor(progress.loaded / progress.total * 100) + '%', progress.phase || 'Extracting page');
+                            else setIndeterminateProgress(notice, true, progress?.phase || 'Opening page');
+                        }
+                    });
+                }).then(resource => {
+                    if (!resource) throw new Error('Page resource is unavailable');
+                    if (token !== bridge.state.renderToken || imageController.signal.aborted) { resource.release(); return null; }
+                    imageController.signal.addEventListener('abort', () => resource.release(), { once: true });
+                    return bridge.loadImageFully(resource.url, 30000, { item, signal: imageController.signal });
+                }).then(img => {
+                    if (!img || token !== bridge.state.renderToken || imageController.signal.aborted) return;
+                    setStageFetching(false);
+                    showLoadedImage(img, item.src);
+                }).catch(error => {
+                    clearTimeout(imageProgressTimer);
+                    if (token !== bridge.state.renderToken || imageController.signal.aborted) return;
+                    hideStageNotice(wrap);
+                    setTopbarLoading(false);
+                    setStageFetching(false);
+                    imageArrival?.cancel();
+                    renderErrorStage(wrap, error?.message || 'Could not open page', item.sourceUrl || '', item);
+                });
+            } else tryCandidate(0, 0);
         } else if (item.type === 'video') {
             const predictedVideo = bridge.takePredictedVideo(item);
             let video;

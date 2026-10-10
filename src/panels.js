@@ -249,9 +249,23 @@ export function renderPostPanel(options) {
             main.append(icon, text);
             main.addEventListener('click', event => {
                 event.stopPropagation();
-                if (attachment.onOpen) { event.preventDefault(); attachment.onOpen(); }
+                if (attachment.onOpen && !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey) {
+                    event.preventDefault(); attachment.onOpen();
+                }
             });
             row.append(main);
+            if (attachment.action && typeof attachment.action.run === 'function') {
+                const action = panelElement(doc, 'button', 'ms-att-dl ms-att-read', attachment.action.label || 'Open');
+                action.type = 'button';
+                action.addEventListener('click', async event => {
+                    event.preventDefault(); event.stopPropagation();
+                    action.disabled = true;
+                    try { await attachment.action.run(action); }
+                    catch (error) { action.title = error?.message || 'Could not open attachment'; }
+                    finally { action.disabled = false; }
+                });
+                row.append(action);
+            }
             // An attachment opened in an editor still needs a plain way down to
             // the file itself.
             if (attachment.downloadHref) {

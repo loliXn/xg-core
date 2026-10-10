@@ -10,6 +10,7 @@ export function createRuntimeFacade(bridge) {
 
 export const BRIDGE_METHODS = Object.freeze([
     'resolveItem',
+    'resolveMediaResource',
     'requestMore',
     'performAction',
     'download',

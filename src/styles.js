@@ -3547,6 +3547,10 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-att-dl svg { width: 16px; height: 16px; display: block; }
         .ms-att-dl:hover { background: var(--ms-hover); color: var(--ms-text); }
+        .ms-att-read { width: auto; min-width: 72px; padding: 0 10px; border: 0; background: transparent;
+            font: 500 12px/1 var(--ms-font-ui); cursor: pointer; white-space: nowrap; }
+        .ms-att-read:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: -2px; }
+        .ms-att-read:disabled { opacity: .45; cursor: default; }
         .ms-post-section {
             width: 100%;
         }

@@ -53,6 +53,12 @@ Album type actions select loaded playable entries in the current preview folder
 and use the same `addAlbumEntries` / `isAlbumEntryAdded` bridge as individual
 tiles. They do not recursively enumerate folders or remove the album item.
 
+Optional ZIP sessions index image archives through caller-provided random-access
+transport and a configured zip.js namespace. Managed stage, thumbnail, preload,
+and download resources use cancellable leases with stable item identity. Other
+consumers need no ZIP dependency. See [archive resources](docs/archive-resources.md)
+for limits, worker requirements, password handling, and cleanup responsibilities.
+
 `npm run build` writes:
 
 - `dist/xgallery-core.iife.js`

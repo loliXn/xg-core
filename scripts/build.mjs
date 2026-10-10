@@ -23,6 +23,7 @@ function moduleBody(file) {
 const body = [
     moduleBody('contract.js'),
     moduleBody('media-format.js'),
+    moduleBody('archive.js'),
     moduleBody('media-url.js'),
     moduleBody('netq.js'),
     moduleBody('thumbs.js'),
@@ -56,6 +57,9 @@ const bundle = [
     '        buildPagedGridLayout,',
     '        pagedGridWindow,',
     '        inspectImageFormat,',
+    '        openZipArchive,',
+    '        DEFAULT_ARCHIVE_LIMITS,',
+    '        ArchiveError,',
     '        PLACEHOLDER_DATA_URI_MAX,',
     '        ensureHttpsUrl,',
     '        absoluteUrl,',
