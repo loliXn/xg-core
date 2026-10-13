@@ -2,7 +2,7 @@
     'use strict';
 
     const XGALLERY_CORE_API_VERSION = 1;
-    const XGALLERY_CORE_VERSION = '0.13.0';
+    const XGALLERY_CORE_VERSION = '0.13.1';
 
     const MEDIA_TYPES = Object.freeze([
         'img',
@@ -3812,6 +3812,28 @@
                 height: 10px;
                 fill: #fff;
             }
+            .ms-thumb-album-icon {
+                position: absolute;
+                top: 4px;
+                right: 4px;
+                width: 20px;
+                height: 18px;
+                display: grid;
+                place-items: center;
+                border: 1px solid var(--ms-line);
+                border-radius: 4px;
+                background: var(--ms-surface-1);
+                color: var(--ms-text);
+                z-index: 5;
+                pointer-events: none;
+            }
+            .ms-thumb-album-icon svg {
+                width: 14px;
+                height: 14px;
+                fill: none;
+                stroke: currentColor;
+            }
+            .ms-thumb-album > .ms-thumb-att-badge { right: 28px; }
             .ms-thumb-gif-icon {
                 position: absolute;
                 top: 4px;
@@ -8067,8 +8089,22 @@
 
     function appendTypeBadge(options) {
         const doc = options.document;
-        options.host.querySelectorAll('.ms-thumb-video-icon, .ms-thumb-gif-icon').forEach(node => node.remove());
-        if (options.isVideo && !options.isAnimated) {
+        options.host.querySelectorAll('.ms-thumb-video-icon, .ms-thumb-gif-icon, .ms-thumb-album-icon').forEach(node => node.remove());
+        if (options.isAlbum) {
+            const badge = doc.createElement('span');
+            badge.className = 'ms-thumb-album-icon';
+            badge.title = options.albumLabel || 'Album';
+            badge.setAttribute('role', 'img');
+            badge.setAttribute('aria-label', badge.title);
+            const icon = createSvgElement(doc, 'svg', { viewBox: '0 0 24 24', 'aria-hidden': 'true' });
+            icon.appendChild(createSvgElement(doc, 'path', {
+                d: 'M3 7V5a2 2 0 0 1 2-2h5l3 3h6a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z',
+                fill: 'none', stroke: 'currentColor', 'stroke-width': 1.8,
+                'stroke-linecap': 'round', 'stroke-linejoin': 'round'
+            }));
+            badge.appendChild(icon);
+            options.host.appendChild(badge);
+        } else if (options.isVideo && !options.isAnimated) {
             const badge = doc.createElement('div');
             badge.className = 'ms-thumb-video-icon';
             badge.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="#fff"/></svg>';
@@ -8104,7 +8140,8 @@
         const sourceClass = options.sourceClass || '';
         const cacheClass = options.cacheClass || '';
 
-        host.className = baseClass + absoluteClass + sourceClass + cacheClass + activeClass;
+        host.className = baseClass + absoluteClass + sourceClass + cacheClass + activeClass
+            + (options.isAlbum ? ' ms-thumb-album' : '');
         if (options.hdSrc) host.setAttribute('data-hd-src', options.hdSrc);
 
         const shared = {
@@ -8112,6 +8149,8 @@
             host,
             isVideo: !!options.isVideo,
             isAnimated: !!options.isAnimated,
+            isAlbum: !!options.isAlbum,
+            albumLabel: options.albumLabel,
             animatedLabel: options.animatedLabel,
             sourceUrl: options.sourceUrl,
             showDomain: options.showDomain !== false,
@@ -8139,13 +8178,7 @@
             host.appendChild(img);
         }
 
-        appendTypeBadge({
-            document: doc,
-            host,
-            isVideo: !!options.isVideo,
-            isAnimated: !!options.isAnimated,
-            animatedLabel: options.animatedLabel
-        });
+        appendTypeBadge(shared);
         lockThumbnailFill(host);
 
         if (options.indexLabel !== undefined) {
@@ -12361,6 +12394,8 @@
                 visible: visible !== false,
                 hdSrc: hdSrc,
                 isVideo: isVideo,
+                isAlbum: thumbnailIsAlbum(item),
+                albumLabel: item.type === 'folder' ? 'Folder' : 'Album',
                 isAnimated: animated,
                 animatedLabel: animated ? bridge.animatedThumbLabel(item) : '',
                 isPlaceholder: isPlaceholder,
@@ -12388,6 +12423,15 @@
             if (bridge.state.thumbEnteringKeys && bridge.state.thumbEnteringKeys.has(btn.dataset.msKey)) {
                 btn.classList.add('ms-thumb-entering');
             }
+        }
+
+    function thumbnailIsAlbum(item) {
+            if (!item) return false;
+            if (item.type === 'album' || item.type === 'folder') return true;
+            // Legacy adapters may represent an expandable collection as a cover
+            // image or iframe. Reuse their presentation contract, never host URLs.
+            return !!(typeof bridge.mediaPresentation === 'function'
+                && bridge.mediaPresentation(item)?.expandable);
         }
 
     // A post can carry files the gallery cannot show (a layered file, an archive,
@@ -12934,6 +12978,8 @@
                 active: index === bridge.state.currentIndex,
                 hdSrc: hdSrc,
                 isVideo: isVideo,
+                isAlbum: thumbnailIsAlbum(item),
+                albumLabel: item.type === 'folder' ? 'Folder' : 'Album',
                 isAnimated: animated,
                 animatedLabel: animated ? bridge.animatedThumbLabel(item) : '',
                 isPlaceholder: thumbMediaIsPlaceholder(item, thumbSrc),
@@ -12957,6 +13003,7 @@
                 },
                 indexLabel: index + 1
             });
+            paintThumbAttachmentBadge(cell, item);
         }
 
     function syncGridWindow() {

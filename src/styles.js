@@ -1775,6 +1775,28 @@ export const OVERLAY_CSS = String.raw`
             height: 10px;
             fill: #fff;
         }
+        .ms-thumb-album-icon {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 20px;
+            height: 18px;
+            display: grid;
+            place-items: center;
+            border: 1px solid var(--ms-line);
+            border-radius: 4px;
+            background: var(--ms-surface-1);
+            color: var(--ms-text);
+            z-index: 5;
+            pointer-events: none;
+        }
+        .ms-thumb-album-icon svg {
+            width: 14px;
+            height: 14px;
+            fill: none;
+            stroke: currentColor;
+        }
+        .ms-thumb-album > .ms-thumb-att-badge { right: 28px; }
         .ms-thumb-gif-icon {
             position: absolute;
             top: 4px;

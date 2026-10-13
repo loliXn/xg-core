@@ -3114,6 +3114,8 @@ function fillThumbButton(btn, entry, index, groupCounts, visible) {
             visible: visible !== false,
             hdSrc: hdSrc,
             isVideo: isVideo,
+            isAlbum: thumbnailIsAlbum(item),
+            albumLabel: item.type === 'folder' ? 'Folder' : 'Album',
             isAnimated: animated,
             animatedLabel: animated ? bridge.animatedThumbLabel(item) : '',
             isPlaceholder: isPlaceholder,
@@ -3141,6 +3143,15 @@ function fillThumbButton(btn, entry, index, groupCounts, visible) {
         if (bridge.state.thumbEnteringKeys && bridge.state.thumbEnteringKeys.has(btn.dataset.msKey)) {
             btn.classList.add('ms-thumb-entering');
         }
+    }
+
+function thumbnailIsAlbum(item) {
+        if (!item) return false;
+        if (item.type === 'album' || item.type === 'folder') return true;
+        // Legacy adapters may represent an expandable collection as a cover
+        // image or iframe. Reuse their presentation contract, never host URLs.
+        return !!(typeof bridge.mediaPresentation === 'function'
+            && bridge.mediaPresentation(item)?.expandable);
     }
 
 // A post can carry files the gallery cannot show (a layered file, an archive,
@@ -3687,6 +3698,8 @@ function fillGridCell(cell, entry, index) {
             active: index === bridge.state.currentIndex,
             hdSrc: hdSrc,
             isVideo: isVideo,
+            isAlbum: thumbnailIsAlbum(item),
+            albumLabel: item.type === 'folder' ? 'Folder' : 'Album',
             isAnimated: animated,
             animatedLabel: animated ? bridge.animatedThumbLabel(item) : '',
             isPlaceholder: thumbMediaIsPlaceholder(item, thumbSrc),
@@ -3710,6 +3723,7 @@ function fillGridCell(cell, entry, index) {
             },
             indexLabel: index + 1
         });
+        paintThumbAttachmentBadge(cell, item);
     }
 
 function syncGridWindow() {

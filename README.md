@@ -8,6 +8,10 @@ This package owns the overlay and launcher styles, shell, controls, settings,
 post panels, captions, zoom and pan, thumbnail and grid windowing, media-slot
 cleanup, loading and error states, and the image, video, iframe and album
 rendering lifecycle.
+Collection thumbnails carry an optional neutral folder badge in strip and grid
+views, including placeholders. Attachment counts stay beside the badge. The
+thumbnail renderer accepts `isAlbum` and an optional `albumLabel`; existing
+callers need no changes.
 It must not contain site detection, source-page selectors, authenticated site
 actions, Tampermonkey APIs, or live host DOM nodes.
 
