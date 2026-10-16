@@ -73,6 +73,10 @@ Consumers should pin a bootstrap release tag plus SHA-256, then load
 `latest.json` from GitHub Releases on each start, verify the hash, and cache
 the last verified bundle. Do not load a moving `@main` branch.
 
+Bootstrap files may use `raw.githubusercontent.com` at an immutable release tag.
+Update manifests point directly at versioned GitHub Release assets, avoiding
+CDN repository-archive size limits as older bundles accumulate.
+
 ## Development
 
 Provider filtering is adapter-defined: pass `filterProviders` as `{id, label}`

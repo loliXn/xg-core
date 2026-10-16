@@ -162,7 +162,9 @@ fs.writeFileSync(path.join(dist, 'xgallery-core.iife.js'), bundleNormalized, 'ut
 fs.writeFileSync(path.join(dist, versionedName), bundleNormalized, 'utf8');
 const manifest = {
     version: version,
-    url: 'https://cdn.jsdelivr.net/gh/loliXn/xg-core@v' + version + '/dist/xgallery-core.iife.js',
+    // Download the release asset directly: a repository with retained bundles
+    // can exceed a CDN's archive-size limit even when this file is small.
+    url: 'https://github.com/loliXn/xg-core/releases/download/v' + version + '/' + versionedName,
     sha256: sha256
 };
 fs.writeFileSync(path.join(dist, 'latest.json'), JSON.stringify(manifest, null, 2) + '\n', 'utf8');
