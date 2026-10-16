@@ -2,7 +2,7 @@
     'use strict';
 
     const XGALLERY_CORE_API_VERSION = 1;
-    const XGALLERY_CORE_VERSION = '0.13.2';
+    const XGALLERY_CORE_VERSION = '0.13.3';
 
     const MEDIA_TYPES = Object.freeze([
         'img',
@@ -2972,36 +2972,30 @@
             .ms-gallery-overlay .ms-playback-progress {
                 position: absolute;
                 left: 50%;
-                bottom: 22px;
-                transform: translateX(-50%);
+                top: 50%;
+                transform: translate(-50%, -50%);
                 z-index: 12;
-                width: min(380px, calc(100% - 32px));
+                width: min(240px, calc(100% - 24px));
                 display: flex;
                 flex-direction: column;
-                gap: 10px;
+                gap: 6px;
                 box-sizing: border-box;
-                padding: 12px 14px;
+                padding: 8px 10px;
                 border: 1px solid var(--ms-line);
-                border-radius: 12px;
+                border-radius: 8px;
                 background: var(--ms-surface-1);
-                box-shadow: var(--ms-shadow-md);
+                box-shadow: none;
                 color: var(--ms-text);
                 font: 12px/1.4 var(--ms-font-ui, system-ui, sans-serif);
                 font-variant-numeric: tabular-nums;
             }
+            .ms-gallery-overlay .ms-playback-progress[hidden],
+            .ms-gallery-overlay .ms-playback-progress > progress[hidden] { display: none; }
             .ms-gallery-overlay .ms-playback-progress-head {
                 display: flex;
                 align-items: center;
                 gap: 8px;
                 min-width: 0;
-            }
-            .ms-gallery-overlay .ms-playback-progress-signal {
-                flex: 0 0 auto;
-                width: 8px;
-                height: 8px;
-                border-radius: 50%;
-                background: var(--ms-accent);
-                box-shadow: 0 0 0 4px var(--ms-accent-tint);
             }
             .ms-gallery-overlay .ms-playback-progress-label {
                 flex: 1 1 auto;
@@ -3014,7 +3008,7 @@
             }
             .ms-gallery-overlay .ms-playback-progress > progress {
                 width: 100%;
-                height: 5px;
+                height: 3px;
                 margin: 0;
                 border: 0;
                 border-radius: 999px;
@@ -3029,18 +3023,23 @@
                 color: var(--ms-text-3);
                 font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
                 font-variant-numeric: tabular-nums;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
             }
             .ms-gallery-overlay .ms-playback-progress-head > button {
                 flex: 0 0 auto;
-                min-height: 28px;
-                padding: 5px 9px;
-                border: 1px solid var(--ms-line);
-                border-radius: 7px;
-                background: var(--ms-control-rest);
-                color: var(--ms-text);
+                width: 24px;
+                height: 24px;
+                padding: 4px;
+                border: 0;
+                border-radius: 4px;
+                background: transparent;
+                color: var(--ms-text-3);
                 cursor: pointer;
                 font: 600 11px/1.2 var(--ms-font-ui, system-ui, sans-serif);
             }
+            .ms-gallery-overlay .ms-playback-progress-head > button svg { display: block; width: 16px; height: 16px; }
             .ms-gallery-overlay .ms-playback-progress-head > button:hover { background: var(--ms-hover); border-color: var(--ms-line-strong); }
             .ms-gallery-overlay .ms-playback-progress-head > button:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: 2px; }
             @media (max-width: 600px) {
@@ -9322,6 +9321,7 @@
         const parser = parserFactory();
         const tracks = new Map();
         const chunkSize = 1024 * 1024;
+        const startupChunkSize = 128 * 1024;
         let disposed = false, failed = false, pendingSeek = null, total = 0;
         let receivedRanges = [];
         let parsingReady = false;
@@ -9389,7 +9389,10 @@
         };
         const drain = () => Promise.all([...tracks.values()].map(track => track.pending));
         const read = async offset => {
-            const result = await readRange(offset, total ? Math.min(total - 1, offset + chunkSize - 1) : offset + chunkSize - 1, controller.signal);
+            // A GM range resolves only once its entire payload arrives. Give the
+            // parser small initial reads, then grow requests after playback starts.
+            const size = video.readyState >= 2 ? chunkSize : startupChunkSize;
+            const result = await readRange(offset, total ? Math.min(total - 1, offset + size - 1) : offset + size - 1, controller.signal);
             if (disposed) throw abortError();
             if (Object.prototype.toString.call(result.buffer) !== '[object ArrayBuffer]' || !result.buffer.byteLength || result.start !== offset) {
                 throw new Error('The server returned an invalid video range');
@@ -9437,7 +9440,8 @@
                     const mime = (track.type === 'audio' ? 'audio/mp4' : 'video/mp4') + '; codecs="' + track.codec + '"';
                     if (!MediaSource.isTypeSupported(mime)) throw new Error('Unsupported video codec: ' + track.codec);
                     tracks.set(track.id, { id: track.id, buffer: mediaSource.addSourceBuffer(mime), pending: Promise.resolve() });
-                    parser.setSegmentOptions(track.id, null, { nbSamples: track.type === 'video' ? 30 : 100 });
+                    const samples = track.type === 'video' ? 8 : 16;
+                    parser.setSegmentOptions(track.id, null, { nbSamples: samples });
                 }
                 if (info.duration > 0 && info.timescale > 0) mediaSource.duration = info.duration / info.timescale;
                 parser.onSegment = (id, _user, buffer, sampleNumber) => {
@@ -15167,15 +15171,17 @@
                         try { video.pause(); video.removeAttribute('src'); video.load(); } catch (e) { }
                         const panel = document.createElement('div');
                         panel.className = 'ms-playback-progress';
+                        panel.hidden = true;
+                        const revealTimer = setTimeout(() => {
+                            if (ownsVideoSession() && !controller.signal.aborted && video.readyState < 2) panel.hidden = false;
+                        }, 1200);
                         controller.signal.addEventListener('abort', () => {
+                            clearTimeout(revealTimer);
                             item._playbackRecoveryTried = false;
                             panel.remove();
                         }, { once: true });
                         const head = document.createElement('div');
                         head.className = 'ms-playback-progress-head';
-                        const signal = document.createElement('span');
-                        signal.className = 'ms-playback-progress-signal';
-                        signal.setAttribute('aria-hidden', 'true');
                         const label = document.createElement('strong');
                         label.className = 'ms-playback-progress-label';
                         label.setAttribute('aria-live', 'polite');
@@ -15183,12 +15189,15 @@
                         const track = document.createElement('progress');
                         track.setAttribute('aria-label', 'Video transfer');
                         track.removeAttribute('value');
+                        track.hidden = true;
                         const stats = document.createElement('span');
                         stats.className = 'ms-playback-progress-stats';
-                        stats.textContent = 'Waiting for transfer';
+                        stats.textContent = '';
                         const cancel = document.createElement('button');
                         cancel.type = 'button';
-                        cancel.textContent = 'Cancel';
+                        cancel.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+                        cancel.title = 'Cancel video loading';
+                        cancel.setAttribute('aria-label', cancel.title);
                         cancel.addEventListener('click', event => {
                             event.stopPropagation();
                             controller.abort();
@@ -15197,9 +15206,9 @@
                             setStageFetching(false);
                             renderErrorStage(wrap, 'Loading cancelled', item.src, item);
                         });
-                        head.append(signal, label, cancel);
+                        head.append(label, cancel);
                         panel.append(head, track, stats);
-                        wrap.appendChild(panel);
+                        ensureMediaBox(wrap).appendChild(panel);
                         let lastPaint = 0;
                         bridge.preparePlayback(item, { video, signal: controller.signal, onError: message => {
                             if (!ownsVideoSession() || controller.signal.aborted) return;
@@ -15221,6 +15230,7 @@
                                 ? (loaded / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1)
                                     + ' MB · ' + Math.floor(Math.min(loaded / total, 1) * 100) + '%'
                                 : (loaded / 1048576).toFixed(1) + ' MB transferred';
+                            track.hidden = !(total > 0);
                             if (total > 0) { track.max = total; track.value = Math.min(loaded, total); }
                         } }).then(result => {
                             if (!ownsVideoSession()) {
@@ -15237,10 +15247,12 @@
                                 label.textContent = 'Preparing video…';
                                 stats.textContent = result.streaming ? 'Opening chunked playback' : 'Transfer complete · opening player';
                                 track.removeAttribute('value');
+                                track.hidden = true;
                                 video.src = result.src;
                                 video.load();
                                 const readyTimeout = setTimeout(() => {
                                     if (!ownsVideoSession() || video.readyState >= 2) return;
+                                    controller.abort();
                                     panel.remove();
                                     video._msRecovering = false;
                                     setStageFetching(false);
@@ -15248,6 +15260,7 @@
                                 }, 20000);
                                 controller.signal.addEventListener('abort', () => clearTimeout(readyTimeout), { once: true });
                                 on('loadeddata', () => {
+                                    clearTimeout(revealTimer);
                                     clearTimeout(readyTimeout);
                                     panel.remove(); video._msRecovering = false; setStageFetching(false);
                                 }, { once: true });
@@ -15374,6 +15387,12 @@
                     if (videoActivated || token !== bridge.state.renderToken || !video.isConnected) return;
                     videoActivated = true;
                     video.preload = bufferedVideo ? 'auto' : 'metadata';
+                    // Known streaming transports need no failed native attempt
+                    // before they can start feeding the active player.
+                    if (presentation.preferPlaybackRecovery && video.readyState < 2 && !item._playbackRecoveryTried) {
+                        handleVideoError();
+                        return;
+                    }
                     if (streamingVideo) startStream();
                     else if (!video.getAttribute('src')) video.src = primaryVideoSrc;
                     const promise = video.play();

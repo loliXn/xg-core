@@ -80,6 +80,10 @@ adapter-owned `readRange(start, end, signal)` returning `{buffer, start, total}`
 It returns a MediaSource URL and an idempotent disposer. It fetches the MP4 index
 and bounded ranges, supports audio/video tracks and seeking, prunes old buffered
 media and cancels on navigation. No provider authentication belongs in the core.
+Initial reads use 128 KiB and grow after the first decoded frame. An adapter may
+set `mediaPresentation(item).preferPlaybackRecovery` to start its transport
+without a deliberately failed native request. Recovery feedback is delayed and
+centered inside the active media box, with bars only for measured totals.
 See [MP4Box's progressive parsing API](https://github.com/gpac/mp4box.js#api).
 
 The optional runtime `videoProvider(item)` bridge supplies `videoProviderLabel`

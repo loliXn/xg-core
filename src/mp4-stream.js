@@ -9,6 +9,7 @@ export function createMp4RangePlayback(options) {
     const parser = parserFactory();
     const tracks = new Map();
     const chunkSize = 1024 * 1024;
+    const startupChunkSize = 128 * 1024;
     let disposed = false, failed = false, pendingSeek = null, total = 0;
     let receivedRanges = [];
     let parsingReady = false;
@@ -76,7 +77,10 @@ export function createMp4RangePlayback(options) {
     };
     const drain = () => Promise.all([...tracks.values()].map(track => track.pending));
     const read = async offset => {
-        const result = await readRange(offset, total ? Math.min(total - 1, offset + chunkSize - 1) : offset + chunkSize - 1, controller.signal);
+        // A GM range resolves only once its entire payload arrives. Give the
+        // parser small initial reads, then grow requests after playback starts.
+        const size = video.readyState >= 2 ? chunkSize : startupChunkSize;
+        const result = await readRange(offset, total ? Math.min(total - 1, offset + size - 1) : offset + size - 1, controller.signal);
         if (disposed) throw abortError();
         if (Object.prototype.toString.call(result.buffer) !== '[object ArrayBuffer]' || !result.buffer.byteLength || result.start !== offset) {
             throw new Error('The server returned an invalid video range');
@@ -124,7 +128,8 @@ export function createMp4RangePlayback(options) {
                 const mime = (track.type === 'audio' ? 'audio/mp4' : 'video/mp4') + '; codecs="' + track.codec + '"';
                 if (!MediaSource.isTypeSupported(mime)) throw new Error('Unsupported video codec: ' + track.codec);
                 tracks.set(track.id, { id: track.id, buffer: mediaSource.addSourceBuffer(mime), pending: Promise.resolve() });
-                parser.setSegmentOptions(track.id, null, { nbSamples: track.type === 'video' ? 30 : 100 });
+                const samples = track.type === 'video' ? 8 : 16;
+                parser.setSegmentOptions(track.id, null, { nbSamples: samples });
             }
             if (info.duration > 0 && info.timescale > 0) mediaSource.duration = info.duration / info.timescale;
             parser.onSegment = (id, _user, buffer, sampleNumber) => {

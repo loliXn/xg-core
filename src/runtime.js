@@ -5685,15 +5685,17 @@ function renderCurrent() {
                     try { video.pause(); video.removeAttribute('src'); video.load(); } catch (e) { }
                     const panel = document.createElement('div');
                     panel.className = 'ms-playback-progress';
+                    panel.hidden = true;
+                    const revealTimer = setTimeout(() => {
+                        if (ownsVideoSession() && !controller.signal.aborted && video.readyState < 2) panel.hidden = false;
+                    }, 1200);
                     controller.signal.addEventListener('abort', () => {
+                        clearTimeout(revealTimer);
                         item._playbackRecoveryTried = false;
                         panel.remove();
                     }, { once: true });
                     const head = document.createElement('div');
                     head.className = 'ms-playback-progress-head';
-                    const signal = document.createElement('span');
-                    signal.className = 'ms-playback-progress-signal';
-                    signal.setAttribute('aria-hidden', 'true');
                     const label = document.createElement('strong');
                     label.className = 'ms-playback-progress-label';
                     label.setAttribute('aria-live', 'polite');
@@ -5701,12 +5703,15 @@ function renderCurrent() {
                     const track = document.createElement('progress');
                     track.setAttribute('aria-label', 'Video transfer');
                     track.removeAttribute('value');
+                    track.hidden = true;
                     const stats = document.createElement('span');
                     stats.className = 'ms-playback-progress-stats';
-                    stats.textContent = 'Waiting for transfer';
+                    stats.textContent = '';
                     const cancel = document.createElement('button');
                     cancel.type = 'button';
-                    cancel.textContent = 'Cancel';
+                    cancel.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+                    cancel.title = 'Cancel video loading';
+                    cancel.setAttribute('aria-label', cancel.title);
                     cancel.addEventListener('click', event => {
                         event.stopPropagation();
                         controller.abort();
@@ -5715,9 +5720,9 @@ function renderCurrent() {
                         setStageFetching(false);
                         renderErrorStage(wrap, 'Loading cancelled', item.src, item);
                     });
-                    head.append(signal, label, cancel);
+                    head.append(label, cancel);
                     panel.append(head, track, stats);
-                    wrap.appendChild(panel);
+                    ensureMediaBox(wrap).appendChild(panel);
                     let lastPaint = 0;
                     bridge.preparePlayback(item, { video, signal: controller.signal, onError: message => {
                         if (!ownsVideoSession() || controller.signal.aborted) return;
@@ -5739,6 +5744,7 @@ function renderCurrent() {
                             ? (loaded / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1)
                                 + ' MB · ' + Math.floor(Math.min(loaded / total, 1) * 100) + '%'
                             : (loaded / 1048576).toFixed(1) + ' MB transferred';
+                        track.hidden = !(total > 0);
                         if (total > 0) { track.max = total; track.value = Math.min(loaded, total); }
                     } }).then(result => {
                         if (!ownsVideoSession()) {
@@ -5755,10 +5761,12 @@ function renderCurrent() {
                             label.textContent = 'Preparing video…';
                             stats.textContent = result.streaming ? 'Opening chunked playback' : 'Transfer complete · opening player';
                             track.removeAttribute('value');
+                            track.hidden = true;
                             video.src = result.src;
                             video.load();
                             const readyTimeout = setTimeout(() => {
                                 if (!ownsVideoSession() || video.readyState >= 2) return;
+                                controller.abort();
                                 panel.remove();
                                 video._msRecovering = false;
                                 setStageFetching(false);
@@ -5766,6 +5774,7 @@ function renderCurrent() {
                             }, 20000);
                             controller.signal.addEventListener('abort', () => clearTimeout(readyTimeout), { once: true });
                             on('loadeddata', () => {
+                                clearTimeout(revealTimer);
                                 clearTimeout(readyTimeout);
                                 panel.remove(); video._msRecovering = false; setStageFetching(false);
                             }, { once: true });
@@ -5892,6 +5901,12 @@ function renderCurrent() {
                 if (videoActivated || token !== bridge.state.renderToken || !video.isConnected) return;
                 videoActivated = true;
                 video.preload = bufferedVideo ? 'auto' : 'metadata';
+                // Known streaming transports need no failed native attempt
+                // before they can start feeding the active player.
+                if (presentation.preferPlaybackRecovery && video.readyState < 2 && !item._playbackRecoveryTried) {
+                    handleVideoError();
+                    return;
+                }
                 if (streamingVideo) startStream();
                 else if (!video.getAttribute('src')) video.src = primaryVideoSrc;
                 const promise = video.play();

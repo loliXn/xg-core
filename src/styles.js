@@ -935,36 +935,30 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay .ms-playback-progress {
             position: absolute;
             left: 50%;
-            bottom: 22px;
-            transform: translateX(-50%);
+            top: 50%;
+            transform: translate(-50%, -50%);
             z-index: 12;
-            width: min(380px, calc(100% - 32px));
+            width: min(240px, calc(100% - 24px));
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 6px;
             box-sizing: border-box;
-            padding: 12px 14px;
+            padding: 8px 10px;
             border: 1px solid var(--ms-line);
-            border-radius: 12px;
+            border-radius: 8px;
             background: var(--ms-surface-1);
-            box-shadow: var(--ms-shadow-md);
+            box-shadow: none;
             color: var(--ms-text);
             font: 12px/1.4 var(--ms-font-ui, system-ui, sans-serif);
             font-variant-numeric: tabular-nums;
         }
+        .ms-gallery-overlay .ms-playback-progress[hidden],
+        .ms-gallery-overlay .ms-playback-progress > progress[hidden] { display: none; }
         .ms-gallery-overlay .ms-playback-progress-head {
             display: flex;
             align-items: center;
             gap: 8px;
             min-width: 0;
-        }
-        .ms-gallery-overlay .ms-playback-progress-signal {
-            flex: 0 0 auto;
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            background: var(--ms-accent);
-            box-shadow: 0 0 0 4px var(--ms-accent-tint);
         }
         .ms-gallery-overlay .ms-playback-progress-label {
             flex: 1 1 auto;
@@ -977,7 +971,7 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-gallery-overlay .ms-playback-progress > progress {
             width: 100%;
-            height: 5px;
+            height: 3px;
             margin: 0;
             border: 0;
             border-radius: 999px;
@@ -992,18 +986,23 @@ export const OVERLAY_CSS = String.raw`
             color: var(--ms-text-3);
             font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
             font-variant-numeric: tabular-nums;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
         .ms-gallery-overlay .ms-playback-progress-head > button {
             flex: 0 0 auto;
-            min-height: 28px;
-            padding: 5px 9px;
-            border: 1px solid var(--ms-line);
-            border-radius: 7px;
-            background: var(--ms-control-rest);
-            color: var(--ms-text);
+            width: 24px;
+            height: 24px;
+            padding: 4px;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
+            color: var(--ms-text-3);
             cursor: pointer;
             font: 600 11px/1.2 var(--ms-font-ui, system-ui, sans-serif);
         }
+        .ms-gallery-overlay .ms-playback-progress-head > button svg { display: block; width: 16px; height: 16px; }
         .ms-gallery-overlay .ms-playback-progress-head > button:hover { background: var(--ms-hover); border-color: var(--ms-line-strong); }
         .ms-gallery-overlay .ms-playback-progress-head > button:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: 2px; }
         @media (max-width: 600px) {
