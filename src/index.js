@@ -37,6 +37,7 @@ export {
     readGoogleDriveFolder
 } from './gdrive.js';
 export { createViewerRuntime } from './runtime.js';
+export { createMp4RangePlayback } from './mp4-stream.js';
 export { renderPostPanel, createSettingsPanel, createDialog } from './panels.js';
 export { OVERLAY_CSS, LAUNCHER_CSS, installOverlayStyles, installLauncherStyles, DEFAULT_ACCENT, ACCENT_PRESETS, accentTokens, applyAccent } from './styles.js';
 export { createOverlayShell } from './view.js';

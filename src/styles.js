@@ -1775,6 +1775,21 @@ export const OVERLAY_CSS = String.raw`
             height: 10px;
             fill: #fff;
         }
+        .ms-thumb-video-icon.ms-thumb-video-provider {
+            width: auto;
+            min-width: 26px;
+            height: 18px;
+            gap: 2px;
+            padding: 0 3px;
+            color: var(--ms-text);
+            background: var(--ms-surface-1);
+            border: 1px solid var(--ms-line);
+            border-radius: 4px;
+            font: 600 10px/1 var(--ms-font-mono, ui-monospace, monospace);
+        }
+        .ms-thumb-video-provider svg { flex: 0 0 10px; fill: currentColor; }
+        .ms-thumb-video-provider svg path { fill: currentColor; }
+        .ms-thumb-provider > .ms-thumb-att-badge { right: 38px; }
         .ms-thumb-album-icon {
             position: absolute;
             top: 4px;

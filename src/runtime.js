@@ -2914,7 +2914,8 @@ function thumbPreviewRevision(entry) {
         // the cell shows, so it has to change what the cell remembers too.
         const oversized = Number(Math.max(item.thumbnailWidth || 0, item.thumbnailHeight || 0) > THUMB_MAX_SOURCE_EDGE);
         return token + '|' + String(item.type || '') + '|' + Number(!!item.isVideo)
-            + '|' + Number(animated) + '|' + oversized + '|' + (animated ? String(item.thumbnailFormat || item.detectedFormat || '') : '');
+            + '|' + Number(animated) + '|' + oversized + '|' + (animated ? String(item.thumbnailFormat || item.detectedFormat || '') : '')
+            + '|' + (bridge.videoProvider?.(item)?.videoProviderLabel || '');
     }
 
 function takeThumbVisual(el) {
@@ -3102,6 +3103,7 @@ function fillThumbButton(btn, entry, index, groupCounts, visible) {
         btn.style.left = (index * bridge.MS_THUMB_STRIDE) + 'px';
         btn.style.boxShadow = '';
         const animated = bridge.isFreezableAnimatedThumb(item);
+        const provider = bridge.videoProvider?.(item) || {};
         globalThis.XGalleryCore.renderThumbnailCell({
             document: document,
             host: btn,
@@ -3115,6 +3117,8 @@ function fillThumbButton(btn, entry, index, groupCounts, visible) {
             hdSrc: hdSrc,
             isVideo: isVideo,
             isAlbum: thumbnailIsAlbum(item),
+            videoProviderLabel: provider.videoProviderLabel,
+            videoProviderName: provider.videoProviderName,
             albumLabel: item.type === 'folder' ? 'Folder' : 'Album',
             isAnimated: animated,
             animatedLabel: animated ? bridge.animatedThumbLabel(item) : '',
@@ -3688,6 +3692,7 @@ function fillGridCell(cell, entry, index) {
         const isVideo = item.type === 'video' || item.type === 'iframe' || item.expectedVideo || item.xUnplayable;
         const hasPoster = !!(item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc));
         const animated = bridge.isFreezableAnimatedThumb(item);
+        const provider = bridge.videoProvider?.(item) || {};
         globalThis.XGalleryCore.renderThumbnailCell({
             document: document,
             host: cell,
@@ -3699,6 +3704,8 @@ function fillGridCell(cell, entry, index) {
             hdSrc: hdSrc,
             isVideo: isVideo,
             isAlbum: thumbnailIsAlbum(item),
+            videoProviderLabel: provider.videoProviderLabel,
+            videoProviderName: provider.videoProviderName,
             albumLabel: item.type === 'folder' ? 'Folder' : 'Album',
             isAnimated: animated,
             animatedLabel: animated ? bridge.animatedThumbLabel(item) : '',
@@ -5712,14 +5719,22 @@ function renderCurrent() {
                     panel.append(head, track, stats);
                     wrap.appendChild(panel);
                     let lastPaint = 0;
-                    bridge.preparePlayback(item, { signal: controller.signal, onProgress: progress => {
+                    bridge.preparePlayback(item, { video, signal: controller.signal, onError: message => {
                         if (!ownsVideoSession() || controller.signal.aborted) return;
+                        controller.abort();
+                        video._msRecovering = false;
+                        panel.remove();
+                        setStageFetching(false);
+                        setTopbarLoading(false);
+                        renderErrorStage(wrap, message || 'Video stream failed', item.src, item);
+                    }, onProgress: progress => {
+                        if (!ownsVideoSession() || controller.signal.aborted || !panel.isConnected) return;
                         const now = Date.now();
                         if (now - lastPaint < 200 && progress.loadedBytes !== progress.totalBytes) return;
                         lastPaint = now;
                         const loaded = Number(progress.loadedBytes) || 0;
                         const total = Number(progress.totalBytes) || 0;
-                        if (label.textContent !== 'Downloading video') label.textContent = 'Downloading video';
+                        label.textContent = progress.streaming ? 'Buffering video' : 'Downloading video';
                         stats.textContent = total > 0
                             ? (loaded / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1)
                                 + ' MB · ' + Math.floor(Math.min(loaded / total, 1) * 100) + '%'
@@ -5735,10 +5750,10 @@ function renderCurrent() {
                             return;
                         }
                         if (result && result.src) {
-                            const unbindSave = result.downloadName ? bindRecoveredVideoSave(video, result.src, result.downloadName) : null;
+                            const unbindSave = result.downloadName ? bindRecoveredVideoSave(video, result.downloadSrc || result.src, result.downloadName) : null;
                             activePlaybackDispose = () => { unbindSave?.(); result.dispose?.(); };
                             label.textContent = 'Preparing video…';
-                            stats.textContent = 'Transfer complete · opening player';
+                            stats.textContent = result.streaming ? 'Opening chunked playback' : 'Transfer complete · opening player';
                             track.removeAttribute('value');
                             video.src = result.src;
                             video.load();
@@ -5892,7 +5907,7 @@ function renderCurrent() {
                     wrap: wrap,
                     url: item.src,
                     isCurrent: ownsVideoSession,
-                    recoveryStallMs: presentation.playbackRecovery ? 20000 : 0,
+                    recoveryStallMs: presentation.playbackRecovery ? (presentation.playbackRecoveryStallMs || 20000) : 0,
                     onRestart: () => {
                         if (presentation.playbackRecovery && !item._playbackRecoveryTried && video.readyState < 2) {
                             handleVideoError();

@@ -37,6 +37,7 @@ const body = [
     moduleBody('update.js'),
     moduleBody('panels.js'),
     moduleBody('grid-layout.js'),
+    moduleBody('mp4-stream.js'),
     moduleBody('runtime.js')
 ].join('\n\n');
 
@@ -86,6 +87,7 @@ const bundle = [
     '        parseGoogleDriveFolderListing,',
     '        readGoogleDriveFolder,',
     '        createViewerRuntime,',
+    '        createMp4RangePlayback,',
     '        renderPostPanel,',
     '        createSettingsPanel,',
     '        createDialog,',

@@ -75,6 +75,17 @@ the last verified bundle. Do not load a moving `@main` branch.
 
 ## Development
 
+`createMp4RangePlayback` accepts an MP4Box-compatible parser factory and an
+adapter-owned `readRange(start, end, signal)` returning `{buffer, start, total}`.
+It returns a MediaSource URL and an idempotent disposer. It fetches the MP4 index
+and bounded ranges, supports audio/video tracks and seeking, prunes old buffered
+media and cancels on navigation. No provider authentication belongs in the core.
+See [MP4Box's progressive parsing API](https://github.com/gpac/mp4box.js#api).
+
+The optional runtime `videoProvider(item)` bridge supplies `videoProviderLabel`
+and `videoProviderName` for shared strip/grid badges. Host mapping stays in the
+adapter; collection and animated-image badges retain priority.
+
 ```text
 npm run build
 npm test

@@ -81,6 +81,17 @@ function appendTypeBadge(options) {
         const badge = doc.createElement('div');
         badge.className = 'ms-thumb-video-icon';
         badge.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="#fff"/></svg>';
+        badge.title = options.videoProviderName ? options.videoProviderName + ' video' : 'Video';
+        badge.setAttribute('role', 'img');
+        badge.setAttribute('aria-label', badge.title);
+        badge.querySelector('svg').setAttribute('aria-hidden', 'true');
+        if (options.videoProviderLabel) {
+            const label = doc.createElement('span');
+            label.textContent = options.videoProviderLabel;
+            label.setAttribute('aria-hidden', 'true');
+            badge.appendChild(label);
+            badge.classList.add('ms-thumb-video-provider');
+        }
         options.host.appendChild(badge);
     } else if (options.isAnimated) {
         const badge = doc.createElement('div');
@@ -114,7 +125,8 @@ export function renderThumbnailCell(options) {
     const cacheClass = options.cacheClass || '';
 
     host.className = baseClass + absoluteClass + sourceClass + cacheClass + activeClass
-        + (options.isAlbum ? ' ms-thumb-album' : '');
+        + (options.isAlbum ? ' ms-thumb-album' : '')
+        + (options.isVideo && !options.isAnimated && !options.isAlbum && options.videoProviderLabel ? ' ms-thumb-provider' : '');
     if (options.hdSrc) host.setAttribute('data-hd-src', options.hdSrc);
 
     const shared = {
@@ -124,6 +136,8 @@ export function renderThumbnailCell(options) {
         isAnimated: !!options.isAnimated,
         isAlbum: !!options.isAlbum,
         albumLabel: options.albumLabel,
+        videoProviderLabel: options.videoProviderLabel,
+        videoProviderName: options.videoProviderName,
         animatedLabel: options.animatedLabel,
         sourceUrl: options.sourceUrl,
         showDomain: options.showDomain !== false,
