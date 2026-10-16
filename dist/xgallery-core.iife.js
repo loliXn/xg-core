@@ -2,7 +2,7 @@
     'use strict';
 
     const XGALLERY_CORE_API_VERSION = 1;
-    const XGALLERY_CORE_VERSION = '0.13.3';
+    const XGALLERY_CORE_VERSION = '0.13.4';
 
     const MEDIA_TYPES = Object.freeze([
         'img',
@@ -2970,20 +2970,18 @@
             .ms-gallery-overlay .ms-album-preview-body > .ms-album-preview-action { display: block; margin: 16px auto 0; }
             .ms-gallery-overlay .ms-album-preview-body > .ms-album-preview-action[hidden] { display: none; }
             .ms-gallery-overlay .ms-playback-progress {
-                position: absolute;
-                left: 50%;
-                top: 50%;
-                transform: translate(-50%, -50%);
-                z-index: 12;
-                width: min(240px, calc(100% - 24px));
+                position: relative;
+                flex: 0 0 112px;
+                width: 112px;
+                height: 30px;
                 display: flex;
                 flex-direction: column;
-                gap: 6px;
+                gap: 0;
                 box-sizing: border-box;
-                padding: 8px 10px;
-                border: 1px solid var(--ms-line);
-                border-radius: 8px;
-                background: var(--ms-surface-1);
+                padding: 0 4px;
+                border: 0;
+                border-radius: 4px;
+                background: transparent;
                 box-shadow: none;
                 color: var(--ms-text);
                 font: 12px/1.4 var(--ms-font-ui, system-ui, sans-serif);
@@ -2991,11 +2989,13 @@
             }
             .ms-gallery-overlay .ms-playback-progress[hidden],
             .ms-gallery-overlay .ms-playback-progress > progress[hidden] { display: none; }
+            .ms-gallery-overlay.ms-playback-busy [data-act="hd"] { display: none !important; }
             .ms-gallery-overlay .ms-playback-progress-head {
                 display: flex;
                 align-items: center;
-                gap: 8px;
+                gap: 4px;
                 min-width: 0;
+                height: 100%;
             }
             .ms-gallery-overlay .ms-playback-progress-label {
                 flex: 1 1 auto;
@@ -3004,11 +3004,14 @@
                 text-overflow: ellipsis;
                 white-space: nowrap;
                 color: var(--ms-text);
-                font: 600 12px/1.3 var(--ms-font-ui, system-ui, sans-serif);
+                font: 500 11px/1.3 var(--ms-font-ui, system-ui, sans-serif);
             }
             .ms-gallery-overlay .ms-playback-progress > progress {
+                position: absolute;
+                left: 0;
+                bottom: 0;
                 width: 100%;
-                height: 3px;
+                height: 2px;
                 margin: 0;
                 border: 0;
                 border-radius: 999px;
@@ -3020,6 +3023,7 @@
             .ms-gallery-overlay .ms-playback-progress > progress::-webkit-progress-value { background: var(--ms-accent); border-radius: 999px; }
             .ms-gallery-overlay .ms-playback-progress > progress::-moz-progress-bar { background: var(--ms-accent); border-radius: 999px; }
             .ms-gallery-overlay .ms-playback-progress-stats {
+                flex: 0 0 auto;
                 color: var(--ms-text-3);
                 font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
                 font-variant-numeric: tabular-nums;
@@ -3029,7 +3033,7 @@
             }
             .ms-gallery-overlay .ms-playback-progress-head > button {
                 flex: 0 0 auto;
-                width: 24px;
+                width: 20px;
                 height: 24px;
                 padding: 4px;
                 border: 0;
@@ -3039,7 +3043,7 @@
                 cursor: pointer;
                 font: 600 11px/1.2 var(--ms-font-ui, system-ui, sans-serif);
             }
-            .ms-gallery-overlay .ms-playback-progress-head > button svg { display: block; width: 16px; height: 16px; }
+            .ms-gallery-overlay .ms-playback-progress-head > button svg { display: block; width: 12px; height: 12px; }
             .ms-gallery-overlay .ms-playback-progress-head > button:hover { background: var(--ms-hover); border-color: var(--ms-line-strong); }
             .ms-gallery-overlay .ms-playback-progress-head > button:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: 2px; }
             @media (max-width: 600px) {
@@ -9318,6 +9322,7 @@
         const mediaSource = new MediaSource();
         const src = URL.createObjectURL(mediaSource);
         const controller = new AbortController();
+        let pendingRange = null, suspended = false, wakeWait = null;
         const parser = parserFactory();
         const tracks = new Map();
         const chunkSize = 1024 * 1024;
@@ -9337,6 +9342,11 @@
             tracks.forEach(track => { try { if (track.buffer.updating) track.buffer.abort(); } catch (_) {} });
             URL.revokeObjectURL(src);
         };
+        const suspend = () => {
+            suspended = true;
+            if (pendingRange) { pendingRange._msParked = true; pendingRange.abort(); }
+        };
+        const resume = () => { if (!disposed) { suspended = false; wakeWait?.(); } };
         const fail = error => {
             if (disposed || failed) return;
             failed = true;
@@ -9344,8 +9354,14 @@
             options.onError?.(error instanceof Error ? error.message : String(error));
         };
         const wait = ms => new Promise(resolve => {
-            const done = () => { clearTimeout(timer); controller.signal.removeEventListener('abort', done); resolve(); };
+            const done = () => {
+                clearTimeout(timer);
+                controller.signal.removeEventListener('abort', done);
+                if (wakeWait === done) wakeWait = null;
+                resolve();
+            };
             const timer = setTimeout(done, ms);
+            wakeWait = done;
             controller.signal.addEventListener('abort', done, { once: true });
             if (disposed) done();
         });
@@ -9392,7 +9408,20 @@
             // A GM range resolves only once its entire payload arrives. Give the
             // parser small initial reads, then grow requests after playback starts.
             const size = video.readyState >= 2 ? chunkSize : startupChunkSize;
-            const result = await readRange(offset, total ? Math.min(total - 1, offset + size - 1) : offset + size - 1, controller.signal);
+            const request = new AbortController();
+            const cancel = () => request.abort();
+            controller.signal.addEventListener('abort', cancel, { once: true });
+            pendingRange = request;
+            let result;
+            try {
+                result = await readRange(offset, total ? Math.min(total - 1, offset + size - 1) : offset + size - 1, request.signal);
+            } catch (error) {
+                if (request._msParked && request.signal.aborted && !disposed) return null;
+                throw error;
+            } finally {
+                controller.signal.removeEventListener('abort', cancel);
+                if (pendingRange === request) pendingRange = null;
+            }
             if (disposed) throw abortError();
             if (Object.prototype.toString.call(result.buffer) !== '[object ArrayBuffer]' || !result.buffer.byteLength || result.start !== offset) {
                 throw new Error('The server returned an invalid video range');
@@ -9423,7 +9452,9 @@
                 // appendBuffer returns the next useful offset, skipping a large mdat
                 // to find a trailing moov without transferring the whole video.
                 while (!info && !disposed) {
+                    if (suspended) { await wait(150); continue; }
                     const bytes = await read(offset);
+                    if (!bytes) continue;
                     metadataBytes += bytes.byteLength;
                     if (offset === 0) firstEnd = bytes.byteLength;
                     const next = parser.appendBuffer(bytes);
@@ -9456,6 +9487,7 @@
                 while (!disposed) {
                     await drain();
                     if (disposed) return;
+                    if (suspended) { await wait(150); continue; }
                     if (pendingSeek !== null) {
                         const target = pendingSeek;
                         pendingSeek = null;
@@ -9476,6 +9508,7 @@
                         continue;
                     }
                     const bytes = await read(offset);
+                    if (!bytes) continue;
                     parser.appendBuffer(bytes);
                     offset += bytes.byteLength;
                     if (parserError) throw parserError;
@@ -9485,7 +9518,7 @@
         signal?.addEventListener('abort', dispose, { once: true });
         video.addEventListener('seeking', seeking);
         mediaSource.addEventListener('sourceopen', open);
-        return { src, streaming: true, dispose };
+        return { src, streaming: true, dispose, suspend, resume };
     }
 
     // Shared viewer behavior. Host operations and persisted preferences enter through the bridge.
@@ -9493,14 +9526,39 @@
     bridge = createRuntimeFacade(bridge);
     let activePlaybackAbort = null;
     let activePlaybackDispose = null;
+    let activePlaybackVideo = null;
+    let activePlaybackSuspend = null;
+    let activePlaybackResume = null;
     let activeImageArrival = null;
     let imageEntranceBlockedUntil = 0;
     const albumBrowserState = new WeakMap();
-    function releasePlayback() {
-        if (activePlaybackAbort) activePlaybackAbort.abort();
+    function clearPlaybackProgress() {
+        const panel = bridge.state.playbackProgressPanel;
+        if (!panel) return;
+        panel.remove();
+        bridge.state.playbackProgressPanel = null;
+        bridge.state.overlay?.classList.remove('ms-playback-busy');
+        updateTopbarCompact();
+    }
+    function releasePlayback(preserveNearby = false) {
+        clearPlaybackProgress();
+        const keep = preserveNearby && activePlaybackVideo && canRetainStageVideo(activePlaybackVideo);
+        if (keep && (activePlaybackAbort || activePlaybackDispose)) {
+            activePlaybackVideo._msPlaybackSession = {
+                controller: activePlaybackAbort, dispose: activePlaybackDispose,
+                suspend: activePlaybackSuspend, resume: activePlaybackResume
+            };
+            activePlaybackSuspend?.();
+        } else {
+            if (activePlaybackVideo && (activePlaybackAbort || activePlaybackDispose)) activePlaybackVideo._msPlaybackFailed = true;
+            if (activePlaybackAbort) activePlaybackAbort.abort();
+            if (activePlaybackDispose) activePlaybackDispose();
+        }
         activePlaybackAbort = null;
-        if (activePlaybackDispose) activePlaybackDispose();
         activePlaybackDispose = null;
+        activePlaybackVideo = null;
+        activePlaybackSuspend = null;
+        activePlaybackResume = null;
     }
     function bindRecoveredVideoSave(video, source, filename) {
         let menu = null, dismiss = null;
@@ -9711,7 +9769,7 @@
         const wrap=overlay.querySelector('.ms-media-wrap');
         // The stage videos outlive the session, parked and empty: the next gallery
         // opened on this page reuses them rather than introducing new ones.
-        stageVideoPool().forEach(video=>parkStageVideo(video));
+        stageVideoPool().forEach(video=>parkStageVideo(video, true));
         if(wrap){
             delete wrap.dataset.msVerticalFitBound;
             wrap.querySelectorAll('video,audio').forEach(media=>{
@@ -11163,14 +11221,14 @@
                 bridge.state.activeStageImageController = null;
                 bridge.state.activeAlbumResourceController?.abort();
                 bridge.state.activeAlbumResourceController = null;
-                releasePlayback();
+                releasePlayback(true);
                 const wrap = bridge.state.overlay.querySelector('.ms-media-wrap');
                 if (wrap) {
                     const existingMedia = wrap.querySelectorAll('video, audio, iframe');
                     existingMedia.forEach(media => {
                         if (media.tagName === 'VIDEO' || media.tagName === 'AUDIO') {
-                            media.pause();
-                            media.removeAttribute('src');
+                            if (media._msPooled) parkStageVideo(media);
+                            else { media.pause(); media.removeAttribute('src'); }
                         }
                     });
                     wrap.innerHTML = '';
@@ -13803,7 +13861,8 @@
     // navigation, of which the gallery's own share was under 30; photos never
     // showed it because photos never made a <video>. An element those scripts have
     // already met costs nothing, so the gallery stops introducing new ones.
-    const STAGE_VIDEO_POOL_SIZE = 2;
+    const STAGE_VIDEO_POOL_SIZE = 4; // Active player plus at most three retained/prefetch players.
+    const STAGE_VIDEO_CACHE_RADIUS = 6;
 
     function stageVideoPark() {
             const overlay = bridge.state.overlay;
@@ -13830,9 +13889,36 @@
             parent.appendChild(node);
         }
 
-    function resetStageVideo(video) {
+    function detachStageVideoListeners(video) {
             if (video._msRenderAbort) { video._msRenderAbort.abort(); video._msRenderAbort = null; }
             if (video._msEndRecoveryTimer) { clearTimeout(video._msEndRecoveryTimer); video._msEndRecoveryTimer = null; }
+            video._msPlaybackErrorHandler = null;
+        }
+
+    function canRetainStageVideo(video) {
+            const item = video?._msVideoItem;
+            if (!item || item.type !== 'video' || video._msVideoSource !== item.src || video.error
+                || video._msPlaybackFailed || video.readyState < 2 || !video.buffered.length
+                || bridge.mediaPresentation(item).retainPlayback === false) return false;
+            const index = bridge.state.items.findIndex(entry => (entry.item || entry) === item);
+            if (index < 0 || Math.abs(index - bridge.state.currentIndex) > STAGE_VIDEO_CACHE_RADIUS) return false;
+            if (video === activePlaybackVideo && (activePlaybackAbort || activePlaybackDispose)
+                && (!activePlaybackSuspend || !activePlaybackResume)) return false;
+            const held = video._msPlaybackSession;
+            return !held || (!!held.suspend && !!held.resume && !held.controller?.signal.aborted);
+        }
+
+    function resetStageVideo(video) {
+            detachStageVideoListeners(video);
+            const session = video._msPlaybackSession;
+            delete video._msPlaybackSession;
+            session?.controller?.abort();
+            session?.dispose?.();
+            video._msWarm = false;
+            video._msLent = false;
+            video._msVideoItem = null;
+            video._msVideoSource = '';
+            video._msPlaybackFailed = false;
             video._msRecovering = false;
             try {
                 video.pause();
@@ -13844,30 +13930,53 @@
             video.style.opacity = '0';
         }
 
-    function parkStageVideo(video) {
-            resetStageVideo(video);
+    function parkStageVideo(video, force = false) {
+            if (video === activePlaybackVideo) releasePlayback(!force);
+            if (!force && canRetainStageVideo(video)) {
+                detachStageVideoListeners(video);
+                video.pause();
+                video.muted = true;
+                video.preload = 'none';
+                video._msPlaybackSession?.suspend?.();
+                video._msWarm = true;
+                video._msLent = false;
+                video._msLastUsed = Date.now();
+            } else resetStageVideo(video);
             const park = stageVideoPark();
             if (park) placeNode(park, video);
+        }
+
+    function trimStageVideos() {
+            const current = bridge.state.items[bridge.state.currentIndex];
+            const item = current && (current.item || current);
+            const warm = stageVideoPool().filter(video => video._msWarm)
+                .sort((a, b) => Number(b._msVideoItem === item) - Number(a._msVideoItem === item)
+                    || b._msLastUsed - a._msLastUsed);
+            warm.forEach((video, index) => { if (index >= 3 || !canRetainStageVideo(video)) resetStageVideo(video); });
+        }
+
+    function retainedStageVideo(item) {
+            trimStageVideos();
+            return stageVideoPool().find(video => video._msWarm && video._msVideoItem === item
+                && video._msVideoSource === item.src && canRetainStageVideo(video)) || null;
         }
 
     function stageVideoPool() {
             // An element something else tore out of the document is forgotten:
             // the pool heals rather than handing back a node nobody can see.
-            const pool = (bridge.state.stageVideoPool || []).filter((video) => video.isConnected);
+            const previous = bridge.state.stageVideoPool || [];
+            previous.forEach(video => { if (!video.isConnected) resetStageVideo(video); });
+            const pool = previous.filter((video) => video.isConnected);
             bridge.state.stageVideoPool = pool;
             return pool;
         }
 
-    // An element that is not on stage right now, made if the pool is not full yet.
-    // One of the two may be out on loan to the adapter's prefetch, and the adapter
-    // goes on believing it owns that element until it hands it back: it will point
-    // it at the neighbour's file when its turn at the gate comes, and clear it
-    // when the prediction changes. So the stage never takes the lent one - it
-    // takes the other, and with two elements and one loan there always is one.
+    // Prefetch never steals a warm player. Only an explicit stage request may
+    // evict the least-recently-used retained player when the pool is full.
     function idleStageVideo(forLoan) {
             const pool = stageVideoPool();
             const idle = pool.filter((candidate) => !candidate.closest('.ms-media-wrap'));
-            let video = idle.find((candidate) => !!candidate._msLent === !!forLoan) || null;
+            let video = idle.find((candidate) => !candidate._msWarm && !!candidate._msLent === !!forLoan) || null;
             if (!video && pool.length < STAGE_VIDEO_POOL_SIZE) {
                 video = document.createElement('video');
                 video._msPooled = true;
@@ -13875,13 +13984,16 @@
                 const park = stageVideoPark();
                 if (park) park.appendChild(video);
             }
-            if (!video && forLoan) video = idle[0] || null;
+            if (!video && !forLoan) {
+                video = idle.filter(candidate => !candidate._msLent).sort((a, b) => (a._msLastUsed || 0) - (b._msLastUsed || 0))[0] || null;
+            }
             return video;
         }
 
     // For the adapter's neighbour prefetch: the element it loads into is one the
     // stage will later show, so the handoff introduces nothing new to the page.
-    function preloadStageVideo(preloadMode) {
+    function preloadStageVideo(preloadMode, item) {
+            if (item && retainedStageVideo(item)) return null;
             const video = idleStageVideo(true);
             if (!video) return null;
             resetStageVideo(video);
@@ -14423,7 +14535,7 @@
                 bridge.state.activeStageImageController.abort();
                 bridge.state.activeStageImageController = null;
             }
-            releasePlayback();
+            releasePlayback(true);
             bridge.syncCoreCurrent();
             // Let the current item paint before any host scroll/layout work starts.
             setTimeout(() => { if (bridge.state.open) bridge.checkTriggerInfiniteScroll(); }, 0);
@@ -14457,6 +14569,7 @@
             const nextBtn = bridge.state.overlay.querySelector('.ms-nav.next');
             const thumbs = bridge.state.overlay.querySelectorAll('.ms-thumb');
             prepareMediaWrap(wrap, item);
+            trimStageVideos();
             const imageArrival = item.type === 'img' ? beginImageArrival(wrap, item, token, previousImageArrival) : null;
             // Every value here goes into innerHTML, and URLs and error text come from
             // the page or a remote host - escape all of them, not only the byline.
@@ -14951,9 +15064,21 @@
                     });
                 } else tryCandidate(0, 0);
             } else if (item.type === 'video') {
-                const predictedVideo = bridge.takePredictedVideo(item);
+                const retainedVideo = retainedStageVideo(item);
+                const predictedVideo = retainedVideo ? null : bridge.takePredictedVideo(item);
                 let video;
-                if (predictedVideo && !predictedVideo._msPooled) {
+                if (retainedVideo) {
+                    video = retainedVideo;
+                    video._msWarm = false;
+                    const session = video._msPlaybackSession;
+                    delete video._msPlaybackSession;
+                    if (session) {
+                        activePlaybackAbort = session.controller;
+                        activePlaybackDispose = session.dispose;
+                        activePlaybackSuspend = session.suspend;
+                        activePlaybackResume = session.resume;
+                    }
+                } else if (predictedVideo && !predictedVideo._msPooled) {
                     // An adapter that still prefetches into an element of its own.
                     video = bridge.takeStageVideo(wrap, predictedVideo);
                 } else if (predictedVideo) {
@@ -14965,6 +15090,10 @@
                     if (video) resetStageVideo(video);
                 }
                 const usedPredicted = !!video && video === predictedVideo;
+                video._msVideoItem = item;
+                video._msVideoSource = item.src;
+                video._msLastUsed = Date.now();
+                activePlaybackVideo = video;
                 // Everything this render listens for is dropped in one go when the
                 // element is next reused, or the listeners of every item it ever
                 // showed would all still be answering.
@@ -14979,21 +15108,22 @@
                 const streamingVideo = !!bridge.isStreamingVideo?.(item);
                 let streamDispose = null;
                 const startStream = () => {
-                    streamDispose?.();
+                    activePlaybackAbort?.abort();
+                    activePlaybackDispose?.();
+                    const controller = new AbortController();
+                    video._msPlaybackFailed = false;
+                    activePlaybackAbort = controller;
                     streamDispose = bridge.attachVideoStream(video, item, {
-                        signal: renderAbort.signal,
+                        signal: controller.signal,
                         onError: message => {
-                            if (token === bridge.state.renderToken && !renderAbort.signal.aborted) {
-                                if (stallWatch) stallWatch.stop(false);
-                                setStageFetching(false);
-                                setTopbarLoading(false);
-                                showStageNotice(wrap, message || 'Could not play this stream', false);
-                            }
+                            video._msPlaybackFailed = true;
+                            video._msPlaybackErrorHandler?.(message);
                         }
                     });
                     activePlaybackDispose = () => streamDispose?.();
+                    activePlaybackSuspend = streamDispose?.suspend ? () => streamDispose.suspend() : null;
+                    activePlaybackResume = streamDispose?.resume ? () => streamDispose.resume() : null;
                 };
-                if (streamingVideo) renderAbort.signal.addEventListener('abort', () => streamDispose?.(), { once: true });
                 const bufferedVideo = bridge.requiresBufferedVideo(item);
                 const videoPoster = item.thumbSrc && item.thumbSrc !== item.src && !bridge.isPlaceholderUrl(item.thumbSrc)
                     ? item.thumbSrc : '';
@@ -15044,6 +15174,15 @@
                 let stageRetried = false;
                 let stallWatch = null;
                 const ownsVideoSession = () => token === bridge.state.renderToken && video.isConnected && wrap.contains(video);
+                video._msPlaybackErrorHandler = message => {
+                    if (!ownsVideoSession() || renderAbort.signal.aborted) return;
+                    if (stallWatch) stallWatch.stop(false);
+                    clearPlaybackProgress();
+                    video._msRecovering = false;
+                    setStageFetching(false);
+                    setTopbarLoading(false);
+                    renderErrorStage(wrap, message || 'Video stream failed', item.src, item);
+                };
                 // Starting over on the same element. A starved element recovers on
                 // its own once the pressure is off, but clearing the src and asking
                 // again is what stepping back and returning does by hand, and it is
@@ -15170,22 +15309,32 @@
                         activePlaybackAbort = controller;
                         try { video.pause(); video.removeAttribute('src'); video.load(); } catch (e) { }
                         const panel = document.createElement('div');
-                        panel.className = 'ms-playback-progress';
+                        panel.className = 'ms-mode-viewer ms-playback-progress';
                         panel.hidden = true;
+                        bridge.state.playbackProgressPanel = panel;
+                        const removeProgress = () => {
+                            if (bridge.state.playbackProgressPanel === panel) clearPlaybackProgress();
+                            else panel.remove();
+                        };
                         const revealTimer = setTimeout(() => {
-                            if (ownsVideoSession() && !controller.signal.aborted && video.readyState < 2) panel.hidden = false;
+                            if (ownsVideoSession() && !controller.signal.aborted && video.readyState < 2 && panel.isConnected) {
+                                panel.hidden = false;
+                                bridge.state.overlay.classList.add('ms-playback-busy');
+                                updateTopbarCompact();
+                            }
                         }, 1200);
+                        renderAbort.signal.addEventListener('abort', () => { clearTimeout(revealTimer); removeProgress(); }, { once: true });
                         controller.signal.addEventListener('abort', () => {
                             clearTimeout(revealTimer);
                             item._playbackRecoveryTried = false;
-                            panel.remove();
+                            removeProgress();
                         }, { once: true });
                         const head = document.createElement('div');
                         head.className = 'ms-playback-progress-head';
                         const label = document.createElement('strong');
                         label.className = 'ms-playback-progress-label';
                         label.setAttribute('aria-live', 'polite');
-                        label.textContent = 'Connecting to video…';
+                        label.textContent = 'Connecting';
                         const track = document.createElement('progress');
                         track.setAttribute('aria-label', 'Video transfer');
                         track.removeAttribute('value');
@@ -15201,23 +15350,19 @@
                         cancel.addEventListener('click', event => {
                             event.stopPropagation();
                             controller.abort();
-                            panel.remove();
+                            removeProgress();
                             video._msRecovering = false;
                             setStageFetching(false);
                             renderErrorStage(wrap, 'Loading cancelled', item.src, item);
                         });
-                        head.append(label, cancel);
-                        panel.append(head, track, stats);
-                        ensureMediaBox(wrap).appendChild(panel);
+                        head.append(label, stats, cancel);
+                        panel.append(head, track);
+                        const controls = bridge.state.overlay.querySelector('.ms-gallery-controls');
+                        controls.insertBefore(panel, controls.querySelector('[data-act="hd"]'));
                         let lastPaint = 0;
                         bridge.preparePlayback(item, { video, signal: controller.signal, onError: message => {
-                            if (!ownsVideoSession() || controller.signal.aborted) return;
-                            controller.abort();
-                            video._msRecovering = false;
-                            panel.remove();
-                            setStageFetching(false);
-                            setTopbarLoading(false);
-                            renderErrorStage(wrap, message || 'Video stream failed', item.src, item);
+                            video._msPlaybackFailed = true;
+                            video._msPlaybackErrorHandler?.(message);
                         }, onProgress: progress => {
                             if (!ownsVideoSession() || controller.signal.aborted || !panel.isConnected) return;
                             const now = Date.now();
@@ -15225,11 +15370,12 @@
                             lastPaint = now;
                             const loaded = Number(progress.loadedBytes) || 0;
                             const total = Number(progress.totalBytes) || 0;
-                            label.textContent = progress.streaming ? 'Buffering video' : 'Downloading video';
-                            stats.textContent = total > 0
+                            label.textContent = progress.streaming ? 'Buffering' : 'Loading';
+                            panel.title = total > 0
                                 ? (loaded / 1048576).toFixed(1) + ' / ' + (total / 1048576).toFixed(1)
                                     + ' MB · ' + Math.floor(Math.min(loaded / total, 1) * 100) + '%'
                                 : (loaded / 1048576).toFixed(1) + ' MB transferred';
+                            stats.textContent = total > 0 ? Math.floor(Math.min(loaded / total, 1) * 100) + '%' : '';
                             track.hidden = !(total > 0);
                             if (total > 0) { track.max = total; track.value = Math.min(loaded, total); }
                         } }).then(result => {
@@ -15244,8 +15390,11 @@
                             if (result && result.src) {
                                 const unbindSave = result.downloadName ? bindRecoveredVideoSave(video, result.downloadSrc || result.src, result.downloadName) : null;
                                 activePlaybackDispose = () => { unbindSave?.(); result.dispose?.(); };
-                                label.textContent = 'Preparing video…';
-                                stats.textContent = result.streaming ? 'Opening chunked playback' : 'Transfer complete · opening player';
+                                activePlaybackSuspend = result.streaming ? result.suspend || null : () => {};
+                                activePlaybackResume = result.streaming ? result.resume || null : () => {};
+                                label.textContent = 'Preparing';
+                                stats.textContent = '';
+                                panel.title = result.streaming ? 'Opening chunked playback' : 'Transfer complete · opening player';
                                 track.removeAttribute('value');
                                 track.hidden = true;
                                 video.src = result.src;
@@ -15253,7 +15402,7 @@
                                 const readyTimeout = setTimeout(() => {
                                     if (!ownsVideoSession() || video.readyState >= 2) return;
                                     controller.abort();
-                                    panel.remove();
+                                    removeProgress();
                                     video._msRecovering = false;
                                     setStageFetching(false);
                                     renderErrorStage(wrap, 'Video could not be prepared', item.src, item);
@@ -15262,12 +15411,13 @@
                                 on('loadeddata', () => {
                                     clearTimeout(revealTimer);
                                     clearTimeout(readyTimeout);
-                                    panel.remove(); video._msRecovering = false; setStageFetching(false);
+                                    removeProgress(); video._msRecovering = false; setStageFetching(false);
                                 }, { once: true });
                                 const play = video.play();
                                 if (play && play.catch) play.catch(() => { });
                             } else {
-                                panel.remove();
+                                clearTimeout(revealTimer);
+                                removeProgress();
                                 video._msRecovering = false;
                                 setStageFetching(false);
                                 renderErrorStage(wrap, 'Video recovery unavailable', item.src, item);
@@ -15275,7 +15425,8 @@
                         }).catch(() => {
                             if (!ownsVideoSession()) return;
                             video._msRecovering = false;
-                            panel.remove();
+                            clearTimeout(revealTimer);
+                            removeProgress();
                             setStageFetching(false);
                             if (!controller.signal.aborted) renderErrorStage(wrap, 'Video recovery failed', item.src, item);
                         });
@@ -15387,13 +15538,14 @@
                     if (videoActivated || token !== bridge.state.renderToken || !video.isConnected) return;
                     videoActivated = true;
                     video.preload = bufferedVideo ? 'auto' : 'metadata';
+                    if (retainedVideo) activePlaybackResume?.();
                     // Known streaming transports need no failed native attempt
                     // before they can start feeding the active player.
                     if (presentation.preferPlaybackRecovery && video.readyState < 2 && !item._playbackRecoveryTried) {
                         handleVideoError();
                         return;
                     }
-                    if (streamingVideo) startStream();
+                    if (streamingVideo && !retainedVideo) startStream();
                     else if (!video.getAttribute('src')) video.src = primaryVideoSrc;
                     const promise = video.play();
                     if (promise && typeof promise.catch === 'function') promise.catch(() => { });

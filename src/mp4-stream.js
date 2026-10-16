@@ -6,6 +6,7 @@ export function createMp4RangePlayback(options) {
     const mediaSource = new MediaSource();
     const src = URL.createObjectURL(mediaSource);
     const controller = new AbortController();
+    let pendingRange = null, suspended = false, wakeWait = null;
     const parser = parserFactory();
     const tracks = new Map();
     const chunkSize = 1024 * 1024;
@@ -25,6 +26,11 @@ export function createMp4RangePlayback(options) {
         tracks.forEach(track => { try { if (track.buffer.updating) track.buffer.abort(); } catch (_) {} });
         URL.revokeObjectURL(src);
     };
+    const suspend = () => {
+        suspended = true;
+        if (pendingRange) { pendingRange._msParked = true; pendingRange.abort(); }
+    };
+    const resume = () => { if (!disposed) { suspended = false; wakeWait?.(); } };
     const fail = error => {
         if (disposed || failed) return;
         failed = true;
@@ -32,8 +38,14 @@ export function createMp4RangePlayback(options) {
         options.onError?.(error instanceof Error ? error.message : String(error));
     };
     const wait = ms => new Promise(resolve => {
-        const done = () => { clearTimeout(timer); controller.signal.removeEventListener('abort', done); resolve(); };
+        const done = () => {
+            clearTimeout(timer);
+            controller.signal.removeEventListener('abort', done);
+            if (wakeWait === done) wakeWait = null;
+            resolve();
+        };
         const timer = setTimeout(done, ms);
+        wakeWait = done;
         controller.signal.addEventListener('abort', done, { once: true });
         if (disposed) done();
     });
@@ -80,7 +92,20 @@ export function createMp4RangePlayback(options) {
         // A GM range resolves only once its entire payload arrives. Give the
         // parser small initial reads, then grow requests after playback starts.
         const size = video.readyState >= 2 ? chunkSize : startupChunkSize;
-        const result = await readRange(offset, total ? Math.min(total - 1, offset + size - 1) : offset + size - 1, controller.signal);
+        const request = new AbortController();
+        const cancel = () => request.abort();
+        controller.signal.addEventListener('abort', cancel, { once: true });
+        pendingRange = request;
+        let result;
+        try {
+            result = await readRange(offset, total ? Math.min(total - 1, offset + size - 1) : offset + size - 1, request.signal);
+        } catch (error) {
+            if (request._msParked && request.signal.aborted && !disposed) return null;
+            throw error;
+        } finally {
+            controller.signal.removeEventListener('abort', cancel);
+            if (pendingRange === request) pendingRange = null;
+        }
         if (disposed) throw abortError();
         if (Object.prototype.toString.call(result.buffer) !== '[object ArrayBuffer]' || !result.buffer.byteLength || result.start !== offset) {
             throw new Error('The server returned an invalid video range');
@@ -111,7 +136,9 @@ export function createMp4RangePlayback(options) {
             // appendBuffer returns the next useful offset, skipping a large mdat
             // to find a trailing moov without transferring the whole video.
             while (!info && !disposed) {
+                if (suspended) { await wait(150); continue; }
                 const bytes = await read(offset);
+                if (!bytes) continue;
                 metadataBytes += bytes.byteLength;
                 if (offset === 0) firstEnd = bytes.byteLength;
                 const next = parser.appendBuffer(bytes);
@@ -144,6 +171,7 @@ export function createMp4RangePlayback(options) {
             while (!disposed) {
                 await drain();
                 if (disposed) return;
+                if (suspended) { await wait(150); continue; }
                 if (pendingSeek !== null) {
                     const target = pendingSeek;
                     pendingSeek = null;
@@ -164,6 +192,7 @@ export function createMp4RangePlayback(options) {
                     continue;
                 }
                 const bytes = await read(offset);
+                if (!bytes) continue;
                 parser.appendBuffer(bytes);
                 offset += bytes.byteLength;
                 if (parserError) throw parserError;
@@ -173,5 +202,5 @@ export function createMp4RangePlayback(options) {
     signal?.addEventListener('abort', dispose, { once: true });
     video.addEventListener('seeking', seeking);
     mediaSource.addEventListener('sourceopen', open);
-    return { src, streaming: true, dispose };
+    return { src, streaming: true, dispose, suspend, resume };
 }

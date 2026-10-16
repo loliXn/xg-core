@@ -80,15 +80,28 @@ adapter-owned `readRange(start, end, signal)` returning `{buffer, start, total}`
 It returns a MediaSource URL and an idempotent disposer. It fetches the MP4 index
 and bounded ranges, supports audio/video tracks and seeking, prunes old buffered
 media and cancels on navigation. No provider authentication belongs in the core.
-Initial reads use 128 KiB and grow after the first decoded frame. An adapter may
+Initial reads use 128 KiB and grow after the first decoded frame. Its `suspend`
+and `resume` methods preserve buffers while stopping parked range requests.
+An adapter may
 set `mediaPresentation(item).preferPlaybackRecovery` to start its transport
 without a deliberately failed native request. Recovery feedback is delayed and
-centered inside the active media box, with bars only for measured totals.
+occupies a compact topbar slot, with bars only for measured totals.
 See [MP4Box's progressive parsing API](https://github.com/gpac/mp4box.js#api).
 
 The optional runtime `videoProvider(item)` bridge supplies `videoProviderLabel`
 and `videoProviderName` for shared strip/grid badges. Host mapping stays in the
 adapter; collection and animated-image badges retain priority.
+
+The runtime retains at most three parked, loaded video players within six gallery items,
+with four players overall including the active player and any prefetch loan.
+Parked players are paused and muted; opted-in transports suspend their network
+work independently of disposable render listeners. Close, eviction, source
+changes and failures dispose retained sessions. Transports returned by
+`attachVideoStream` may expose `suspend`/`resume` methods on their disposer;
+`preparePlayback` results may expose the same pair beside `dispose`. Streaming
+sessions without these methods are not retained. An adapter may opt out through
+`mediaPresentation(item).retainPlayback = false`. Prefetch never evicts a warm
+player or allocates an extra decoder when the pool cannot lend one.
 
 ```text
 npm run build

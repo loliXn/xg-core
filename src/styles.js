@@ -933,20 +933,18 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay .ms-album-preview-body > .ms-album-preview-action { display: block; margin: 16px auto 0; }
         .ms-gallery-overlay .ms-album-preview-body > .ms-album-preview-action[hidden] { display: none; }
         .ms-gallery-overlay .ms-playback-progress {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 12;
-            width: min(240px, calc(100% - 24px));
+            position: relative;
+            flex: 0 0 112px;
+            width: 112px;
+            height: 30px;
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 0;
             box-sizing: border-box;
-            padding: 8px 10px;
-            border: 1px solid var(--ms-line);
-            border-radius: 8px;
-            background: var(--ms-surface-1);
+            padding: 0 4px;
+            border: 0;
+            border-radius: 4px;
+            background: transparent;
             box-shadow: none;
             color: var(--ms-text);
             font: 12px/1.4 var(--ms-font-ui, system-ui, sans-serif);
@@ -954,11 +952,13 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-gallery-overlay .ms-playback-progress[hidden],
         .ms-gallery-overlay .ms-playback-progress > progress[hidden] { display: none; }
+        .ms-gallery-overlay.ms-playback-busy [data-act="hd"] { display: none !important; }
         .ms-gallery-overlay .ms-playback-progress-head {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 4px;
             min-width: 0;
+            height: 100%;
         }
         .ms-gallery-overlay .ms-playback-progress-label {
             flex: 1 1 auto;
@@ -967,11 +967,14 @@ export const OVERLAY_CSS = String.raw`
             text-overflow: ellipsis;
             white-space: nowrap;
             color: var(--ms-text);
-            font: 600 12px/1.3 var(--ms-font-ui, system-ui, sans-serif);
+            font: 500 11px/1.3 var(--ms-font-ui, system-ui, sans-serif);
         }
         .ms-gallery-overlay .ms-playback-progress > progress {
+            position: absolute;
+            left: 0;
+            bottom: 0;
             width: 100%;
-            height: 3px;
+            height: 2px;
             margin: 0;
             border: 0;
             border-radius: 999px;
@@ -983,6 +986,7 @@ export const OVERLAY_CSS = String.raw`
         .ms-gallery-overlay .ms-playback-progress > progress::-webkit-progress-value { background: var(--ms-accent); border-radius: 999px; }
         .ms-gallery-overlay .ms-playback-progress > progress::-moz-progress-bar { background: var(--ms-accent); border-radius: 999px; }
         .ms-gallery-overlay .ms-playback-progress-stats {
+            flex: 0 0 auto;
             color: var(--ms-text-3);
             font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
             font-variant-numeric: tabular-nums;
@@ -992,7 +996,7 @@ export const OVERLAY_CSS = String.raw`
         }
         .ms-gallery-overlay .ms-playback-progress-head > button {
             flex: 0 0 auto;
-            width: 24px;
+            width: 20px;
             height: 24px;
             padding: 4px;
             border: 0;
@@ -1002,7 +1006,7 @@ export const OVERLAY_CSS = String.raw`
             cursor: pointer;
             font: 600 11px/1.2 var(--ms-font-ui, system-ui, sans-serif);
         }
-        .ms-gallery-overlay .ms-playback-progress-head > button svg { display: block; width: 16px; height: 16px; }
+        .ms-gallery-overlay .ms-playback-progress-head > button svg { display: block; width: 12px; height: 12px; }
         .ms-gallery-overlay .ms-playback-progress-head > button:hover { background: var(--ms-hover); border-color: var(--ms-line-strong); }
         .ms-gallery-overlay .ms-playback-progress-head > button:focus-visible { outline: 2px solid var(--ms-accent); outline-offset: 2px; }
         @media (max-width: 600px) {
