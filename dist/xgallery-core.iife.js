@@ -2,7 +2,7 @@
     'use strict';
 
     const XGALLERY_CORE_API_VERSION = 1;
-    const XGALLERY_CORE_VERSION = '0.13.4';
+    const XGALLERY_CORE_VERSION = '0.13.5';
 
     const MEDIA_TYPES = Object.freeze([
         'img',
@@ -2468,6 +2468,10 @@
                 transform: translateY(-6px) scale(0.985);
                 transform-origin: top right;
                 width: min(620px, calc(100% - 24px));
+                max-height: calc(100dvh - 120px);
+                overflow-y: auto;
+                overflow-x: hidden;
+                overscroll-behavior: contain;
                 z-index: 100;
                 box-sizing: border-box;
                 padding: 12px;
@@ -2660,6 +2664,14 @@
                 border-color: var(--ms-accent-line);
                 background: var(--ms-accent-tint);
                 color: var(--ms-text);
+            }
+            .ms-filter-provider-field { grid-column: 1 / -1; }
+            .ms-filter-provider-field[hidden] { display: none; }
+            .ms-filter-providers { display: flex; flex-wrap: wrap; gap: 6px; }
+            .ms-filter-provider {
+                padding-inline: 10px;
+                font-family: var(--ms-font-ui, system-ui, sans-serif);
+                letter-spacing: normal;
             }
             .ms-filter-pair {
                 display: grid;
@@ -7398,6 +7410,7 @@
         query: '',
         kind: 'all',
         types: Object.freeze([]),
+        hiddenProviders: Object.freeze([]),
         minMb: null,
         maxMb: null,
         minAlbum: null,
@@ -7422,6 +7435,9 @@
             query: String(src.query || ''),
             kind: kind,
             types: types,
+            hiddenProviders: Array.isArray(src.hiddenProviders)
+                ? [...new Set(src.hiddenProviders.map(id => String(id || '').trim().toLowerCase())
+                    .filter(id => /^[a-z0-9][a-z0-9_-]{0,63}$/.test(id)))] : [],
             minMb: asNumber(src.minMb),
             maxMb: asNumber(src.maxMb),
             minAlbum: asNumber(src.minAlbum),
@@ -7435,6 +7451,7 @@
         const state = normalizeFilterState(input);
         return state.kind !== 'all'
             || state.types.length > 0
+            || state.hiddenProviders.length > 0
             || state.minMb != null
             || state.maxMb != null
             || state.hideUnavailable
@@ -7523,8 +7540,12 @@
             || haystack.indexOf(token.value) >= 0;
     }
 
-    function matchGalleryItem(item, state) {
+    function matchGalleryItem(item, state, getProvider) {
         const filter = normalizeFilterState(state);
+        if (filter.hiddenProviders.length) {
+            const provider = typeof getProvider === 'function' ? getProvider(item) : item?.providerId;
+            if (filter.hiddenProviders.includes(String(provider || 'other').toLowerCase())) return false;
+        }
         if (filter.hideUnavailable && item && item._msUnavailable === true) return false;
         if (filter.kind !== 'all' && itemKind(item) !== filter.kind) return false;
         if (filter.types.length) {
@@ -7554,10 +7575,10 @@
         return true;
     }
 
-    function applyGalleryFilter(items, state, getItem) {
+    function applyGalleryFilter(items, state, getItem, getProvider) {
         if (!Array.isArray(items)) return [];
         const pick = typeof getItem === 'function' ? getItem : (entry) => entry;
-        return items.filter((entry) => matchGalleryItem(pick(entry), state));
+        return items.filter((entry) => matchGalleryItem(pick(entry), state, getProvider));
     }
 
     const FILTER_TYPE_OPTIONS = FILE_TYPE_OPTIONS;
@@ -7598,6 +7619,7 @@
             '      <input class="ms-filter-min-mb" type="number" min="0" inputmode="numeric" placeholder="Min MB">',
             '      <input class="ms-filter-max-mb" type="number" min="0" inputmode="numeric" placeholder="Max MB">',
             '    </div></div>',
+            '    <div class="ms-filter-field ms-filter-provider-field" hidden role="group" aria-label="Providers"><span>Providers</span><div class="ms-filter-providers"></div></div>',
             '    <button type="button" class="ms-filter-type ms-filter-hide-unavailable" aria-pressed="false">Hide unavailable</button>',
             '  </div>',
             '  <div class="ms-filter-chips" hidden></div>',
@@ -7627,9 +7649,15 @@
         root.querySelectorAll('.ms-filter-kind').forEach((btn) => {
             btn.classList.toggle('is-active', btn.getAttribute('data-kind') === state.kind);
         });
-        root.querySelectorAll('.ms-filter-type').forEach((btn) => {
+        root.querySelectorAll('.ms-filter-type[data-ext]').forEach((btn) => {
             const ext = btn.getAttribute('data-ext');
             btn.classList.toggle('is-active', state.types.indexOf(ext) >= 0);
+        });
+        root.querySelectorAll('.ms-filter-provider').forEach(btn => {
+            const enabled = !state.hiddenProviders.includes(btn.dataset.provider);
+            btn.classList.toggle('is-active', enabled);
+            btn.setAttribute('aria-pressed', String(enabled));
+            btn.title = (enabled ? 'Hide ' : 'Show ') + btn.textContent;
         });
         const minMb = root.querySelector('.ms-filter-min-mb');
         const maxMb = root.querySelector('.ms-filter-max-mb');
@@ -7652,6 +7680,7 @@
             trigger.setAttribute('aria-pressed', active ? 'true' : 'false');
             const count = (state.kind !== 'all' ? 1 : 0)
                 + state.types.length
+                + state.hiddenProviders.length
                 + (state.minMb != null || state.maxMb != null ? 1 : 0)
                 + (String(state.query || '').trim() ? 1 : 0)
                 + (state.hideUnavailable ? 1 : 0);
@@ -7664,18 +7693,22 @@
         paintChips(root, state);
     }
 
-    function readForm(root, extrasOpen) {
+    function readForm(root, extrasOpen, hiddenProviders = []) {
         const types = [];
-        root.querySelectorAll('.ms-filter-type.is-active').forEach((btn) => {
+        root.querySelectorAll('.ms-filter-type.is-active[data-ext]').forEach((btn) => {
             const ext = btn.getAttribute('data-ext');
             if (ext) types.push(ext);
         });
         const input = root.querySelector('.ms-filter-input');
         const kindBtn = root.querySelector('.ms-filter-kind.is-active');
+        const providers = Array.from(root.querySelectorAll('.ms-filter-provider'));
+        const knownProviders = new Set(providers.map(btn => btn.dataset.provider));
         return normalizeFilterState({
             query: input ? input.value : '',
             kind: kindBtn ? kindBtn.getAttribute('data-kind') : 'all',
             types: types,
+            hiddenProviders: hiddenProviders.filter(id => !knownProviders.has(id))
+                .concat(providers.filter(btn => !btn.classList.contains('is-active')).map(btn => btn.dataset.provider)),
             minMb: root.querySelector('.ms-filter-min-mb') && root.querySelector('.ms-filter-min-mb').value,
             maxMb: root.querySelector('.ms-filter-max-mb') && root.querySelector('.ms-filter-max-mb').value,
             minAlbum: root.querySelector('.ms-filter-min-album') && root.querySelector('.ms-filter-min-album').value,
@@ -7708,6 +7741,25 @@
 
     function bindFilterBar(root, options = {}) {
         if (!root) return null;
+        const providerField = root.querySelector('.ms-filter-provider-field');
+        const providerWrap = root.querySelector('.ms-filter-providers');
+        if (providerField && providerWrap) {
+            const seen = new Set();
+            const buttons = [];
+            for (const provider of Array.isArray(options.providers) ? options.providers : []) {
+                const id = String(provider?.id || '').trim().toLowerCase();
+                if (!/^[a-z0-9][a-z0-9_-]{0,63}$/.test(id) || seen.has(id)) continue;
+                seen.add(id);
+                const button = root.ownerDocument.createElement('button');
+                button.type = 'button';
+                button.className = 'ms-filter-type ms-filter-provider';
+                button.dataset.provider = id;
+                button.textContent = String(provider.label || id);
+                buttons.push(button);
+            }
+            providerWrap.replaceChildren(...buttons);
+            providerField.hidden = !buttons.length;
+        }
         let state = normalizeFilterState(options.state);
         const emit = () => {
             paint(root, state);
@@ -7719,7 +7771,7 @@
 
         root.addEventListener('submit', (event) => {
             event.preventDefault();
-            state = readForm(root, state.extrasOpen);
+            state = readForm(root, state.extrasOpen, state.hiddenProviders);
             emit();
         });
         const input = root.querySelector('.ms-filter-input');
@@ -7728,7 +7780,7 @@
             input.addEventListener('input', () => {
                 clearTimeout(debounce);
                 debounce = setTimeout(() => {
-                    state = readForm(root, state.extrasOpen);
+                    state = readForm(root, state.extrasOpen, state.hiddenProviders);
                     emit();
                 }, 120);
             });
@@ -7742,6 +7794,14 @@
             const kind = event.target.closest('.ms-filter-kind');
             if (kind) {
                 state.kind = kind.getAttribute('data-kind') || 'all';
+                emit();
+                return;
+            }
+            const providerBtn = event.target.closest('.ms-filter-provider');
+            if (providerBtn) {
+                const id = providerBtn.dataset.provider;
+                state.hiddenProviders = state.hiddenProviders.includes(id)
+                    ? state.hiddenProviders.filter(value => value !== id) : state.hiddenProviders.concat(id);
                 emit();
                 return;
             }
@@ -7765,7 +7825,7 @@
         });
         root.addEventListener('change', (event) => {
             if (!event.target.closest('.ms-filter-extras')) return;
-            state = readForm(root, state.extrasOpen);
+            state = readForm(root, state.extrasOpen, state.hiddenProviders);
             emit();
         });
 
@@ -10197,6 +10257,7 @@
             if (coreApi && typeof coreApi.bindFilterBar === 'function') {
                 bridge.state.filterBar = coreApi.bindFilterBar(overlay.querySelector('.ms-filter-bar'), {
                     state: bridge.galleryFilter,
+                    providers: bridge.filterProviders,
                     onChange: (next) => {
                         bridge.galleryFilter = next;
                         bridge.filterMode = next.kind === 'videos' ? 2 : (next.kind === 'images' ? 1 : 0);

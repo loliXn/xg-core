@@ -431,6 +431,10 @@ export const OVERLAY_CSS = String.raw`
             transform: translateY(-6px) scale(0.985);
             transform-origin: top right;
             width: min(620px, calc(100% - 24px));
+            max-height: calc(100dvh - 120px);
+            overflow-y: auto;
+            overflow-x: hidden;
+            overscroll-behavior: contain;
             z-index: 100;
             box-sizing: border-box;
             padding: 12px;
@@ -623,6 +627,14 @@ export const OVERLAY_CSS = String.raw`
             border-color: var(--ms-accent-line);
             background: var(--ms-accent-tint);
             color: var(--ms-text);
+        }
+        .ms-filter-provider-field { grid-column: 1 / -1; }
+        .ms-filter-provider-field[hidden] { display: none; }
+        .ms-filter-providers { display: flex; flex-wrap: wrap; gap: 6px; }
+        .ms-filter-provider {
+            padding-inline: 10px;
+            font-family: var(--ms-font-ui, system-ui, sans-serif);
+            letter-spacing: normal;
         }
         .ms-filter-pair {
             display: grid;

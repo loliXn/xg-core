@@ -75,6 +75,13 @@ the last verified bundle. Do not load a moving `@main` branch.
 
 ## Development
 
+Provider filtering is adapter-defined: pass `filterProviders` as `{id, label}`
+options on the runtime bridge and a provider resolver as the fourth argument to
+`applyGalleryFilter` (or third to `matchGalleryItem`). Standalone items may carry
+`providerId` instead. `hiddenProviders` stores exclusions, so old/default states
+enable every provider; `other` covers unclassified media. Reset restores all
+providers. Public core code has no provider host mapping or service catalog.
+
 `createMp4RangePlayback` accepts an MP4Box-compatible parser factory and an
 adapter-owned `readRange(start, end, signal)` returning `{buffer, start, total}`.
 It returns a MediaSource URL and an idempotent disposer. It fetches the MP4 index

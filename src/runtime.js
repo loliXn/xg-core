@@ -678,6 +678,7 @@ function ensureOverlay() {
         if (coreApi && typeof coreApi.bindFilterBar === 'function') {
             bridge.state.filterBar = coreApi.bindFilterBar(overlay.querySelector('.ms-filter-bar'), {
                 state: bridge.galleryFilter,
+                providers: bridge.filterProviders,
                 onChange: (next) => {
                     bridge.galleryFilter = next;
                     bridge.filterMode = next.kind === 'videos' ? 2 : (next.kind === 'images' ? 1 : 0);
